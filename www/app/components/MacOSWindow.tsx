@@ -144,21 +144,21 @@ export default function MacOSWindow() {
   return (
     <div className="w-full max-w-3xl mx-auto">
       {/* Window chrome */}
-      <div className="rounded-xl overflow-hidden shadow-2xl border border-[#c8c8c8] dark:border-[#3a3a3a]">
+      <div className="rounded-xl overflow-hidden shadow-2xl border border-[#3a3a3a]">
         {/* Title bar */}
-        <div className="flex items-center h-[38px] px-4 bg-gradient-to-b from-[#e8e8e8] to-[#d8d8d8] dark:from-[#3a3a3a] dark:to-[#2d2d2d] border-b border-[#b8b8b8] dark:border-[#2a2a2a]">
+        <div className="flex items-center h-[38px] px-4 bg-gradient-to-b from-[#3a3a3a] to-[#2d2d2d] border-b border-[#2a2a2a]">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-[#ff5f57] border border-[#e0443e]" />
             <div className="w-3 h-3 rounded-full bg-[#febc2e] border border-[#dea123]" />
             <div className="w-3 h-3 rounded-full bg-[#28c840] border border-[#1aab29]" />
           </div>
-          <div className="flex-1 text-center text-[11px] text-[#666] dark:text-[#999] font-medium">
+          <div className="flex-1 text-center text-[11px] text-[#999] font-medium">
             Bonsplit
           </div>
           <div className="w-[52px]" />
         </div>
         {/* Content area */}
-        <div className="h-[300px] p-[2px] bg-[#e0e0e0] dark:bg-[#1a1a1a]">
+        <div className="h-[300px] p-[2px] bg-[#1a1a1a]">
           <PaneView pane={rootPane} />
         </div>
       </div>
