@@ -89,7 +89,7 @@ export default function Home() {
         <div className="mb-12">
           <video
             ref={videoRef}
-            src="/demo.mov"
+            src="/demo-compressed.mov"
             loop
             muted
             playsInline
