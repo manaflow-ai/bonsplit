@@ -1,11 +1,11 @@
 import SwiftUI
-import SplitTabBar
+import Bonsplit
 
 struct ContentView: View {
     @StateObject private var appState = AppState()
 
     var body: some View {
-        SplitTabBarView(controller: appState.controller) { tab, paneId in
+        BonsplitView(controller: appState.controller) { tab, paneId in
             TabContentView(tab: tab, paneId: paneId, appState: appState)
         } emptyPane: { paneId in
             EmptyPaneView(paneId: paneId, appState: appState)
@@ -22,7 +22,7 @@ struct ContentView: View {
 }
 
 struct TabContentView: View {
-    let tab: SplitTabBar.Tab
+    let tab: Bonsplit.Tab
     let paneId: PaneID
     @ObservedObject var appState: AppState
     @FocusState private var isEditorFocused: Bool

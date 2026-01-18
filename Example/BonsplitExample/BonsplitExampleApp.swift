@@ -1,8 +1,8 @@
 import SwiftUI
-import SplitTabBar
+import Bonsplit
 
 @main
-struct SplitTabBarExampleApp: App {
+struct BonsplitExampleApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()

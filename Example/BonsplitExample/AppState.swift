@@ -1,5 +1,5 @@
 import SwiftUI
-import SplitTabBar
+import Bonsplit
 
 /// Content associated with a tab
 struct TabContent {
@@ -9,21 +9,21 @@ struct TabContent {
 /// Application state managing tabs and their content
 @MainActor
 class AppState: ObservableObject {
-    let controller: SplitTabBarController
+    let controller: BonsplitController
 
     @Published var tabContents: [TabID: TabContent] = [:]
 
     private var tabCounter = 0
 
     init() {
-        let config = SplitTabBarConfiguration(
+        let config = BonsplitConfiguration(
             allowSplits: true,
             allowCloseTabs: true,
             allowCloseLastPane: false,
             // Use keepAllAlive to preserve scroll position, @State, and focus when switching tabs
             contentViewLifecycle: .keepAllAlive
         )
-        self.controller = SplitTabBarController(configuration: config)
+        self.controller = BonsplitController(configuration: config)
         self.controller.delegate = self
     }
 
@@ -73,7 +73,7 @@ class AppState: ObservableObject {
 
     private func sampleText(for index: Int) -> String {
         let samples = [
-            "// Welcome to SplitTabBar Example!\n\n// Try these actions:\n// - ⌘T to create a new tab\n// - ⌘W to close the current tab\n// - ⌘⇧D to split right\n// - ⌘⌥D to split down\n// - Drag tabs to reorder or move between panes\n// - ⌘⌥←→↑↓ to navigate between panes\n\nlet greeting = \"Hello, World!\"\nprint(greeting)",
+            "// Welcome to Bonsplit Example!\n\n// Try these actions:\n// - ⌘T to create a new tab\n// - ⌘W to close the current tab\n// - ⌘⇧D to split right\n// - ⌘⌥D to split down\n// - Drag tabs to reorder or move between panes\n// - ⌘⌥←→↑↓ to navigate between panes\n\nlet greeting = \"Hello, World!\"\nprint(greeting)",
             "import SwiftUI\n\nstruct MyView: View {\n    var body: some View {\n        Text(\"Hello from tab \\(index)\")\n            .font(.largeTitle)\n            .padding()\n    }\n}",
             "# Notes\n\nThis is a sample document.\n\n## Features\n\n- Drag and drop tabs\n- Split panes\n- Keyboard navigation\n\n## Tips\n\nTry dragging a tab to the edge of a pane to create a split!",
             "func fibonacci(_ n: Int) -> Int {\n    guard n > 1 else { return n }\n    return fibonacci(n - 1) + fibonacci(n - 2)\n}\n\nlet result = fibonacci(10)\nprint(\"Fibonacci(10) = \\(result)\")",
@@ -83,11 +83,11 @@ class AppState: ObservableObject {
     }
 }
 
-// MARK: - SplitTabBarDelegate
+// MARK: - BonsplitDelegate
 
-extension AppState: SplitTabBarDelegate {
-    func splitTabBar(_ controller: SplitTabBarController,
-                     shouldCloseTab tab: SplitTabBar.Tab,
+extension AppState: BonsplitDelegate {
+    func splitTabBar(_ controller: BonsplitController,
+                     shouldCloseTab tab: Bonsplit.Tab,
                      inPane pane: PaneID) -> Bool {
         // If tab is dirty, show confirmation
         if tab.isDirty {
@@ -115,15 +115,15 @@ extension AppState: SplitTabBarDelegate {
         return true
     }
 
-    func splitTabBar(_ controller: SplitTabBarController,
+    func splitTabBar(_ controller: BonsplitController,
                      didCloseTab tabId: TabID,
                      fromPane pane: PaneID) {
         // Clean up content when tab is closed
         tabContents.removeValue(forKey: tabId)
     }
 
-    func splitTabBar(_ controller: SplitTabBarController,
-                     didSelectTab tab: SplitTabBar.Tab,
+    func splitTabBar(_ controller: BonsplitController,
+                     didSelectTab tab: Bonsplit.Tab,
                      inPane pane: PaneID) {
         // Update window title
         if let window = NSApp.keyWindow {
@@ -131,7 +131,7 @@ extension AppState: SplitTabBarDelegate {
         }
     }
 
-    func splitTabBar(_ controller: SplitTabBarController,
+    func splitTabBar(_ controller: BonsplitController,
                      didSplitPane originalPane: PaneID,
                      newPane: PaneID,
                      orientation: SplitOrientation) {

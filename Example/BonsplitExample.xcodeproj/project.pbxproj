@@ -7,17 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1000001242424240001 /* SplitTabBarExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011242424240001 /* SplitTabBarExampleApp.swift */; };
+		A1000001242424240001 /* BonsplitExampleApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000011242424240001 /* BonsplitExampleApp.swift */; };
 		A1000002242424240001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012242424240001 /* ContentView.swift */; };
 		A1000003242424240001 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000013242424240001 /* AppState.swift */; };
-		A1000004242424240001 /* SplitTabBar in Frameworks */ = {isa = PBXBuildFile; productRef = A1000024242424240001 /* SplitTabBar */; };
+		A1000004242424240001 /* Bonsplit in Frameworks */ = {isa = PBXBuildFile; productRef = A1000024242424240001 /* Bonsplit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A1000011242424240001 /* SplitTabBarExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplitTabBarExampleApp.swift; sourceTree = "<group>"; };
+		A1000011242424240001 /* BonsplitExampleApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonsplitExampleApp.swift; sourceTree = "<group>"; };
 		A1000012242424240001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A1000013242424240001 /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
-		A1000021242424240001 /* SplitTabBarExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SplitTabBarExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000021242424240001 /* BonsplitExample.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BonsplitExample.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -25,7 +25,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000004242424240001 /* SplitTabBar in Frameworks */,
+				A1000004242424240001 /* Bonsplit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -35,25 +35,25 @@
 		A1000030242424240001 = {
 			isa = PBXGroup;
 			children = (
-				A1000031242424240001 /* SplitTabBarExample */,
+				A1000031242424240001 /* BonsplitExample */,
 				A1000032242424240001 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		A1000031242424240001 /* SplitTabBarExample */ = {
+		A1000031242424240001 /* BonsplitExample */ = {
 			isa = PBXGroup;
 			children = (
-				A1000011242424240001 /* SplitTabBarExampleApp.swift */,
+				A1000011242424240001 /* BonsplitExampleApp.swift */,
 				A1000012242424240001 /* ContentView.swift */,
 				A1000013242424240001 /* AppState.swift */,
 			);
-			path = SplitTabBarExample;
+			path = BonsplitExample;
 			sourceTree = "<group>";
 		};
 		A1000032242424240001 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A1000021242424240001 /* SplitTabBarExample.app */,
+				A1000021242424240001 /* BonsplitExample.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -61,9 +61,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A1000041242424240001 /* SplitTabBarExample */ = {
+		A1000041242424240001 /* BonsplitExample */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A1000051242424240001 /* Build configuration list for PBXNativeTarget "SplitTabBarExample" */;
+			buildConfigurationList = A1000051242424240001 /* Build configuration list for PBXNativeTarget "BonsplitExample" */;
 			buildPhases = (
 				A100003E242424240001 /* Sources */,
 				A100003F242424240001 /* Frameworks */,
@@ -72,12 +72,12 @@
 			);
 			dependencies = (
 			);
-			name = SplitTabBarExample;
+			name = BonsplitExample;
 			packageProductDependencies = (
-				A1000024242424240001 /* SplitTabBar */,
+				A1000024242424240001 /* Bonsplit */,
 			);
-			productName = SplitTabBarExample;
-			productReference = A1000021242424240001 /* SplitTabBarExample.app */;
+			productName = BonsplitExample;
+			productReference = A1000021242424240001 /* BonsplitExample.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -90,7 +90,7 @@
 				LastSwiftUpdateCheck = 1500;
 				LastUpgradeCheck = 1500;
 			};
-			buildConfigurationList = A1000052242424240001 /* Build configuration list for PBXProject "SplitTabBarExample" */;
+			buildConfigurationList = A1000052242424240001 /* Build configuration list for PBXProject "BonsplitExample" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -106,7 +106,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A1000041242424240001 /* SplitTabBarExample */,
+				A1000041242424240001 /* BonsplitExample */,
 			);
 		};
 /* End PBXProject section */
@@ -116,7 +116,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000001242424240001 /* SplitTabBarExampleApp.swift in Sources */,
+				A1000001242424240001 /* BonsplitExampleApp.swift in Sources */,
 				A1000002242424240001 /* ContentView.swift in Sources */,
 				A1000003242424240001 /* AppState.swift in Sources */,
 			);
@@ -264,7 +264,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.SplitTabBarExample;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BonsplitExample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -292,7 +292,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.SplitTabBarExample;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.BonsplitExample;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -302,7 +302,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A1000051242424240001 /* Build configuration list for PBXNativeTarget "SplitTabBarExample" */ = {
+		A1000051242424240001 /* Build configuration list for PBXNativeTarget "BonsplitExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000063242424240001 /* Debug */,
@@ -311,7 +311,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A1000052242424240001 /* Build configuration list for PBXProject "SplitTabBarExample" */ = {
+		A1000052242424240001 /* Build configuration list for PBXProject "BonsplitExample" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A1000061242424240001 /* Debug */,
@@ -330,9 +330,9 @@
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		A1000024242424240001 /* SplitTabBar */ = {
+		A1000024242424240001 /* Bonsplit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = SplitTabBar;
+			productName = Bonsplit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

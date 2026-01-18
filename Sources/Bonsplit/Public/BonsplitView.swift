@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Main entry point for the SplitTabBar library
+/// Main entry point for the Bonsplit library
 ///
 /// Usage:
 /// ```swift
 /// struct MyApp: View {
-///     @State private var controller = SplitTabBarController()
+///     @State private var controller = BonsplitController()
 ///
 ///     var body: some View {
-///         SplitTabBarView(controller: controller) { tab, paneId in
+///         BonsplitView(controller: controller) { tab, paneId in
 ///             MyContentView(for: tab)
 ///                 .onTapGesture { controller.focusPane(paneId) }
 ///         } emptyPane: { paneId in
@@ -17,18 +17,18 @@ import SwiftUI
 ///     }
 /// }
 /// ```
-public struct SplitTabBarView<Content: View, EmptyContent: View>: View {
-    @Bindable private var controller: SplitTabBarController
+public struct BonsplitView<Content: View, EmptyContent: View>: View {
+    @Bindable private var controller: BonsplitController
     private let contentBuilder: (Tab, PaneID) -> Content
     private let emptyPaneBuilder: (PaneID) -> EmptyContent
 
     /// Initialize with a controller, content builder, and empty pane builder
     /// - Parameters:
-    ///   - controller: The SplitTabBarController managing the tab state
+    ///   - controller: The BonsplitController managing the tab state
     ///   - content: A ViewBuilder closure that provides content for each tab. Receives the tab and pane ID.
     ///   - emptyPane: A ViewBuilder closure that provides content for empty panes
     public init(
-        controller: SplitTabBarController,
+        controller: BonsplitController,
         @ViewBuilder content: @escaping (Tab, PaneID) -> Content,
         @ViewBuilder emptyPane: @escaping (PaneID) -> EmptyContent
     ) {
@@ -54,13 +54,13 @@ public struct SplitTabBarView<Content: View, EmptyContent: View>: View {
 
 // MARK: - Convenience initializer with default empty view
 
-extension SplitTabBarView where EmptyContent == DefaultEmptyPaneView {
+extension BonsplitView where EmptyContent == DefaultEmptyPaneView {
     /// Initialize with a controller and content builder, using the default empty pane view
     /// - Parameters:
-    ///   - controller: The SplitTabBarController managing the tab state
+    ///   - controller: The BonsplitController managing the tab state
     ///   - content: A ViewBuilder closure that provides content for each tab. Receives the tab and pane ID.
     public init(
-        controller: SplitTabBarController,
+        controller: BonsplitController,
         @ViewBuilder content: @escaping (Tab, PaneID) -> Content
     ) {
         self.controller = controller

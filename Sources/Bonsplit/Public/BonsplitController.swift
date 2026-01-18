@@ -4,17 +4,17 @@ import SwiftUI
 /// Main controller for the split tab bar system
 @MainActor
 @Observable
-public final class SplitTabBarController {
+public final class BonsplitController {
 
     // MARK: - Delegate
 
     /// Delegate for receiving callbacks about tab bar events
-    public weak var delegate: SplitTabBarDelegate?
+    public weak var delegate: BonsplitDelegate?
 
     // MARK: - Configuration
 
     /// Configuration for behavior and appearance
-    public var configuration: SplitTabBarConfiguration
+    public var configuration: BonsplitConfiguration
 
     // MARK: - Internal State
 
@@ -23,7 +23,7 @@ public final class SplitTabBarController {
     // MARK: - Initialization
 
     /// Create a new controller with the specified configuration
-    public init(configuration: SplitTabBarConfiguration = .default) {
+    public init(configuration: BonsplitConfiguration = .default) {
         self.configuration = configuration
         self.internalController = SplitViewController()
     }

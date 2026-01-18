@@ -15,7 +15,7 @@ public enum ContentViewLifecycle: Sendable {
 }
 
 /// Configuration for the split tab bar appearance and behavior
-public struct SplitTabBarConfiguration: Sendable {
+public struct BonsplitConfiguration: Sendable {
 
     // MARK: - Behavior
 
@@ -47,14 +47,14 @@ public struct SplitTabBarConfiguration: Sendable {
 
     // MARK: - Presets
 
-    public static let `default` = SplitTabBarConfiguration()
+    public static let `default` = BonsplitConfiguration()
 
-    public static let singlePane = SplitTabBarConfiguration(
+    public static let singlePane = BonsplitConfiguration(
         allowSplits: false,
         allowCloseLastPane: false
     )
 
-    public static let readOnly = SplitTabBarConfiguration(
+    public static let readOnly = BonsplitConfiguration(
         allowSplits: false,
         allowCloseTabs: false,
         allowTabReordering: false,
@@ -86,7 +86,7 @@ public struct SplitTabBarConfiguration: Sendable {
 
 // MARK: - Appearance Configuration
 
-extension SplitTabBarConfiguration {
+extension BonsplitConfiguration {
     public struct Appearance: Sendable {
         // MARK: - Tab Bar
 

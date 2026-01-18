@@ -3,26 +3,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "SplitTabBar",
+    name: "Bonsplit",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "SplitTabBar",
-            targets: ["SplitTabBar"]
+            name: "Bonsplit",
+            targets: ["Bonsplit"]
         ),
     ],
     targets: [
         .target(
-            name: "SplitTabBar",
+            name: "Bonsplit",
             dependencies: [],
-            path: "Sources/SplitTabBar"
+            path: "Sources/Bonsplit"
         ),
         .testTarget(
-            name: "SplitTabBarTests",
-            dependencies: ["SplitTabBar"],
-            path: "Tests/SplitTabBarTests"
+            name: "BonsplitTests",
+            dependencies: ["Bonsplit"],
+            path: "Tests/BonsplitTests"
         ),
     ]
 )
