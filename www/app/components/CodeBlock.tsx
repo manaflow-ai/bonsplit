@@ -1,6 +1,5 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import { Highlight, themes, Prism } from "prism-react-renderer";
 
 // Add Swift language support to Prism
@@ -15,21 +14,11 @@ interface CodeBlockProps {
 
 export default function CodeBlock({ children, language = "swift", showLineNumbers = false }: CodeBlockProps) {
   const code = children.trim();
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    setIsDark(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setIsDark(e.matches);
-    mediaQuery.addEventListener("change", handler);
-    return () => mediaQuery.removeEventListener("change", handler);
-  }, []);
 
   return (
     <div className="rounded-lg overflow-hidden">
       <Highlight
-        theme={isDark ? themes.vsDark : themes.github}
+        theme={themes.vsDark}
         code={code}
         language={language}
       >
@@ -38,7 +27,7 @@ export default function CodeBlock({ children, language = "swift", showLineNumber
             className={`${className} p-4 overflow-x-auto font-mono`}
             style={{
               ...style,
-              backgroundColor: isDark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.03)",
+              backgroundColor: "rgba(255,255,255,0.03)",
               margin: 0,
               fontSize: "13px",
             }}
@@ -71,7 +60,7 @@ export default function CodeBlock({ children, language = "swift", showLineNumber
 // Inline code component
 export function InlineCode({ children }: { children: React.ReactNode }) {
   return (
-    <code className="bg-[#f5f5f5] dark:bg-[#2a2a2a] px-1.5 py-0.5 rounded text-sm font-mono text-[#e06c75] dark:text-[#e06c75]">
+    <code className="bg-[#2a2a2a] px-1.5 py-0.5 rounded text-sm font-mono text-[#e06c75]">
       {children}
     </code>
   );

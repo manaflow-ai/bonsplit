@@ -34,7 +34,6 @@ export default function Logo({
   const [waveColumn, setWaveColumn] = useState<number | null>(null);
   const [isHovering, setIsHovering] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const animationSettings = {
     stiffness: 416,
     damping: 21,
@@ -353,19 +352,6 @@ export default function Logo({
     };
   }, [totalBlocks, totalInternalGaps, letterGapsCount, gap, letterGap]);
 
-  // Dark mode detection
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    setIsDarkMode(mediaQuery.matches);
-
-    const handleChange = (e: MediaQueryListEvent) => {
-      setIsDarkMode(e.matches);
-    };
-
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
-  }, []);
-
   // Grid cell size includes the block and gap
   const cellSize = blockSize !== null ? blockSize + gap : 0;
 
@@ -398,8 +384,8 @@ export default function Logo({
             pointerEvents: "none",
             zIndex: 1000,
             backgroundImage: `
-              linear-gradient(to right, ${isDarkMode ? "rgba(255, 255, 255, 0.12)" : "rgba(200, 200, 200, 0.5)"} 1px, transparent 1px),
-              linear-gradient(to bottom, ${isDarkMode ? "rgba(255, 255, 255, 0.12)" : "rgba(200, 200, 200, 0.5)"} 1px, transparent 1px)
+              linear-gradient(to right, rgba(255,255,255,0.08) 1px, transparent 1px),
+              linear-gradient(to bottom, rgba(255,255,255,0.08) 1px, transparent 1px)
             `,
             backgroundSize: `${cellSize}px ${cellSize}px`,
             backgroundPosition: `${padding - gap + 1}px ${padding - gap + 1}px`,
@@ -457,6 +443,8 @@ export default function Logo({
                         pointerEvents: "none",
                         zIndex: 1001,
                         transition: "opacity 0.2s ease-in-out",
+                        maskImage: "linear-gradient(to bottom, black 0%, black calc(100% - 300px), transparent 100%)",
+                        WebkitMaskImage: "linear-gradient(to bottom, black 0%, black calc(100% - 300px), transparent 100%)",
                       }}
                     />
                   );
