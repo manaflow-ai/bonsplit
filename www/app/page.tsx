@@ -45,7 +45,7 @@ export default function Home() {
           <div className="space-y-6">
             <p className="text-lg text-[#999]">
               Bonsplit is a custom tab bar and layout split library for macOS
-              apps. Out the box 120fps animations, drag-and-drop reordering,
+              apps. Out of the box 120fps animations, drag-and-drop reordering,
               SwiftUI support &amp; keyboard navigation.
             </p>
             <div>
