@@ -28,10 +28,10 @@ const APIExample = ({
       <div className="flex gap-4">
         <div className="shrink-0 w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-500">{icon}</div>
         <div>
-          <h4 className="text-[15px] font-semibold text-[#333] dark:text-[#eee]">
+          <h4 className="text-[15px] font-semibold text-[#eee]">
             {title}
           </h4>
-          <p className="text-[15px] text-[#666] dark:text-[#999]">{description}</p>
+          <p className="text-[15px] text-[#999]">{description}</p>
           {relatedAPIs && relatedAPIs.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-2">
               {relatedAPIs.map((api, i) => (
@@ -55,10 +55,10 @@ const APIExample = ({
     <div className="hidden md:grid grid-cols-[40px_2fr_3fr] gap-6">
       <div className="mt-2 w-10 h-10 rounded-xl bg-blue-500/15 flex items-center justify-center text-blue-500">{icon}</div>
       <div className="mt-2">
-        <h4 className="text-[15px] font-semibold text-[#333] dark:text-[#eee]">
+        <h4 className="text-[15px] font-semibold text-[#eee]">
           {title}
         </h4>
-        <p className="text-[15px] text-[#666] dark:text-[#999]">{description}</p>
+        <p className="text-[15px] text-[#999]">{description}</p>
         {relatedAPIs && relatedAPIs.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-2">
             {relatedAPIs.map((api, i) => (
@@ -107,7 +107,7 @@ const Parameter = ({
     </div>
     <div className="flex-1">
       <code className="text-[12px] font-mono text-[#888]">{type}</code>
-      <p className="text-[14px] text-[#666] dark:text-[#999] mt-0.5 leading-relaxed">
+      <p className="text-[14px] text-[#999] mt-0.5 leading-relaxed">
         {description}
       </p>
       {defaultValue && (
@@ -126,12 +126,12 @@ const ReturnValue = ({
   type: string;
   description: string;
 }) => (
-  <div className="mt-5 py-3 px-4 bg-[#f8f9fa] dark:bg-[#111] rounded-md">
+  <div className="mt-5 py-3 px-4 bg-[#111] rounded-md">
     <div className="text-[11px] font-medium text-[#888] uppercase tracking-wider mb-1.5">
       Returns
     </div>
     <code className="text-[13px] font-mono text-[#e06c75]">{type}</code>
-    <p className="text-[14px] text-[#666] dark:text-[#999] mt-0.5 leading-relaxed">
+    <p className="text-[14px] text-[#999] mt-0.5 leading-relaxed">
       {description}
     </p>
   </div>
@@ -183,10 +183,10 @@ const APIMethod = ({
     <div id={id} className="scroll-mt-8">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center gap-2.5 text-left py-2 -mx-2 px-2 rounded hover:bg-[#f5f5f5] dark:hover:bg-[#1a1a1a] transition-colors"
+        className="w-full flex items-center gap-2.5 text-left py-2 -mx-2 px-2 rounded hover:bg-[#1a1a1a] transition-colors"
       >
         <svg
-          className={`w-3 h-3 text-[#bbb] dark:text-[#666] transition-transform shrink-0 ${isOpen ? "rotate-90" : ""}`}
+          className={`w-3 h-3 text-[#666] transition-transform shrink-0 ${isOpen ? "rotate-90" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -194,14 +194,14 @@ const APIMethod = ({
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
         </svg>
-        <code className="text-[14px] font-mono font-normal text-[#333] dark:text-[#eee]">
+        <code className="text-[14px] font-mono font-normal text-[#eee]">
           {name}
         </code>
       </button>
       {isOpen && (
         <div className="pt-3 pb-6 ml-[22px]">
           <MethodSignature>{signature}</MethodSignature>
-          <p className="text-[14px] text-[#666] dark:text-[#999] mt-3 leading-relaxed">
+          <p className="text-[14px] text-[#999] mt-3 leading-relaxed">
             {description}
           </p>
           {parameters && parameters.length > 0 && (
@@ -209,7 +209,7 @@ const APIMethod = ({
               <div className="text-[11px] font-medium text-[#888] uppercase tracking-wider mb-2">
                 Parameters
               </div>
-              <div className="bg-[#f8f9fa] dark:bg-[#111] rounded-md py-1 px-4">
+              <div className="bg-[#111] rounded-md py-1 px-4">
                 {parameters.map((param, i) => (
                   <Parameter key={i} {...param} />
                 ))}
@@ -241,7 +241,7 @@ const APISection = ({
   children: React.ReactNode;
 }) => (
   <div id={id} className="scroll-mt-8">
-    <h3 className="text-[20px] font-semibold text-[#333] dark:text-[#eee] mb-1">
+    <h3 className="text-[20px] font-semibold text-[#eee] mb-1">
       {title}
     </h3>
     {children}
@@ -264,10 +264,10 @@ const TypeDefinition = ({
   description: string;
 }) => (
   <div className="py-4">
-    <h4 className="text-[16px] font-medium text-[#333] dark:text-[#eee] mb-2">
+    <h4 className="text-[16px] font-medium text-[#eee] mb-2">
       {name}
     </h4>
-    <p className="text-[14px] text-[#666] dark:text-[#999] mb-4 leading-relaxed">
+    <p className="text-[14px] text-[#999] mb-4 leading-relaxed">
       {description}
     </p>
     <CodeBlock>{definition}</CodeBlock>
@@ -285,7 +285,7 @@ const DelegateMethod = ({
 }) => (
   <div className="py-3">
     <code className="text-[13px] font-mono text-[#e06c75]">{name}</code>
-    <p className="text-[14px] text-[#666] dark:text-[#999] mt-1.5 leading-relaxed">
+    <p className="text-[14px] text-[#999] mt-1.5 leading-relaxed">
       {description}
     </p>
     <code className="block text-[12px] font-mono text-[#888] mt-1.5 leading-relaxed">
@@ -330,10 +330,10 @@ export default function ContentSections() {
         {/* Features */}
         <section id="features">
           <div className="mb-12">
-            <p className="font-mono text-[14px] text-[#999] dark:text-[#666] mb-2">
+            <p className="font-mono text-[14px] text-[#666] mb-2">
               ### Features
             </p>
-            <h2 className="text-[32px] font-semibold text-[#333] dark:text-[#eee]">
+            <h2 className="text-[32px] font-semibold text-[#eee]">
               Configurable &amp; Observable
             </h2>
           </div>
@@ -462,13 +462,13 @@ controller.focusPane(paneId)`}
         {/* API Reference */}
         <section id="api-reference">
           <div className="mb-12">
-            <p className="font-mono text-[14px] text-[#999] dark:text-[#666] mb-2">
+            <p className="font-mono text-[14px] text-[#666] mb-2">
               ### Read this, agents...
             </p>
-            <h2 className="text-[32px] font-semibold text-[#333] dark:text-[#eee]">
+            <h2 className="text-[32px] font-semibold text-[#eee]">
               API Reference
             </h2>
-            <p className="text-lg text-[#666] dark:text-[#999] mt-4">
+            <p className="text-lg text-[#999] mt-4">
               Complete reference for all Bonsplit classes, methods, and
               configuration options.
             </p>
@@ -477,7 +477,7 @@ controller.focusPane(paneId)`}
           <div className="space-y-12">
             {/* BonsplitController */}
             <APISection title="BonsplitController" id="bonsplit-controller">
-              <p className="text-[14px] text-[#666] dark:text-[#999] mt-2 mb-4 leading-relaxed">
+              <p className="text-[14px] text-[#999] mt-2 mb-4 leading-relaxed">
                 The main controller for managing tabs and panes. Create an
                 instance and pass it to BonsplitView.
               </p>
@@ -778,7 +778,7 @@ controller.navigateFocus(direction: .down)`}
 
             {/* BonsplitDelegate */}
             <APISection title="BonsplitDelegate" id="bonsplit-delegate">
-              <p className="text-[14px] text-[#666] dark:text-[#999] mt-2 mb-4 leading-relaxed">
+              <p className="text-[14px] text-[#999] mt-2 mb-4 leading-relaxed">
                 Implement this protocol to receive callbacks about tab bar
                 events. All methods have default implementations and are
                 optional.
@@ -888,12 +888,12 @@ controller.navigateFocus(direction: .down)`}
               title="BonsplitConfiguration"
               id="bonsplit-configuration"
             >
-              <p className="text-[14px] text-[#666] dark:text-[#999] mt-2 mb-6 leading-relaxed">
+              <p className="text-[14px] text-[#999] mt-2 mb-6 leading-relaxed">
                 Configure behavior and appearance. Pass to BonsplitController on
                 initialization.
               </p>
 
-              <div className="bg-[#f8f9fa] dark:bg-[#111] rounded-md py-2 px-4">
+              <div className="bg-[#111] rounded-md py-2 px-4">
                 <Parameter
                   name="allowSplits"
                   type="Bool"
@@ -955,30 +955,30 @@ let controller = BonsplitController(configuration: config)`}</CodeBlock>
 
               <CategoryHeader>Content View Lifecycle</CategoryHeader>
 
-              <p className="text-[14px] text-[#666] dark:text-[#999] mt-2 mb-4 leading-relaxed">
+              <p className="text-[14px] text-[#999] mt-2 mb-4 leading-relaxed">
                 Controls how tab content views are managed when switching
                 between tabs.
               </p>
 
-              <div className="overflow-x-auto bg-[#f8f9fa] dark:bg-[#111] rounded-md">
+              <div className="overflow-x-auto bg-[#111] rounded-md">
                 <table className="w-full text-[13px]">
                   <thead>
                     <tr>
-                      <th className="text-left py-2.5 px-4 font-medium text-[#666] dark:text-[#999]">
+                      <th className="text-left py-2.5 px-4 font-medium text-[#999]">
                         Mode
                       </th>
-                      <th className="text-left py-2.5 px-4 font-medium text-[#666] dark:text-[#999]">
+                      <th className="text-left py-2.5 px-4 font-medium text-[#999]">
                         Memory
                       </th>
-                      <th className="text-left py-2.5 px-4 font-medium text-[#666] dark:text-[#999]">
+                      <th className="text-left py-2.5 px-4 font-medium text-[#999]">
                         State
                       </th>
-                      <th className="text-left py-2.5 px-4 font-medium text-[#666] dark:text-[#999]">
+                      <th className="text-left py-2.5 px-4 font-medium text-[#999]">
                         Use Case
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="text-[#666] dark:text-[#999]">
+                  <tbody className="text-[#999]">
                     <tr>
                       <td className="py-2.5 px-4">
                         <code className="text-[#e06c75]">
@@ -1003,7 +1003,7 @@ let controller = BonsplitController(configuration: config)`}</CodeBlock>
 
               <CategoryHeader>Appearance</CategoryHeader>
 
-              <div className="bg-[#f8f9fa] dark:bg-[#111] rounded-md py-2 px-4">
+              <div className="bg-[#111] rounded-md py-2 px-4">
                 <Parameter
                   name="tabBarHeight"
                   type="CGFloat"
@@ -1062,7 +1062,7 @@ let controller = BonsplitController(configuration: config)`}</CodeBlock>
 
               <CategoryHeader>Presets</CategoryHeader>
 
-              <div className="bg-[#f8f9fa] dark:bg-[#111] rounded-md py-2 px-4">
+              <div className="bg-[#111] rounded-md py-2 px-4">
                 <Parameter
                   name=".default"
                   type="BonsplitConfiguration"
@@ -1094,15 +1094,15 @@ let controller = BonsplitController(configuration: config)`}</CodeBlock>
               const prefix = isLast ? "└── " : "├── ";
               return (
                 <li key={id} className="flex">
-                  <span className="text-[#ccc] dark:text-[#444] select-none whitespace-pre">
+                  <span className="text-[#444] select-none whitespace-pre">
                     {prefix}
                   </span>
                   <a
                     href={`#${id}`}
                     className={`transition-colors ${
                       isActive
-                        ? "text-[#333] dark:text-[#eee]"
-                        : "text-[#999] dark:text-[#666] hover:text-[#333] dark:hover:text-[#eee]"
+                        ? "text-[#eee]"
+                        : "text-[#666] hover:text-[#eee]"
                     }`}
                   >
                     {label}

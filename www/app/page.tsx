@@ -32,6 +32,18 @@ export default function Home() {
     return () => window.removeEventListener("resize", calculatePadding);
   }, []);
 
+  // Remove hash from URL when scrolled to top
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.scrollY === 0 && window.location.hash) {
+        history.replaceState(null, "", window.location.pathname);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   const handleIntroComplete = useCallback(() => {
     videoRef.current?.play();
   }, []);
@@ -41,7 +53,7 @@ export default function Home() {
       <Hero padding={padding} onIntroComplete={handleIntroComplete} />
       <div className="max-w-[1000px] mx-auto px-4">
         {/* Intro & Installation */}
-        <section className="mt-4 lg:-mt-12 mb-8 max-w-[600px]">
+        <section id="installation" className="mt-4 lg:-mt-12 mb-8 max-w-[600px] scroll-mt-8">
           <div className="space-y-6">
             <p className="text-lg text-[#999]">
               Bonsplit is a custom tab bar and layout split library for macOS

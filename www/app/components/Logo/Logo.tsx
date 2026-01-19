@@ -357,15 +357,15 @@ export default function Logo({
 
 
   return (
-    <div ref={containerRef} className="w-full">
-      {/* Overlay to hide initial layout flash */}
+    <div ref={containerRef} className="w-full relative">
+      {/* Overlay to hide initial layout flash - only covers logo area */}
       <div
         style={{
-          position: "fixed",
+          position: "absolute",
           top: 0,
           left: 0,
-          width: "100vw",
-          height: "100vh",
+          width: "100%",
+          height: "100%",
           backgroundColor: "var(--background)",
           pointerEvents: "none",
           zIndex: 9999,

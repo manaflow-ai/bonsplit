@@ -15,6 +15,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Bonsplit - Native macOS Tab Bar with Split Panes for SwiftUI",
   description: "A native macOS tab bar library with split pane support for SwiftUI applications. Features 120fps animations, drag-and-drop tabs, and full keyboard navigation.",
+  openGraph: {
+    title: "Bonsplit - Native macOS Tab Bar with Split Panes",
+    description: "A native macOS tab bar library with split pane support for SwiftUI. 120fps animations, drag-and-drop, keyboard navigation.",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Bonsplit Logo",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Bonsplit - Native macOS Tab Bar with Split Panes",
+    description: "A native macOS tab bar library with split pane support for SwiftUI. 120fps animations, drag-and-drop, keyboard navigation.",
+    images: ["/og-image.png"],
+  },
 };
 
 export default function RootLayout({
