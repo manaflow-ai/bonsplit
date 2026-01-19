@@ -21,6 +21,11 @@ struct TabBarView: View {
         contentWidth > containerWidth && scrollOffset < contentWidth - containerWidth - 1
     }
 
+    /// Whether this tab bar should show full saturation (focused or drag source)
+    private var shouldShowFullSaturation: Bool {
+        isFocused || controller.dragSourcePaneId == pane.id
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Scrollable tabs with fade overlays
@@ -84,6 +89,7 @@ struct TabBarView: View {
         .frame(height: TabBarMetrics.barHeight)
         .contentShape(Rectangle())
         .background(tabBarBackground)
+        .saturation(shouldShowFullSaturation ? 1.0 : 0)
     }
 
     // MARK: - Tab Item

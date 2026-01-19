@@ -40,13 +40,6 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         controller.focusedPaneId == pane.id
     }
 
-    /// Whether this pane should show full saturation (focused, drag source, or drop target)
-    private var shouldShowFullSaturation: Bool {
-        isFocused ||
-        controller.dragSourcePaneId == pane.id ||
-        activeDropZone != nil
-    }
-
     var body: some View {
         VStack(spacing: 0) {
             // Tab bar
@@ -62,7 +55,6 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
-        .saturation(shouldShowFullSaturation ? 1.0 : 0)
     }
 
     // MARK: - Content Area with Drop Zones
