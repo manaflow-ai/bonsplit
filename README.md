@@ -158,6 +158,35 @@ let paneTabs = controller.tabs(inPane: paneId)
 let selected = controller.selectedTab(inPane: paneId)
 ```
 
+#### Geometry & Synchronization
+
+Query pane geometry and synchronize with external programs (e.g., window managers like yabai):
+
+```swift
+// Get flat list of pane geometries with pixel coordinates
+let snapshot = controller.layoutSnapshot()
+for pane in snapshot.panes {
+    print("Pane \(pane.paneId): \(pane.frame.width)x\(pane.frame.height)")
+}
+
+// Get full tree structure
+let tree = controller.treeSnapshot()
+
+// Set divider position programmatically (0.0-1.0)
+controller.setDividerPosition(0.3, forSplit: splitId, fromExternal: true)
+
+// Update container frame when window moves
+controller.setContainerFrame(newFrame)
+```
+
+| Method | Description |
+|--------|-------------|
+| `layoutSnapshot()` | Get current pane geometry with pixel coordinates |
+| `treeSnapshot()` | Get full tree structure for external consumption |
+| `findSplit(_:)` | Check if a split exists by UUID |
+| `setDividerPosition(_:forSplit:fromExternal:)` | Programmatically set divider position |
+| `setContainerFrame(_:)` | Update container frame |
+
 ### Tab
 
 Read-only snapshot of tab metadata.
@@ -231,6 +260,28 @@ All delegate methods have default implementations and are optional.
 | `shouldClosePane` | Called before closing a pane. Return `false` to prevent. |
 | `didClosePane` | Called after a pane is closed. |
 | `didFocusPane` | Called when focus changes to a different pane. |
+| `didChangeGeometry` | Called when any pane geometry changes (resize, split, close). |
+| `shouldNotifyDuringDrag` | Return `true` for real-time notifications during divider drag. |
+
+#### Geometry Notifications
+
+Receive callbacks when pane geometry changes:
+
+```swift
+func splitTabBar(_ controller: BonsplitController,
+                 didChangeGeometry snapshot: LayoutSnapshot) {
+    // Sync with external system (e.g., yabai)
+    for pane in snapshot.panes {
+        externalSystem.updatePane(pane.paneId, frame: pane.frame)
+    }
+}
+
+// Opt-in to real-time notifications during divider drag
+func splitTabBar(_ controller: BonsplitController,
+                 shouldNotifyDuringDrag: Bool) -> Bool {
+    return true  // Enable frame-by-frame updates
+}
+```
 
 ### BonsplitConfiguration
 

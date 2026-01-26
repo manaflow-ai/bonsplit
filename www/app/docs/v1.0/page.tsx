@@ -1,46 +1,18 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { animate } from "animejs";
-import { Menu } from "@base-ui/react/menu";
-import Hero from "./components/Hero";
-import ContentSections from "./components/ContentSections";
-import CodeBlock from "./components/CodeBlock";
+import Hero from "../../components/Hero";
+import ContentSectionsV1 from "../../components/ContentSectionsV1";
+import CodeBlock from "../../components/CodeBlock";
 import Link from "next/link";
 
 const MIN_PADDING = 8;
 const MAX_PADDING = 180;
 const PADDING_RATIO = 0.08;
 
-const CHANGELOG = {
-  "1.1": {
-    date: "2025-01-26",
-    changes: [
-      "Two-Way Synchronization API",
-      "layoutSnapshot() - Query pane geometry",
-      "treeSnapshot() - Get full tree structure",
-      "setDividerPosition() - Programmatic control",
-      "didChangeGeometry delegate callback",
-      "New types: LayoutSnapshot, PixelRect, PaneGeometry",
-    ],
-  },
-  "1.0": {
-    date: "Initial Release",
-    changes: [
-      "Tab bar with drag-and-drop reordering",
-      "Horizontal and vertical split panes",
-      "120fps animations",
-      "Configurable appearance and behavior",
-      "Delegate callbacks for all events",
-      "Keyboard navigation between panes",
-    ],
-  },
-};
-
-export default function Home() {
+export default function DocsV1() {
   const [padding, setPadding] = useState(MAX_PADDING);
   const [showOverlay, setShowOverlay] = useState(true);
-  const [menuOpen, setMenuOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -82,19 +54,6 @@ export default function Home() {
     videoRef.current?.play();
   }, []);
 
-  // Callback ref to animate dropdown on mount
-  const animateDropdown = useCallback((node: HTMLDivElement | null) => {
-    if (node) {
-      node.style.transformOrigin = "top left";
-      animate(node, {
-        opacity: [0, 1],
-        scale: [0.8, 1],
-        duration: 200,
-        ease: "outCubic",
-      });
-    }
-  }, []);
-
   return (
     <div className="bg-background">
       {/* Full-page overlay to hide initial layout flash */}
@@ -114,89 +73,15 @@ export default function Home() {
       />
       <Hero padding={padding} onIntroComplete={handleIntroComplete} onIntroStart={handleIntroStart} />
       <div className="max-w-[1000px] mx-auto px-4">
-        {/* Version dropdown */}
-        <div className="mt-4 lg:-mt-12 mb-4 translate-y-[3px]">
-          <Menu.Root open={menuOpen} onOpenChange={setMenuOpen}>
-            <Menu.Trigger
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono bg-blue-500/20 text-blue-500 rounded hover:bg-blue-500/30 transition-colors"
-            >
-              v1.1
-              <svg
-                className={`w-3 h-3 transition-transform ${menuOpen ? "rotate-180" : ""}`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2.5}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-              </svg>
-            </Menu.Trigger>
-            <Menu.Portal>
-              <Menu.Positioner side="bottom" align="start" sideOffset={4}>
-                <Menu.Popup
-                  ref={animateDropdown}
-                  className="py-1 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 min-w-[100px] outline-none"
-                >
-                  {/* v1.1 with submenu */}
-                  <Menu.SubmenuRoot>
-                    <Menu.SubmenuTrigger className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-mono text-blue-500 bg-blue-500/10 data-[highlighted]:bg-blue-500/20 outline-none cursor-default">
-                      v1.1 (latest)
-                      <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Menu.SubmenuTrigger>
-                    <Menu.Portal>
-                      <Menu.Positioner side="right" align="start" sideOffset={4}>
-                        <Menu.Popup
-                          ref={animateDropdown}
-                          className="p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 w-[280px] outline-none"
-                        >
-                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.1"].date}</div>
-                          <ul className="space-y-1 list-disc list-inside pl-1">
-                            {CHANGELOG["1.1"].changes.map((change, i) => (
-                              <li key={i} className="text-[11px] font-mono text-[#999] leading-relaxed">
-                                {change}
-                              </li>
-                            ))}
-                          </ul>
-                        </Menu.Popup>
-                      </Menu.Positioner>
-                    </Menu.Portal>
-                  </Menu.SubmenuRoot>
-
-                  {/* v1.0 with submenu */}
-                  <Menu.SubmenuRoot>
-                    <Menu.SubmenuTrigger
-                      render={<Link href="/docs/v1.0" />}
-                      className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-mono text-[#999] data-[highlighted]:text-[#eee] data-[highlighted]:bg-[#252525] transition-colors outline-none cursor-pointer"
-                    >
-                      v1.0
-                      <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Menu.SubmenuTrigger>
-                    <Menu.Portal>
-                      <Menu.Positioner side="right" align="start" sideOffset={4}>
-                        <Menu.Popup
-                          ref={animateDropdown}
-                          className="p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 w-[280px] outline-none"
-                        >
-                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.0"].date}</div>
-                          <ul className="space-y-1 list-disc list-inside pl-1">
-                            {CHANGELOG["1.0"].changes.map((change, i) => (
-                              <li key={i} className="text-[11px] font-mono text-[#999] leading-relaxed">
-                                {change}
-                              </li>
-                            ))}
-                          </ul>
-                        </Menu.Popup>
-                      </Menu.Positioner>
-                    </Menu.Portal>
-                  </Menu.SubmenuRoot>
-                </Menu.Popup>
-              </Menu.Positioner>
-            </Menu.Portal>
-          </Menu.Root>
+        {/* Version banner */}
+        <div className="mt-4 lg:-mt-12 mb-4 p-3 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-start gap-3">
+          <span className="px-2 py-0.5 text-xs font-mono bg-[#333] rounded text-[#999] shrink-0">v1.0</span>
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between flex-1 gap-1 md:gap-2">
+            <span className="text-sm text-[#999]">You are viewing documentation for an older version.</span>
+            <Link href="/" className="text-sm text-blue-500 hover:text-blue-400 transition-colors shrink-0">
+              View latest (v1.1)
+            </Link>
+          </div>
         </div>
         {/* Intro & Installation */}
         <section id="installation" className="mb-8 max-w-[600px] scroll-mt-8">
@@ -256,7 +141,7 @@ export default function Home() {
         </div>
         {/* Content section */}
         <div className="relative z-[1001] w-full">
-          <ContentSections />
+          <ContentSectionsV1 />
         </div>
       </div>
     </div>
