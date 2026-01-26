@@ -207,7 +207,7 @@ export default function Home() {
               reordering, SwiftUI support &amp; keyboard navigation.
             </p>
             <div>
-              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.0.0")`}</CodeBlock>
+              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.0")`}</CodeBlock>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <a
