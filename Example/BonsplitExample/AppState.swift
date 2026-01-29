@@ -95,6 +95,8 @@ extension AppState: BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController,
                      shouldCloseTab tab: Bonsplit.Tab,
                      inPane pane: PaneID) -> Bool {
+        debugState?.log("🔔 shouldCloseTab: \"\(tab.title)\" in pane \(pane.hashValue)")
+
         // If tab is dirty, show confirmation
         if tab.isDirty {
             let alert = NSAlert()
@@ -109,21 +111,27 @@ extension AppState: BonsplitDelegate {
             case .alertFirstButtonReturn:
                 // Save - in a real app, save the file here
                 print("Saving \(tab.title)...")
+                debugState?.log("   → allowed (saved)")
                 return true
             case .alertSecondButtonReturn:
                 // Don't save - just close
+                debugState?.log("   → allowed (discarded)")
                 return true
             default:
                 // Cancel
+                debugState?.log("   → denied (cancelled)")
                 return false
             }
         }
+        debugState?.log("   → allowed")
         return true
     }
 
     func splitTabBar(_ controller: BonsplitController,
                      didCloseTab tabId: TabID,
                      fromPane pane: PaneID) {
+        debugState?.log("✅ didCloseTab: tab \(tabId.hashValue) from pane \(pane.hashValue)")
+
         // Clean up content when tab is closed
         tabContents.removeValue(forKey: tabId)
         debugState?.refresh()
