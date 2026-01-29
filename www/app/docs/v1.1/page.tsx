@@ -76,7 +76,7 @@ export default function DocsV1_1() {
         {/* Version banner */}
         <div className="mt-4 lg:-mt-12 mb-4 p-3 bg-[#1a1a1a] rounded-lg border border-[#333] flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 text-xs font-mono bg-green-500/20 text-green-500 rounded">v1.1</span>
+            <span className="px-2 py-0.5 text-xs font-mono bg-green-500/20 text-green-500 rounded">v1.1.1</span>
             <span className="text-sm text-[#999]">Latest version with Two-Way Sync API</span>
           </div>
           <Link href="/docs/v1.0" className="text-sm text-[#666] hover:text-[#999] transition-colors">
@@ -92,7 +92,7 @@ export default function DocsV1_1() {
               reordering, SwiftUI support &amp; keyboard navigation.
             </p>
             <div>
-              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.0")`}</CodeBlock>
+              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.1")`}</CodeBlock>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <a

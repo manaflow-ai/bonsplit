@@ -5,6 +5,15 @@ All notable changes to Bonsplit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-01-29
+
+### Fixed
+- Fixed delegate notifications not being sent when closing tabs ([#2](https://github.com/almonk/bonsplit/issues/2))
+  - Tabs now correctly communicate through `BonsplitController` for proper delegate callbacks
+
+### Added
+- New public method `closeTab(_ tabId: TabID, inPane paneId: PaneID) -> Bool` for efficient tab closing when pane is known
+
 ## [1.1.0] - 2025-01-26
 
 ### Added

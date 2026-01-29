@@ -13,7 +13,14 @@ const MAX_PADDING = 180;
 const PADDING_RATIO = 0.08;
 
 const CHANGELOG = {
-  "1.1": {
+  "1.1.1": {
+    date: "2025-01-29",
+    changes: [
+      "Fixed delegate notifications for tab events",
+      "New closeTab(_:inPane:) method",
+    ],
+  },
+  "1.1.0": {
     date: "2025-01-26",
     changes: [
       "Two-Way Synchronization API",
@@ -24,7 +31,7 @@ const CHANGELOG = {
       "New types: LayoutSnapshot, PixelRect, PaneGeometry",
     ],
   },
-  "1.0": {
+  "1.0.0": {
     date: "Initial Release",
     changes: [
       "Tab bar with drag-and-drop reordering",
@@ -120,7 +127,7 @@ export default function Home() {
             <Menu.Trigger
               className="inline-flex items-center gap-1.5 px-2 py-0.5 text-xs font-mono bg-blue-500/20 text-blue-500 rounded hover:bg-blue-500/30 transition-colors"
             >
-              v1.1
+              v1.1.1
               <svg
                 className={`w-3 h-3 transition-transform ${menuOpen ? "rotate-180" : ""}`}
                 fill="none"
@@ -137,10 +144,10 @@ export default function Home() {
                   ref={animateDropdown}
                   className="py-1 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 min-w-[100px] outline-none"
                 >
-                  {/* v1.1 with submenu */}
+                  {/* v1.1.1 with submenu */}
                   <Menu.SubmenuRoot>
                     <Menu.SubmenuTrigger className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-mono text-blue-500 bg-blue-500/10 data-[highlighted]:bg-blue-500/20 outline-none cursor-default">
-                      v1.1 (latest)
+                      v1.1.1 (latest)
                       <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
@@ -151,9 +158,9 @@ export default function Home() {
                           ref={animateDropdown}
                           className="p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 w-[280px] outline-none"
                         >
-                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.1"].date}</div>
+                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.1.1"].date}</div>
                           <ul className="space-y-1 list-disc list-inside pl-1">
-                            {CHANGELOG["1.1"].changes.map((change, i) => (
+                            {CHANGELOG["1.1.1"].changes.map((change, i) => (
                               <li key={i} className="text-[11px] font-mono text-[#999] leading-relaxed">
                                 {change}
                               </li>
@@ -164,13 +171,13 @@ export default function Home() {
                     </Menu.Portal>
                   </Menu.SubmenuRoot>
 
-                  {/* v1.0 with submenu */}
+                  {/* v1.1.0 with submenu */}
                   <Menu.SubmenuRoot>
                     <Menu.SubmenuTrigger
-                      render={<Link href="/docs/v1.0" />}
+                      render={<Link href="/docs/v1.1" />}
                       className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-mono text-[#999] data-[highlighted]:text-[#eee] data-[highlighted]:bg-[#252525] transition-colors outline-none cursor-pointer"
                     >
-                      v1.0
+                      v1.1.0
                       <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
@@ -181,9 +188,39 @@ export default function Home() {
                           ref={animateDropdown}
                           className="p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 w-[280px] outline-none"
                         >
-                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.0"].date}</div>
+                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.1.0"].date}</div>
                           <ul className="space-y-1 list-disc list-inside pl-1">
-                            {CHANGELOG["1.0"].changes.map((change, i) => (
+                            {CHANGELOG["1.1.0"].changes.map((change, i) => (
+                              <li key={i} className="text-[11px] font-mono text-[#999] leading-relaxed">
+                                {change}
+                              </li>
+                            ))}
+                          </ul>
+                        </Menu.Popup>
+                      </Menu.Positioner>
+                    </Menu.Portal>
+                  </Menu.SubmenuRoot>
+
+                  {/* v1.0.0 with submenu */}
+                  <Menu.SubmenuRoot>
+                    <Menu.SubmenuTrigger
+                      render={<Link href="/docs/v1.0" />}
+                      className="flex items-center justify-between w-full px-3 py-1.5 text-xs font-mono text-[#999] data-[highlighted]:text-[#eee] data-[highlighted]:bg-[#252525] transition-colors outline-none cursor-pointer"
+                    >
+                      v1.0.0
+                      <svg className="w-3 h-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </Menu.SubmenuTrigger>
+                    <Menu.Portal>
+                      <Menu.Positioner side="right" align="start" sideOffset={4}>
+                        <Menu.Popup
+                          ref={animateDropdown}
+                          className="p-3 bg-[#1a1a1a] border border-[#333] rounded-lg shadow-lg z-50 w-[280px] outline-none"
+                        >
+                          <div className="text-[10px] font-mono text-[#666] mb-2">{CHANGELOG["1.0.0"].date}</div>
+                          <ul className="space-y-1 list-disc list-inside pl-1">
+                            {CHANGELOG["1.0.0"].changes.map((change, i) => (
                               <li key={i} className="text-[11px] font-mono text-[#999] leading-relaxed">
                                 {change}
                               </li>
@@ -207,7 +244,7 @@ export default function Home() {
               reordering, SwiftUI support &amp; keyboard navigation.
             </p>
             <div>
-              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.0")`}</CodeBlock>
+              <CodeBlock>{`.package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.1")`}</CodeBlock>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <a
