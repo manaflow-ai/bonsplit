@@ -4,12 +4,12 @@ import Foundation
 enum TabBarMetrics {
     // MARK: - Tab Bar
 
-    static let barHeight: CGFloat = 33
+    static let barHeight: CGFloat = 30
     static let barPadding: CGFloat = 0
 
     // MARK: - Individual Tabs
 
-    static let tabHeight: CGFloat = 32
+    static let tabHeight: CGFloat = 30
     static let tabMinWidth: CGFloat = 140
     static let tabMaxWidth: CGFloat = 220
     static let tabCornerRadius: CGFloat = 0
