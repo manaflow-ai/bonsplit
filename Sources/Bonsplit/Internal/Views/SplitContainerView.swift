@@ -11,6 +11,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     /// Callback when geometry changes. Bool indicates if change is during active divider drag.
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
+    /// Animation configuration
+    var enableAnimations: Bool = true
+    var animationDuration: Double = 0.15
 
     func makeCoordinator() -> Coordinator {
         Coordinator(splitState: splitState, onGeometryChange: onGeometryChange)
@@ -38,15 +41,21 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // Determine which pane is new (will be hidden initially)
         let newPaneIndex = animationOrigin == .fromFirst ? 0 : 1
 
+        // Capture animation settings for async block
+        let shouldAnimate = enableAnimations && animationOrigin != nil
+        let duration = animationDuration
+
         if animationOrigin != nil {
             // Clear immediately so we don't re-animate on updates
             splitState.animationOrigin = nil
 
-            // Hide the NEW pane immediately to prevent flash
-            splitView.arrangedSubviews[newPaneIndex].isHidden = true
+            if shouldAnimate {
+                // Hide the NEW pane immediately to prevent flash
+                splitView.arrangedSubviews[newPaneIndex].isHidden = true
 
-            // Track that we're animating (skip delegate position updates)
-            context.coordinator.isAnimating = true
+                // Track that we're animating (skip delegate position updates)
+                context.coordinator.isAnimating = true
+            }
         }
 
         // Wait for view to be added to window
@@ -58,26 +67,32 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             guard totalSize > 0 else { return }
 
             if animationOrigin != nil {
-                // Position at edge while new pane is hidden
-                let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : totalSize
-                splitView.setPosition(startPosition, ofDividerAt: 0)
-                splitView.layoutSubtreeIfNeeded()
-
                 let targetPosition = totalSize * 0.5
                 splitState.dividerPosition = 0.5
 
-                // Wait for layout
-                DispatchQueue.main.async {
-                    // Show the new pane and animate
-                    splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                if shouldAnimate {
+                    // Position at edge while new pane is hidden
+                    let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : totalSize
+                    splitView.setPosition(startPosition, ofDividerAt: 0)
+                    splitView.layoutSubtreeIfNeeded()
 
-                    SplitAnimator.shared.animate(
-                        splitView: splitView,
-                        from: startPosition,
-                        to: targetPosition
-                    ) {
-                        context.coordinator.isAnimating = false
+                    // Wait for layout
+                    DispatchQueue.main.async {
+                        // Show the new pane and animate
+                        splitView.arrangedSubviews[newPaneIndex].isHidden = false
+
+                        SplitAnimator.shared.animate(
+                            splitView: splitView,
+                            from: startPosition,
+                            to: targetPosition,
+                            duration: duration
+                        ) {
+                            context.coordinator.isAnimating = false
+                        }
                     }
+                } else {
+                    // No animation - just set the position immediately
+                    splitView.setPosition(targetPosition, ofDividerAt: 0)
                 }
             } else {
                 // No animation - just set the position
@@ -141,7 +156,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
                 contentViewLifecycle: contentViewLifecycle,
-                onGeometryChange: onGeometryChange
+                onGeometryChange: onGeometryChange,
+                enableAnimations: enableAnimations,
+                animationDuration: animationDuration
             )
         }
     }

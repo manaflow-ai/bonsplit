@@ -4,13 +4,15 @@ import AppKit
 /// Recursively renders a split node (pane or split)
 struct SplitNodeView<Content: View, EmptyContent: View>: View {
     @Environment(SplitViewController.self) private var controller
-    
+
     let node: SplitNode
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
+    var enableAnimations: Bool = true
+    var animationDuration: Double = 0.15
 
     var body: some View {
         switch node {
@@ -32,7 +34,9 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
                 contentViewLifecycle: contentViewLifecycle,
-                onGeometryChange: onGeometryChange
+                onGeometryChange: onGeometryChange,
+                enableAnimations: enableAnimations,
+                animationDuration: animationDuration
             )
         }
     }

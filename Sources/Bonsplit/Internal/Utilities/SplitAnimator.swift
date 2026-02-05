@@ -26,8 +26,8 @@ final class SplitAnimator {
     /// Shared animator instance
     static let shared = SplitAnimator()
 
-    /// Animation duration in seconds
-    nonisolated static let animationDuration: CFTimeInterval = 0.16
+    /// Default animation duration in seconds
+    nonisolated static let defaultAnimationDuration: CFTimeInterval = 0.16
     // MARK: - Initialization
 
     private init() {
@@ -68,7 +68,7 @@ final class SplitAnimator {
         splitView: NSSplitView,
         from startPosition: CGFloat,
         to endPosition: CGFloat,
-        duration: CFTimeInterval = SplitAnimator.animationDuration,
+        duration: CFTimeInterval = SplitAnimator.defaultAnimationDuration,
         onComplete: (() -> Void)? = nil
     ) -> UUID {
         let id = UUID()
