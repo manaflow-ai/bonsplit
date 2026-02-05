@@ -268,23 +268,22 @@ struct TabDropDelegate: DropDelegate {
         #if DEBUG
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
+
+        // Clear visual state immediately to prevent lingering indicators.
+        // Must happen synchronously before returning, not in async callback.
         dropTargetIndex = nil
+        controller.draggingTab = nil
+        controller.dragSourcePaneId = nil
 
         guard let provider = info.itemProviders(for: [.text]).first else {
             #if DEBUG
             NSLog("[Bonsplit Drag] No item provider found")
             #endif
-            // Clear drag state
-            controller.draggingTab = nil
-            controller.dragSourcePaneId = nil
             return false
         }
 
         provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
             DispatchQueue.main.async {
-                // Clear drag state
-                controller.draggingTab = nil
-                controller.dragSourcePaneId = nil
 
                 // Handle both Data and String representations
                 let string: String?
