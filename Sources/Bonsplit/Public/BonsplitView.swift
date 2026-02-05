@@ -49,7 +49,9 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
             contentViewLifecycle: controller.configuration.contentViewLifecycle,
             onGeometryChange: { [weak controller] isDragging in
                 controller?.notifyGeometryChange(isDragging: isDragging)
-            }
+            },
+            enableAnimations: controller.configuration.appearance.enableAnimations,
+            animationDuration: controller.configuration.appearance.animationDuration
         )
         .environment(controller)
         .environment(controller.internalController)

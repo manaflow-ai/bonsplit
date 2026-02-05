@@ -3,12 +3,14 @@ import SwiftUI
 /// Main container view that renders the entire split tree (internal implementation)
 struct SplitViewContainer<Content: View, EmptyContent: View>: View {
     @Environment(SplitViewController.self) private var controller
-    
+
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
+    var enableAnimations: Bool = true
+    var animationDuration: Double = 0.15
 
     var body: some View {
         GeometryReader { geometry in
@@ -40,7 +42,9 @@ struct SplitViewContainer<Content: View, EmptyContent: View>: View {
             emptyPaneBuilder: emptyPaneBuilder,
             showSplitButtons: showSplitButtons,
             contentViewLifecycle: contentViewLifecycle,
-            onGeometryChange: onGeometryChange
+            onGeometryChange: onGeometryChange,
+            enableAnimations: enableAnimations,
+            animationDuration: animationDuration
         )
     }
 }
