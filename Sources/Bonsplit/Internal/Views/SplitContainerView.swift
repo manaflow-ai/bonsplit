@@ -63,16 +63,17 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
                 : splitView.bounds.height
+            let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard totalSize > 0 else { return }
+            guard availableSize > 0 else { return }
 
             if animationOrigin != nil {
-                let targetPosition = totalSize * 0.5
+                let targetPosition = availableSize * 0.5
                 splitState.dividerPosition = 0.5
 
                 if shouldAnimate {
                     // Position at edge while new pane is hidden
-                    let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : totalSize
+                    let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : availableSize
                     splitView.setPosition(startPosition, ofDividerAt: 0)
                     splitView.layoutSubtreeIfNeeded()
 
@@ -88,6 +89,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                             duration: duration
                         ) {
                             context.coordinator.isAnimating = false
+                            // Re-assert exact 0.5 ratio to prevent pixel-rounding drift
+                            splitState.dividerPosition = 0.5
+                            context.coordinator.lastAppliedPosition = 0.5
                         }
                     }
                 } else {
@@ -96,7 +100,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 }
             } else {
                 // No animation - just set the position
-                let position = totalSize * splitState.dividerPosition
+                let position = availableSize * splitState.dividerPosition
                 splitView.setPosition(position, ofDividerAt: 0)
             }
         }
@@ -190,10 +194,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let totalSize = splitState.orientation == .horizontal
                     ? splitView.bounds.width
                     : splitView.bounds.height
+                let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-                guard totalSize > 0 else { return }
+                guard availableSize > 0 else { return }
 
-                let pixelPosition = totalSize * statePosition
+                let pixelPosition = availableSize * statePosition
                 splitView.setPosition(pixelPosition, ofDividerAt: 0)
                 splitView.layoutSubtreeIfNeeded()
                 lastAppliedPosition = statePosition
@@ -215,15 +220,21 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
                 : splitView.bounds.height
+            let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard totalSize > 0 else { return }
+            guard availableSize > 0 else { return }
 
             if let firstSubview = splitView.arrangedSubviews.first {
                 let dividerPosition = splitState.orientation == .horizontal
                     ? firstSubview.frame.width
                     : firstSubview.frame.height
 
-                let normalizedPosition = dividerPosition / totalSize
+                var normalizedPosition = dividerPosition / availableSize
+
+                // Snap to 0.5 if very close (prevents pixel-rounding drift)
+                if abs(normalizedPosition - 0.5) < 0.01 {
+                    normalizedPosition = 0.5
+                }
 
                 // Check if drag ended (mouse up)
                 let wasDragging = isDragging
@@ -252,7 +263,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
                 : splitView.bounds.height
-            return min(proposedMaximumPosition, totalSize - TabBarMetrics.minimumPaneWidth)
+            return min(proposedMaximumPosition, totalSize - splitView.dividerThickness - TabBarMetrics.minimumPaneWidth)
         }
     }
 }
