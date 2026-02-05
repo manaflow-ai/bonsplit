@@ -134,6 +134,9 @@ struct TabBarView: View {
     // MARK: - Item Provider
 
     private func createItemProvider(for tab: TabItem) -> NSItemProvider {
+        #if DEBUG
+        NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
+        #endif
         // Set drag source for visual feedback
         splitViewController.draggingTab = tab
         splitViewController.dragSourcePaneId = pane.id
@@ -262,9 +265,15 @@ struct TabDropDelegate: DropDelegate {
     @Binding var dropTargetIndex: Int?
 
     func performDrop(info: DropInfo) -> Bool {
+        #if DEBUG
+        NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
+        #endif
         dropTargetIndex = nil
 
         guard let provider = info.itemProviders(for: [.text]).first else {
+            #if DEBUG
+            NSLog("[Bonsplit Drag] No item provider found")
+            #endif
             // Clear drag state
             controller.draggingTab = nil
             controller.dragSourcePaneId = nil
@@ -317,10 +326,16 @@ struct TabDropDelegate: DropDelegate {
     }
 
     func dropEntered(info: DropInfo) {
+        #if DEBUG
+        NSLog("[Bonsplit Drag] dropEntered at index: \(targetIndex)")
+        #endif
         dropTargetIndex = targetIndex
     }
 
     func dropExited(info: DropInfo) {
+        #if DEBUG
+        NSLog("[Bonsplit Drag] dropExited from index: \(targetIndex)")
+        #endif
         if dropTargetIndex == targetIndex {
             dropTargetIndex = nil
         }
