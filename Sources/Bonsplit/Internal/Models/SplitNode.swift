@@ -52,6 +52,19 @@ indirect enum SplitNode: Identifiable, Equatable {
         }
     }
 
+    /// Discriminator for detecting structural changes in the tree
+    enum NodeType: Equatable {
+        case pane
+        case split
+    }
+
+    var nodeType: NodeType {
+        switch self {
+        case .pane: return .pane
+        case .split: return .split
+        }
+    }
+
     static func == (lhs: SplitNode, rhs: SplitNode) -> Bool {
         lhs.id == rhs.id
     }

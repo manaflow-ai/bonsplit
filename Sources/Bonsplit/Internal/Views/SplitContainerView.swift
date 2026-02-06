@@ -26,12 +26,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.delegate = context.coordinator
 
         // First child
-        let firstHosting = makeHostingView(for: splitState.first)
-        splitView.addArrangedSubview(firstHosting)
+        let (firstView, firstController) = makeHostingViewRetained(for: splitState.first)
+        splitView.addArrangedSubview(firstView)
+        context.coordinator.firstHostingController = firstController
 
         // Second child
-        let secondHosting = makeHostingView(for: splitState.second)
-        splitView.addArrangedSubview(secondHosting)
+        let (secondView, secondController) = makeHostingViewRetained(for: splitState.second)
+        splitView.addArrangedSubview(secondView)
+        context.coordinator.secondHostingController = secondController
 
         context.coordinator.splitView = splitView
 
@@ -112,11 +114,30 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
 
-        // Update children
+        // Update children. When a child's node type changes (split→pane or pane→split),
+        // replace the hosting view entirely to ensure native NSViews (e.g., Metal-backed
+        // terminals) are properly moved through the AppKit view hierarchy.
         let subviews = splitView.arrangedSubviews
         if subviews.count >= 2 {
-            updateHostingView(subviews[0], for: splitState.first)
-            updateHostingView(subviews[1], for: splitState.second)
+            let firstType = splitState.first.nodeType
+            let secondType = splitState.second.nodeType
+
+            if firstType != context.coordinator.firstNodeType {
+                replaceArrangedSubview(at: 0, in: splitView, for: splitState.first, context: context)
+                context.coordinator.firstNodeType = firstType
+            } else {
+                updateHostingView(subviews[0], for: splitState.first)
+            }
+
+            if secondType != context.coordinator.secondNodeType {
+                replaceArrangedSubview(at: 1, in: splitView, for: splitState.second, context: context)
+                context.coordinator.secondNodeType = secondType
+            } else {
+                let currentSubviews = splitView.arrangedSubviews
+                if currentSubviews.count >= 2 {
+                    updateHostingView(currentSubviews[1], for: splitState.second)
+                }
+            }
         }
 
         // Access dividerPosition to ensure SwiftUI tracks this dependency
@@ -133,10 +154,50 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         return hostingController.view
     }
 
+    private func makeHostingViewRetained(for node: SplitNode) -> (NSView, NSHostingController<AnyView>) {
+        let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        return (hostingController.view, hostingController)
+    }
+
     private func updateHostingView(_ view: NSView, for node: SplitNode) {
         // Find the hosting controller's view and update it
         if let hostingView = view as? NSHostingView<AnyView> {
             hostingView.rootView = AnyView(makeView(for: node))
+        }
+    }
+
+    /// Replace an arranged subview entirely when the node structure changes.
+    /// Clears the old SwiftUI content, processes the update, then creates fresh content.
+    /// This ensures native NSViews (e.g., Metal-backed terminals) are freed from the
+    /// old view hierarchy before the new hierarchy tries to claim them.
+    private func replaceArrangedSubview(at index: Int, in splitView: NSSplitView, for node: SplitNode, context: Context) {
+        let subviews = splitView.arrangedSubviews
+        guard index < subviews.count else { return }
+
+        let oldView = subviews[index]
+
+        // Step 1: Clear old SwiftUI content to release native views
+        if let hostingView = oldView as? NSHostingView<AnyView> {
+            hostingView.rootView = AnyView(EmptyView())
+        }
+
+        // Step 2: Remove old view from the split view. Once removed from the window,
+        // the hosting view's SwiftUI content is fully dismantled, releasing native views.
+        splitView.removeArrangedSubview(oldView)
+        oldView.removeFromSuperview()
+
+        // Step 3: Create new hosting view with retained controller
+        let (newView, newController) = makeHostingViewRetained(for: node)
+
+        // Step 4: Insert at correct position
+        splitView.insertArrangedSubview(newView, at: index)
+
+        // Store the retained controller
+        if index == 0 {
+            context.coordinator.firstHostingController = newController
+        } else {
+            context.coordinator.secondHostingController = newController
         }
     }
 
@@ -178,11 +239,19 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var lastAppliedPosition: CGFloat = 0.5
         /// Track if user is actively dragging the divider
         var isDragging = false
+        /// Track child node types to detect structural changes
+        var firstNodeType: SplitNode.NodeType
+        var secondNodeType: SplitNode.NodeType
+        /// Retain hosting controllers so SwiftUI content stays alive
+        var firstHostingController: NSHostingController<AnyView>?
+        var secondHostingController: NSHostingController<AnyView>?
 
         init(splitState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
             self.splitState = splitState
             self.onGeometryChange = onGeometryChange
             self.lastAppliedPosition = splitState.dividerPosition
+            self.firstNodeType = splitState.first.nodeType
+            self.secondNodeType = splitState.second.nodeType
         }
 
         /// Apply external position changes to the NSSplitView
