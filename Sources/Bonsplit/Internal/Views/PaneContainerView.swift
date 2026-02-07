@@ -33,6 +33,8 @@ enum PaneDropLifecycle {
 
 /// Container for a single pane with its tab bar and content area
 struct PaneContainerView<Content: View, EmptyContent: View>: View {
+    @Environment(BonsplitController.self) private var bonsplitController
+
     @Bindable var pane: PaneState
     let controller: SplitViewController
     let contentBuilder: (TabItem, PaneID) -> Content
@@ -264,22 +266,15 @@ struct UnifiedPaneDropDelegate: DropDelegate {
                         controller.moveTab(transfer.tab, from: sourcePaneId, to: pane.id, atIndex: nil)
                     }
                 } else if let orientation = zone.orientation {
-                    // Drop on edge - create a split (120fps animation handled by SplitAnimator)
-                    // Remove tab from source first
-                    if let sourcePane = controller.rootNode.findPane(sourcePaneId) {
-                        sourcePane.removeTab(transfer.tab.id)
-
-                        // Close empty source pane if not the only one
-                        if sourcePane.tabs.isEmpty && controller.rootNode.allPaneIds.count > 1 {
-                            controller.closePane(sourcePaneId)
-                        }
-                    }
-
-                    // Create the split
-                    controller.splitPaneWithTab(
+                    // Drop on edge - create a split by moving the tab into the new pane.
+                    //
+                    // Important: this must not "close the source pane if empty" when the source
+                    // pane is also the split target (drag-to-edge within the same pane), or we
+                    // can end up closing the pane we're trying to split.
+                    _ = bonsplitController.splitPane(
                         pane.id,
                         orientation: orientation,
-                        tab: transfer.tab,
+                        movingTab: TabID(id: transfer.tab.id),
                         insertFirst: zone.insertsFirst
                     )
                 }
