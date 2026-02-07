@@ -225,6 +225,75 @@ public final class BonsplitController {
         return newPaneId
     }
 
+    /// Split a pane by moving an existing tab into the new pane.
+    ///
+    /// This mirrors the "drag a tab to a pane edge to create a split" interaction:
+    /// the tab is removed from its source pane first, then inserted into the newly
+    /// created pane on the chosen edge.
+    ///
+    /// - Parameters:
+    ///   - paneId: Optional target pane to split (defaults to the tab's current pane).
+    ///   - orientation: Direction to split (horizontal = side-by-side, vertical = stacked).
+    ///   - tabId: The existing tab to move into the new pane.
+    ///   - insertFirst: If true, the new pane is inserted first (left/top). Otherwise it is inserted second (right/bottom).
+    /// - Returns: The new pane ID, or nil if the tab couldn't be found or the split was vetoed.
+    @discardableResult
+    public func splitPane(
+        _ paneId: PaneID? = nil,
+        orientation: SplitOrientation,
+        movingTab tabId: TabID,
+        insertFirst: Bool
+    ) -> PaneID? {
+        guard configuration.allowSplits else { return nil }
+
+        // Find the existing tab and its source pane.
+        guard let (sourcePane, tabIndex) = findTabInternal(tabId) else { return nil }
+        let tabItem = sourcePane.tabs[tabIndex]
+
+        // Default target to the tab's current pane to match edge-drop behavior on the source pane.
+        let targetPaneId = paneId ?? sourcePane.id
+
+        // Check with delegate
+        if delegate?.splitTabBar(self, shouldSplitPane: targetPaneId, orientation: orientation) == false {
+            return nil
+        }
+
+        // Remove from source first.
+        sourcePane.removeTab(tabItem.id)
+
+        if sourcePane.tabs.isEmpty {
+            if sourcePane.id == targetPaneId {
+                // Keep a placeholder tab so the original pane isn't left "tabless".
+                // This makes the empty side closable via tab close, and avoids apps
+                // needing to special-case empty panes.
+                sourcePane.addTab(TabItem(title: "Empty", icon: nil), select: true)
+            } else if internalController.rootNode.allPaneIds.count > 1 {
+                // If the source pane is now empty, close it (unless it's also the split target).
+                internalController.closePane(sourcePane.id)
+            }
+        }
+
+        // Perform split with the moved tab.
+        internalController.splitPaneWithTab(
+            PaneID(id: targetPaneId.id),
+            orientation: orientation,
+            tab: tabItem,
+            insertFirst: insertFirst
+        )
+
+        let newPaneId = focusedPaneId!
+
+        // Notify delegate
+        delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
+
+        // Notify geometry change after a brief delay to allow layout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.notifyGeometryChange()
+        }
+
+        return newPaneId
+    }
+
     /// Close a specific pane
     /// - Parameter paneId: The pane to close
     /// - Returns: true if the pane was closed, false if vetoed by delegate
