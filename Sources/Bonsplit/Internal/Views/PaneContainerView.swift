@@ -142,6 +142,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                 size: size,
                 pane: pane,
                 controller: controller,
+                bonsplitController: bonsplitController,
                 activeDropZone: $activeDropZone,
                 dropLifecycle: $dropLifecycle
             ))
@@ -198,6 +199,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     let size: CGSize
     let pane: PaneState
     let controller: SplitViewController
+    let bonsplitController: BonsplitController
     @Binding var activeDropZone: DropZone?
     @Binding var dropLifecycle: PaneDropLifecycle
 
