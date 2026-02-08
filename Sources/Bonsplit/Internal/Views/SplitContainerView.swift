@@ -363,7 +363,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // (window resizes, view reparenting, pane↔split structural updates), the model's
                 // dividerPosition should remain stable; syncPosition() will keep the view aligned.
                 guard wasDragging else {
-                    Task { @MainActor in
+                    let statePosition = self.splitState.dividerPosition
+                    DispatchQueue.main.async {
+                        // NSSplitView may resize subviews in a way that drifts away from our
+                        // normalized dividerPosition. Re-assert the model ratio.
+                        self.syncPosition(statePosition, in: splitView)
                         self.onGeometryChange?(false)
                     }
                     return
