@@ -139,6 +139,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     }
 
     func updateNSView(_ splitView: NSSplitView, context: Context) {
+        // SwiftUI may reuse the same NSSplitView/Coordinator instance while the underlying SplitState
+        // object changes (e.g., during split tree restructuring). Keep the coordinator pointed at
+        // the latest state to avoid syncing geometry against a stale model.
+        context.coordinator.update(splitState: splitState, onGeometryChange: onGeometryChange)
+
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
 
@@ -178,13 +183,17 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
     private func makeHostingView(for node: SplitNode) -> NSView {
         let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        // NSSplitView lays out arranged subviews by setting frames. Leaving Auto Layout
+        // enabled on these NSHostingViews can allow them to compress to 0 during
+        // structural updates, collapsing panes.
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = true
         return hostingController.view
     }
 
     private func makeHostingViewRetained(for node: SplitNode) -> (NSView, NSHostingController<AnyView>) {
         let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
-        hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        // See makeHostingView(for:): keep these frame-laid-out under NSSplitView.
+        hostingController.view.translatesAutoresizingMaskIntoConstraints = true
         return (hostingController.view, hostingController)
     }
 
@@ -259,7 +268,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     // MARK: - Coordinator
 
     class Coordinator: NSObject, NSSplitViewDelegate {
-        let splitState: SplitState
+        var splitState: SplitState
+        private var splitStateId: UUID
         weak var splitView: NSSplitView?
         var isAnimating = false
         var didApplyInitialDividerPosition = false
@@ -268,6 +278,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var lastAppliedPosition: CGFloat = 0.5
         /// Track if user is actively dragging the divider
         var isDragging = false
+        /// A retry loop used when arranged subviews are temporarily removed during structural updates.
+        private var structuralSyncWorkItem: DispatchWorkItem?
+        private var structuralSyncRetryCount: Int = 0
+        private var structuralSyncGeneration: Int = 0
         /// Track child node types to detect structural changes
         var firstNodeType: SplitNode.NodeType
         var secondNodeType: SplitNode.NodeType
@@ -277,10 +291,77 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         init(splitState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
             self.splitState = splitState
+            self.splitStateId = splitState.id
             self.onGeometryChange = onGeometryChange
             self.lastAppliedPosition = splitState.dividerPosition
             self.firstNodeType = splitState.first.nodeType
             self.secondNodeType = splitState.second.nodeType
+        }
+
+        func update(splitState newState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
+            self.onGeometryChange = onGeometryChange
+            // Cancel any pending structural sync; we'll re-schedule based on current state.
+            structuralSyncWorkItem?.cancel()
+            structuralSyncWorkItem = nil
+            structuralSyncRetryCount = 0
+            structuralSyncGeneration += 1
+
+            // If SwiftUI reused this representable for a different split node,
+            // reset our cached sync state so we don't "pin" the divider to an edge.
+            if newState.id != splitStateId {
+                splitStateId = newState.id
+                splitState = newState
+                lastAppliedPosition = newState.dividerPosition
+                didApplyInitialDividerPosition = false
+                isAnimating = false
+                isDragging = false
+                firstNodeType = newState.first.nodeType
+                secondNodeType = newState.second.nodeType
+                return
+            }
+
+            // Same split node; keep reference updated anyway.
+            splitState = newState
+        }
+
+        private func scheduleStructuralSync(in splitView: NSSplitView, generation: Int) {
+            guard structuralSyncWorkItem == nil else { return }
+
+            let work = DispatchWorkItem { [weak self, weak splitView] in
+                guard let self, let splitView else { return }
+                self.structuralSyncWorkItem = nil
+                guard self.structuralSyncGeneration == generation else { return }
+
+                let totalSize = self.splitState.orientation == .horizontal
+                    ? splitView.bounds.width
+                    : splitView.bounds.height
+                let availableSize = max(totalSize - splitView.dividerThickness, 0)
+
+                guard splitView.arrangedSubviews.count >= 2, availableSize > 0 else {
+                    self.structuralSyncRetryCount += 1
+                    if self.structuralSyncRetryCount < 200 {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self, weak splitView] in
+                            guard let self, let splitView else { return }
+                            self.scheduleStructuralSync(in: splitView, generation: generation)
+                        }
+                    } else {
+                        self.structuralSyncRetryCount = 0
+                    }
+                    return
+                }
+
+                self.structuralSyncRetryCount = 0
+                let statePosition = self.splitState.dividerPosition
+                self.syncPosition(statePosition, in: splitView)
+                self.onGeometryChange?(false)
+            }
+
+            structuralSyncWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
+        }
+
+        private func scheduleStructuralSync(in splitView: NSSplitView) {
+            scheduleStructuralSync(in: splitView, generation: structuralSyncGeneration)
         }
 
         /// Apply external position changes to the NSSplitView
@@ -315,8 +396,51 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 
         func splitViewWillResizeSubviews(_ notification: Notification) {
-            // Detect if this is a user drag by checking mouse state
-            if let event = NSApp.currentEvent, event.type == .leftMouseDragged {
+            guard let splitView = notification.object as? NSSplitView else { return }
+            // If the left mouse button isn't down, this can't be an interactive divider drag.
+            // (`splitViewWillResizeSubviews` can fire for programmatic/layout-driven resizes too.)
+            guard (NSEvent.pressedMouseButtons & 1) != 0 else {
+                isDragging = false
+                return
+            }
+
+            // If we're already tracking an active drag, keep the flag until mouse-up.
+            if isDragging {
+                return
+            }
+
+            guard let event = NSApp.currentEvent else { return }
+
+            // Only treat this as a divider drag if the pointer is actually on the divider.
+            // This delegate callback can also fire during window resizes or structural updates,
+            // and persisting divider ratios in those cases can permanently collapse a pane.
+            let now = ProcessInfo.processInfo.systemUptime
+            // `NSApp.currentEvent` can be stale when called from async UI work (e.g. socket commands).
+            // Only trust very recent events.
+            guard (now - event.timestamp) < 0.1 else { return }
+            guard event.type == .leftMouseDown || event.type == .leftMouseDragged else { return }
+            guard event.window == splitView.window else { return }
+            guard splitView.arrangedSubviews.count >= 2 else { return }
+
+            let location = splitView.convert(event.locationInWindow, from: nil)
+            let a = splitView.arrangedSubviews[0].frame
+            let b = splitView.arrangedSubviews[1].frame
+            let thickness = splitView.dividerThickness
+            let dividerRect: NSRect
+            if splitView.isVertical {
+                // If we don't have real frames yet (during structural updates), don't infer dragging.
+                guard a.width > 1, b.width > 1 else { return }
+                // Vertical divider between left/right arranged subviews.
+                let x = max(0, a.maxX)
+                dividerRect = NSRect(x: x, y: 0, width: thickness, height: splitView.bounds.height)
+            } else {
+                guard a.height > 1, b.height > 1 else { return }
+                // Horizontal divider between top/bottom arranged subviews.
+                let y = max(0, a.maxY)
+                dividerRect = NSRect(x: 0, y: y, width: splitView.bounds.width, height: thickness)
+            }
+            let hitRect = dividerRect.insetBy(dx: -4, dy: -4)
+            if hitRect.contains(location) {
                 isDragging = true
             }
         }
@@ -325,12 +449,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Skip position updates during animation
             guard !isAnimating else { return }
             guard let splitView = notification.object as? NSSplitView else { return }
+            // Prevent stale drag state from persisting through programmatic/async resizes.
+            let leftDown = (NSEvent.pressedMouseButtons & 1) != 0
+            if !leftDown {
+                isDragging = false
+            }
             // During structural updates (pane↔split), arranged subviews can be temporarily removed.
             // Avoid persisting a dividerPosition derived from a transient 1-subview layout.
             guard splitView.arrangedSubviews.count >= 2 else {
-                Task { @MainActor in
-                    self.onGeometryChange?(false)
-                }
+                scheduleStructuralSync(in: splitView)
                 return
             }
 
@@ -348,13 +475,19 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
                 var normalizedPosition = dividerPosition / availableSize
 
+                // Never persist a fully-collapsed pane ratio. (This can happen if we ever
+                // see a transient 0-sized layout during a drag or structural update.)
+                let minNormalized = min(0.5, TabBarMetrics.minimumPaneWidth / availableSize)
+                let maxNormalized = 1 - minNormalized
+                normalizedPosition = max(minNormalized, min(maxNormalized, normalizedPosition))
+
                 // Snap to 0.5 if very close (prevents pixel-rounding drift)
                 if abs(normalizedPosition - 0.5) < 0.01 {
                     normalizedPosition = 0.5
                 }
 
                 // Check if drag ended (mouse up)
-                let wasDragging = isDragging
+                let wasDragging = isDragging && leftDown
                 if let event = NSApp.currentEvent, event.type == .leftMouseUp {
                     isDragging = false
                 }
