@@ -225,6 +225,57 @@ public final class BonsplitController {
         return newPaneId
     }
 
+    /// Split a pane and place a specific tab in the newly created pane, choosing which side to insert on.
+    ///
+    /// This is like `splitPane(_:orientation:withTab:)`, but allows choosing left/top vs right/bottom insertion
+    /// without needing to create then move a tab.
+    ///
+    /// - Parameters:
+    ///   - paneId: Optional pane to split (defaults to focused pane).
+    ///   - orientation: Direction to split (horizontal = side-by-side, vertical = stacked).
+    ///   - tab: The tab to add to the new pane.
+    ///   - insertFirst: If true, insert the new pane first (left/top). Otherwise insert second (right/bottom).
+    /// - Returns: The new pane ID, or nil if vetoed by delegate.
+    @discardableResult
+    public func splitPane(
+        _ paneId: PaneID? = nil,
+        orientation: SplitOrientation,
+        withTab tab: Tab,
+        insertFirst: Bool
+    ) -> PaneID? {
+        guard configuration.allowSplits else { return nil }
+
+        let targetPaneId = paneId ?? focusedPaneId
+        guard let targetPaneId else { return nil }
+
+        // Check with delegate
+        if delegate?.splitTabBar(self, shouldSplitPane: targetPaneId, orientation: orientation) == false {
+            return nil
+        }
+
+        let internalTab = TabItem(id: tab.id.id, title: tab.title, icon: tab.icon, isDirty: tab.isDirty)
+
+        // Perform split with insertion side.
+        internalController.splitPaneWithTab(
+            PaneID(id: targetPaneId.id),
+            orientation: orientation,
+            tab: internalTab,
+            insertFirst: insertFirst
+        )
+
+        let newPaneId = focusedPaneId!
+
+        // Notify delegate
+        delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
+
+        // Notify geometry change after a brief delay to allow layout
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.notifyGeometryChange()
+        }
+
+        return newPaneId
+    }
+
     /// Split a pane by moving an existing tab into the new pane.
     ///
     /// This mirrors the "drag a tab to a pane edge to create a split" interaction:

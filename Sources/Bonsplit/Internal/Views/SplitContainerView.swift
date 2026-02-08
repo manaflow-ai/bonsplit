@@ -60,14 +60,38 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
-        // Wait for view to be added to window
-        DispatchQueue.main.async {
+        // Wait for the split view to have a real size.
+        //
+        // During SwiftUI/AppKit view reparenting, NSSplitView can briefly report 0-sized bounds.
+        // If we bail out in that transient state, the divider position can get stuck at an edge
+        // (effectively collapsing a pane). Retry a few times until layout has a real size.
+        func applyInitialDividerPosition(attempt: Int) {
+            if context.coordinator.didApplyInitialDividerPosition {
+                return
+            }
+
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
                 : splitView.bounds.height
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard availableSize > 0 else { return }
+            guard availableSize > 0 else {
+                if attempt < 200 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                        applyInitialDividerPosition(attempt: attempt + 1)
+                    }
+                } else {
+                    // Give up; ensure we don't leave the new pane hidden forever.
+                    context.coordinator.didApplyInitialDividerPosition = true
+                    if animationOrigin != nil, shouldAnimate {
+                        splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                        context.coordinator.isAnimating = false
+                    }
+                }
+                return
+            }
+
+            context.coordinator.didApplyInitialDividerPosition = true
 
             if animationOrigin != nil {
                 let targetPosition = availableSize * 0.5
@@ -105,6 +129,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let position = availableSize * splitState.dividerPosition
                 splitView.setPosition(position, ofDividerAt: 0)
             }
+        }
+
+        DispatchQueue.main.async {
+            applyInitialDividerPosition(attempt: 0)
         }
 
         return splitView
@@ -234,6 +262,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let splitState: SplitState
         weak var splitView: NSSplitView?
         var isAnimating = false
+        var didApplyInitialDividerPosition = false
         var onGeometryChange: ((_ isDragging: Bool) -> Void)?
         /// Track last applied position to detect external changes
         var lastAppliedPosition: CGFloat = 0.5
@@ -258,20 +287,31 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         func syncPosition(_ statePosition: CGFloat, in splitView: NSSplitView) {
             guard !isAnimating else { return }
 
-            // Check if position changed externally (not from user drag)
-            if abs(statePosition - lastAppliedPosition) > 0.01 {
-                let totalSize = splitState.orientation == .horizontal
-                    ? splitView.bounds.width
-                    : splitView.bounds.height
-                let availableSize = max(totalSize - splitView.dividerThickness, 0)
+            guard splitView.arrangedSubviews.count >= 2 else { return }
 
-                guard availableSize > 0 else { return }
+            let totalSize = splitState.orientation == .horizontal
+                ? splitView.bounds.width
+                : splitView.bounds.height
+            let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-                let pixelPosition = availableSize * statePosition
-                splitView.setPosition(pixelPosition, ofDividerAt: 0)
-                splitView.layoutSubtreeIfNeeded()
-                lastAppliedPosition = statePosition
+            guard availableSize > 0 else { return }
+
+            // Keep the view in sync even if the model hasn't changed. Structural updates (pane↔split)
+            // can temporarily reset divider positions; lastAppliedPosition alone isn't enough.
+            let currentDividerPixels: CGFloat = {
+                let firstSubview = splitView.arrangedSubviews[0]
+                return splitState.orientation == .horizontal ? firstSubview.frame.width : firstSubview.frame.height
+            }()
+            let currentNormalized = currentDividerPixels / availableSize
+
+            if abs(statePosition - lastAppliedPosition) <= 0.01 && abs(currentNormalized - statePosition) <= 0.01 {
+                return
             }
+
+            let pixelPosition = availableSize * statePosition
+            splitView.setPosition(pixelPosition, ofDividerAt: 0)
+            splitView.layoutSubtreeIfNeeded()
+            lastAppliedPosition = statePosition
         }
 
         func splitViewWillResizeSubviews(_ notification: Notification) {
@@ -285,6 +325,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Skip position updates during animation
             guard !isAnimating else { return }
             guard let splitView = notification.object as? NSSplitView else { return }
+            // During structural updates (pane↔split), arranged subviews can be temporarily removed.
+            // Avoid persisting a dividerPosition derived from a transient 1-subview layout.
+            guard splitView.arrangedSubviews.count >= 2 else {
+                Task { @MainActor in
+                    self.onGeometryChange?(false)
+                }
+                return
+            }
 
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
@@ -309,6 +357,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let wasDragging = isDragging
                 if let event = NSApp.currentEvent, event.type == .leftMouseUp {
                     isDragging = false
+                }
+
+                // Only update the model when the user is actively dragging. For other resizes
+                // (window resizes, view reparenting, pane↔split structural updates), the model's
+                // dividerPosition should remain stable; syncPosition() will keep the view aligned.
+                guard wasDragging else {
+                    Task { @MainActor in
+                        self.onGeometryChange?(false)
+                    }
+                    return
                 }
 
                 Task { @MainActor in

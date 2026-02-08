@@ -89,7 +89,10 @@ final class SplitViewController {
                     orientation: orientation,
                     first: .pane(paneState),
                     second: .pane(newPane),
-                    dividerPosition: 1.0,  // Start at edge (will animate to 0.5)
+                    // Keep the model at its steady-state ratio. The view layer can still animate
+                    // from an edge via animationOrigin, but the model should never represent a
+                    // fully-collapsed pane (which can get stuck under view reparenting timing).
+                    dividerPosition: 0.5,
                     animationOrigin: .fromSecond  // New pane slides in from right/bottom
                 )
 
@@ -144,21 +147,21 @@ final class SplitViewController {
                 // Start with divider at the edge so there's no flash before animation
                 let splitState: SplitState
                 if insertFirst {
-                    // New pane goes first (left or top) - starts at 0, animates to 0.5
+                    // New pane goes first (left or top).
                     splitState = SplitState(
                         orientation: orientation,
                         first: .pane(newPane),
                         second: .pane(paneState),
-                        dividerPosition: 0.0,
+                        dividerPosition: 0.5,
                         animationOrigin: .fromFirst
                     )
                 } else {
-                    // New pane goes second (right or bottom) - starts at 1, animates to 0.5
+                    // New pane goes second (right or bottom).
                     splitState = SplitState(
                         orientation: orientation,
                         first: .pane(paneState),
                         second: .pane(newPane),
-                        dividerPosition: 1.0,
+                        dividerPosition: 0.5,
                         animationOrigin: .fromSecond
                     )
                 }
