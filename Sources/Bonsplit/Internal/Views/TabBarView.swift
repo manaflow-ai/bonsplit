@@ -29,6 +29,10 @@ struct TabBarView: View {
         isFocused || splitViewController.dragSourcePaneId == pane.id
     }
 
+    private var tabBarSaturation: Double {
+        shouldShowFullSaturation ? 1.0 : 0.0
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Scrollable tabs with fade overlays
@@ -87,12 +91,12 @@ struct TabBarView: View {
             // Split buttons
             if showSplitButtons {
                 splitButtons
+                    .saturation(tabBarSaturation)
             }
         }
         .frame(height: TabBarMetrics.barHeight)
         .contentShape(Rectangle())
         .background(tabBarBackground)
-        .saturation(shouldShowFullSaturation ? 1.0 : 0)
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: splitViewController.draggingTab) { _, newValue in
             if newValue == nil {
@@ -109,6 +113,7 @@ struct TabBarView: View {
         TabItemView(
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
+            saturation: tabBarSaturation,
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
@@ -140,6 +145,7 @@ struct TabBarView: View {
         .overlay(alignment: .leading) {
             if dropTargetIndex == index {
                 dropIndicator
+                    .saturation(tabBarSaturation)
             }
         }
     }
@@ -184,6 +190,7 @@ struct TabBarView: View {
             .overlay(alignment: .leading) {
                 if dropTargetIndex == pane.tabs.count {
                     dropIndicator
+                        .saturation(tabBarSaturation)
                 }
             }
     }

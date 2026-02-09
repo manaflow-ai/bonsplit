@@ -4,6 +4,7 @@ import SwiftUI
 struct TabItemView: View {
     let tab: TabItem
     let isSelected: Bool
+    let saturation: Double
     let onSelect: () -> Void
     let onClose: () -> Void
 
@@ -33,6 +34,7 @@ struct TabItemView: View {
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
             }
+            .saturation(saturation)
 
             Spacer(minLength: 0)
 
@@ -48,7 +50,7 @@ struct TabItemView: View {
             maxHeight: TabBarMetrics.tabHeight
         )
         .padding(.bottom, isSelected ? 1 : 0)
-        .background(tabBackground)
+        .background(tabBackground.saturation(saturation))
         .contentShape(Rectangle())
         // Middle click to close (macOS convention).
         // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
@@ -63,8 +65,15 @@ struct TabItemView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tab.title)
-        .accessibilityValue(tab.isDirty ? "Modified" : "")
+        .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+
+    private var accessibilityValue: String {
+        var parts: [String] = []
+        if tab.showsNotificationBadge { parts.append("Unread") }
+        if tab.isDirty { parts.append("Modified") }
+        return parts.joined(separator: ", ")
     }
 
     // MARK: - Tab Background
@@ -106,10 +115,20 @@ struct TabItemView: View {
     private var closeOrDirtyIndicator: some View {
         ZStack {
             // Dirty indicator (shown when dirty and not hovering)
-            if tab.isDirty && !isHovered && !isCloseHovered {
-                Circle()
-                    .fill(TabBarColors.dirtyIndicator)
-                    .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
+            if (!isHovered && !isCloseHovered) && (tab.isDirty || tab.showsNotificationBadge) {
+                HStack(spacing: 2) {
+                    if tab.showsNotificationBadge {
+                        Circle()
+                            .fill(TabBarColors.notificationBadge)
+                            .frame(width: TabBarMetrics.notificationBadgeSize, height: TabBarMetrics.notificationBadgeSize)
+                    }
+                    if tab.isDirty {
+                        Circle()
+                            .fill(TabBarColors.dirtyIndicator)
+                            .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
+                            .saturation(saturation)
+                    }
+                }
             }
 
             // Close button (shown on hover)
@@ -130,6 +149,7 @@ struct TabItemView: View {
                 .onHover { hovering in
                     isCloseHovered = hovering
                 }
+                .saturation(saturation)
             }
         }
         .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)

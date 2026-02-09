@@ -55,6 +55,10 @@ enum TabBarColors {
         Color(nsColor: .labelColor).opacity(0.6)
     }
 
+    static var notificationBadge: Color {
+        Color(nsColor: .systemBlue)
+    }
+
     // MARK: - Shadows
 
     static var tabShadow: Color {
