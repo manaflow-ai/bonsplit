@@ -24,16 +24,27 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
+        // Bonsplit is often embedded in transparent/vibrant window backgrounds. Ensure the
+        // split view itself is not fully transparent so divider regions don't "show through"
+        // to whatever is behind the split hierarchy.
+        splitView.wantsLayer = true
+        splitView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
 
         // Keep arranged subviews stable (always 2) to avoid transient "collapse" flashes when
         // replacing pane<->split content. We swap the hosted content within these containers.
         let firstContainer = NSView()
+        firstContainer.wantsLayer = true
+        firstContainer.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        firstContainer.layer?.masksToBounds = true
         let firstController = makeHostingController(for: splitState.first)
         installHostingController(firstController, into: firstContainer)
         splitView.addArrangedSubview(firstContainer)
         context.coordinator.firstHostingController = firstController
 
         let secondContainer = NSView()
+        secondContainer.wantsLayer = true
+        secondContainer.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        secondContainer.layer?.masksToBounds = true
         let secondController = makeHostingController(for: splitState.second)
         installHostingController(secondController, into: secondContainer)
         splitView.addArrangedSubview(secondContainer)
