@@ -119,7 +119,8 @@ struct TabBarView: View {
                 }
             },
             onClose: {
-                withAnimation(.easeInOut(duration: TabBarMetrics.closeDuration)) {
+                // Close should be instant (no fade-out/removal animation).
+                withTransaction(Transaction(animation: nil)) {
                     _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
                 }
             }
