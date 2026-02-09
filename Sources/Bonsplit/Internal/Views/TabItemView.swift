@@ -41,6 +41,9 @@ struct TabItemView: View {
         .padding(.bottom, isSelected ? 1 : 0)
         .background(tabBackground)
         .contentShape(Rectangle())
+        // Middle click to close (macOS convention).
+        // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
+        .background(MiddleClickMonitorView(onMiddleClick: onClose))
         .onTapGesture {
             onSelect()
         }
@@ -123,5 +126,52 @@ struct TabItemView: View {
         .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isHovered)
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isCloseHovered)
+    }
+}
+
+private struct MiddleClickMonitorView: NSViewRepresentable {
+    let onMiddleClick: () -> Void
+
+    final class Coordinator {
+        var onMiddleClick: (() -> Void)?
+        weak var view: NSView?
+        var monitor: Any?
+
+        deinit {
+            if let monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+
+        context.coordinator.view = view
+        context.coordinator.onMiddleClick = onMiddleClick
+
+        // Monitor only middle clicks so we don't break drag/reorder or normal selection.
+        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseUp]) { event in
+            guard event.buttonNumber == 2 else { return event }
+            guard let v = context.coordinator.view, let w = v.window else { return event }
+            guard event.window === w else { return event }
+
+            let p = v.convert(event.locationInWindow, from: nil)
+            guard v.bounds.contains(p) else { return event }
+
+            context.coordinator.onMiddleClick?()
+            return nil // swallow so it doesn't also select the tab
+        }
+
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.view = nsView
+        context.coordinator.onMiddleClick = onMiddleClick
     }
 }
