@@ -99,34 +99,44 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private var contentArea: some View {
-        if pane.tabs.isEmpty {
-            emptyPaneView
-        } else {
-            switch contentViewLifecycle {
-            case .recreateOnSwitch:
-                // Original behavior: only render selected tab
-                if let selectedTab = pane.selectedTab {
-                    contentBuilder(selectedTab, pane.id)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-
-            case .keepAllAlive:
-                // macOS-like behavior: keep all tab views in hierarchy
-                ZStack {
-                    ForEach(pane.tabs) { tab in
-                        contentBuilder(tab, pane.id)
+        Group {
+            if pane.tabs.isEmpty {
+                emptyPaneView
+            } else {
+                switch contentViewLifecycle {
+                case .recreateOnSwitch:
+                    // Original behavior: only render selected tab
+                    if let selectedTab = pane.selectedTab {
+                        contentBuilder(selectedTab, pane.id)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .opacity(tab.id == pane.selectedTabId ? 1 : 0)
-                            .allowsHitTesting(tab.id == pane.selectedTabId)
+                            // Tab selection is often driven by `withAnimation` in the tab bar;
+                            // don't crossfade the content when switching tabs.
+                            .transition(.identity)
+                            .transaction { tx in
+                                tx.animation = nil
+                            }
                     }
-                }
-                // Prevent SwiftUI from animating Metal-backed views during tab moves.
-                // This avoids blank content when GhosttyKit terminals are snapshotted.
-                .transaction { tx in
-                    tx.disablesAnimations = true
+
+                case .keepAllAlive:
+                    // macOS-like behavior: keep all tab views in hierarchy
+                    ZStack {
+                        ForEach(pane.tabs) { tab in
+                            contentBuilder(tab, pane.id)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .opacity(tab.id == pane.selectedTabId ? 1 : 0)
+                                .allowsHitTesting(tab.id == pane.selectedTabId)
+                        }
+                    }
+                    // Prevent SwiftUI from animating Metal-backed views during tab moves.
+                    // This avoids blank content when GhosttyKit terminals are snapshotted.
+                    .transaction { tx in
+                        tx.disablesAnimations = true
+                    }
                 }
             }
         }
+        // Ensure a tab switch doesn't implicitly animate other animatable properties in this subtree.
+        .animation(nil, value: pane.selectedTabId)
     }
 
     // MARK: - Drop Zones Layer
