@@ -14,8 +14,16 @@ struct TabItemView: View {
         HStack(spacing: TabBarMetrics.contentSpacing) {
             // Icon
             if let iconName = tab.icon {
+                let iconSize: CGFloat = {
+                    // `terminal.fill` reads visually heavier than most symbols at the same point size.
+                    // Keep other icons as-is, but slightly downsize terminal icons.
+                    if iconName == "terminal.fill" || iconName == "terminal" {
+                        return max(10, TabBarMetrics.iconSize - 2)
+                    }
+                    return TabBarMetrics.iconSize
+                }()
                 Image(systemName: iconName)
-                    .font(.system(size: TabBarMetrics.iconSize))
+                    .font(.system(size: iconSize))
                     .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
             }
 
