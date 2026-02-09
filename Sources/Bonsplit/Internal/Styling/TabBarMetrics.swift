@@ -20,7 +20,7 @@ enum TabBarMetrics {
     // MARK: - Tab Content
 
     static let iconSize: CGFloat = 14
-    static let titleFontSize: CGFloat = 12
+    static let titleFontSize: CGFloat = 11
     static let closeButtonSize: CGFloat = 16
     static let closeIconSize: CGFloat = 9
     static let dirtyIndicatorSize: CGFloat = 8
