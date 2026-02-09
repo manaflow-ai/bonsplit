@@ -300,15 +300,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         func update(splitState newState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
             self.onGeometryChange = onGeometryChange
-            // Cancel any pending structural sync; we'll re-schedule based on current state.
-            structuralSyncWorkItem?.cancel()
-            structuralSyncWorkItem = nil
-            structuralSyncRetryCount = 0
-            structuralSyncGeneration += 1
 
             // If SwiftUI reused this representable for a different split node,
             // reset our cached sync state so we don't "pin" the divider to an edge.
             if newState.id != splitStateId {
+                // Cancel any pending structural sync; it belongs to the previous split node.
+                structuralSyncWorkItem?.cancel()
+                structuralSyncWorkItem = nil
+                structuralSyncRetryCount = 0
+                structuralSyncGeneration += 1
+
                 splitStateId = newState.id
                 splitState = newState
                 lastAppliedPosition = newState.dividerPosition
@@ -368,14 +369,24 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         func syncPosition(_ statePosition: CGFloat, in splitView: NSSplitView) {
             guard !isAnimating else { return }
 
-            guard splitView.arrangedSubviews.count >= 2 else { return }
+            guard splitView.arrangedSubviews.count >= 2 else {
+                // Structural updates can temporarily remove an arranged subview. Retry once the
+                // split view is back to a stable 2-subview layout.
+                scheduleStructuralSync(in: splitView)
+                return
+            }
 
             let totalSize = splitState.orientation == .horizontal
                 ? splitView.bounds.width
                 : splitView.bounds.height
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard availableSize > 0 else { return }
+            guard availableSize > 0 else {
+                // During view reparenting, NSSplitView can briefly report 0-sized bounds.
+                // Without a retry, the divider can remain pinned to a prior transient edge state.
+                scheduleStructuralSync(in: splitView)
+                return
+            }
 
             // Keep the view in sync even if the model hasn't changed. Structural updates (pane↔split)
             // can temporarily reset divider positions; lastAppliedPosition alone isn't enough.
