@@ -17,8 +17,8 @@ struct TabItemView: View {
                 let iconSize: CGFloat = {
                     // `terminal.fill` reads visually heavier than most symbols at the same point size.
                     // Keep other icons as-is, but slightly downsize terminal icons.
-                    if iconName == "terminal.fill" || iconName == "terminal" {
-                        return max(10, TabBarMetrics.iconSize - 2)
+                    if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
+                        return max(10, TabBarMetrics.iconSize - 2.5)
                     }
                     return TabBarMetrics.iconSize
                 }()
