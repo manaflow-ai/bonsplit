@@ -25,7 +25,8 @@ struct TabItemView: View {
                 .lineLimit(1)
                 .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
 
-            Spacer(minLength: 4)
+            // Reduce the minimum gap so the close button doesn't feel overly padded.
+            Spacer(minLength: 0)
 
             // Close button or dirty indicator
             closeOrDirtyIndicator
