@@ -110,7 +110,10 @@ struct TabBarView: View {
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
             onSelect: {
-                withAnimation(.easeInOut(duration: TabBarMetrics.selectionDuration)) {
+                // Tab selection must be instant. Animating this transaction causes the pane
+                // content (often swapped via opacity) to crossfade, which is undesirable for
+                // terminal/browser surfaces.
+                withTransaction(Transaction(animation: nil)) {
                     pane.selectTab(tab.id)
                     controller.focusPane(pane.id)
                 }
