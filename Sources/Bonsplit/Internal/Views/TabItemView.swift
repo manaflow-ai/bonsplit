@@ -11,29 +11,29 @@ struct TabItemView: View {
     @State private var isCloseHovered = false
 
     var body: some View {
-        HStack(spacing: TabBarMetrics.contentSpacing) {
-            // Icon
-            if let iconName = tab.icon {
-                let iconSize: CGFloat = {
-                    // `terminal.fill` reads visually heavier than most symbols at the same point size.
-                    // Keep other icons as-is, but slightly downsize terminal icons.
-                    if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
-                        return max(10, TabBarMetrics.iconSize - 2.5)
-                    }
-                    return TabBarMetrics.iconSize
-                }()
-                Image(systemName: iconName)
-                    .font(.system(size: iconSize))
+        HStack(spacing: 0) {
+            // Icon + title block uses the standard spacing, but keep the close affordance tight.
+            HStack(spacing: TabBarMetrics.contentSpacing) {
+                if let iconName = tab.icon {
+                    let iconSize: CGFloat = {
+                        // `terminal.fill` reads visually heavier than most symbols at the same point size.
+                        // Keep other icons as-is, but slightly downsize terminal/browser icons.
+                        if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
+                            return max(10, TabBarMetrics.iconSize - 2.5)
+                        }
+                        return TabBarMetrics.iconSize
+                    }()
+                    Image(systemName: iconName)
+                        .font(.system(size: iconSize))
+                        .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
+                }
+
+                Text(tab.title)
+                    .font(.system(size: TabBarMetrics.titleFontSize))
+                    .lineLimit(1)
                     .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
             }
 
-            // Title
-            Text(tab.title)
-                .font(.system(size: TabBarMetrics.titleFontSize))
-                .lineLimit(1)
-                .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
-
-            // Reduce the minimum gap so the close button doesn't feel overly padded.
             Spacer(minLength: 0)
 
             // Close button or dirty indicator
