@@ -49,6 +49,49 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testCloseSelectedTabKeepsIndexStableWhenPossible() {
+        do {
+            let config = BonsplitConfiguration(newTabPosition: .end)
+            let controller = BonsplitController(configuration: config)
+
+            let tab0 = controller.createTab(title: "0")!
+            let tab1 = controller.createTab(title: "1")!
+            let tab2 = controller.createTab(title: "2")!
+
+            let pane = controller.focusedPaneId!
+
+            controller.selectTab(tab1)
+            XCTAssertEqual(controller.selectedTab(inPane: pane)?.id, tab1)
+
+            _ = controller.closeTab(tab1)
+
+            // Order is [0,1,2] and 1 was selected; after close we should select 2 (same index).
+            XCTAssertEqual(controller.selectedTab(inPane: pane)?.id, tab2)
+            XCTAssertNotNil(controller.tab(tab0))
+        }
+
+        do {
+            let config = BonsplitConfiguration(newTabPosition: .end)
+            let controller = BonsplitController(configuration: config)
+
+            let tab0 = controller.createTab(title: "0")!
+            let tab1 = controller.createTab(title: "1")!
+            let tab2 = controller.createTab(title: "2")!
+
+            let pane = controller.focusedPaneId!
+
+            controller.selectTab(tab2)
+            XCTAssertEqual(controller.selectedTab(inPane: pane)?.id, tab2)
+
+            _ = controller.closeTab(tab2)
+
+            // Closing last should select previous.
+            XCTAssertEqual(controller.selectedTab(inPane: pane)?.id, tab1)
+            XCTAssertNotNil(controller.tab(tab0))
+        }
+    }
+
+    @MainActor
     func testConfiguration() {
         let config = BonsplitConfiguration(
             allowSplits: false,

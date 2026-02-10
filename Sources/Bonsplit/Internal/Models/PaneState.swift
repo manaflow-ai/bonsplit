@@ -52,12 +52,13 @@ final class PaneState: Identifiable {
         guard let index = tabs.firstIndex(where: { $0.id == tabId }) else { return nil }
         let tab = tabs.remove(at: index)
 
-        // If we removed the selected tab, select an adjacent one
+        // If we removed the selected tab, keep the index stable when possible:
+        // prefer selecting the tab that moved into the removed tab's slot (the "next" tab),
+        // and only fall back to selecting the previous tab when we removed the last tab.
         if selectedTabId == tabId {
-            if index > 0 {
-                selectedTabId = tabs[index - 1].id
-            } else if !tabs.isEmpty {
-                selectedTabId = tabs[0].id
+            if !tabs.isEmpty {
+                let newIndex = min(index, max(0, tabs.count - 1))
+                selectedTabId = tabs[newIndex].id
             } else {
                 selectedTabId = nil
             }
