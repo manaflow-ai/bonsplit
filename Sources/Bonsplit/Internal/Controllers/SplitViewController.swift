@@ -17,6 +17,11 @@ final class SplitViewController {
     /// Source pane of the dragging tab
     var dragSourcePaneId: PaneID?
 
+    /// During drop, SwiftUI may keep the source tab view alive briefly (default removal animation)
+    /// even after we've updated the model. Hide it explicitly so it disappears immediately.
+    var dragHiddenSourceTabId: UUID?
+    var dragHiddenSourcePaneId: PaneID?
+
     /// Current frame of the entire split view container
     var containerFrame: CGRect = .zero
 

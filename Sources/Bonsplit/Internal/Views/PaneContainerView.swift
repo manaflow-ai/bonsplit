@@ -109,6 +109,11 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                     if let selectedTab = pane.selectedTab {
                         contentBuilder(selectedTab, pane.id)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            // When the content is an NSViewRepresentable (e.g. WKWebView), it can
+                            // sit above SwiftUI overlays and swallow drop events. During tab drags,
+                            // disable hit testing for the content so our dropZonesLayer reliably
+                            // receives the drag/drop interaction.
+                            .allowsHitTesting(controller.draggingTab == nil)
                             // Tab selection is often driven by `withAnimation` in the tab bar;
                             // don't crossfade the content when switching tabs.
                             .transition(.identity)
@@ -124,7 +129,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                             contentBuilder(tab, pane.id)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                                 .opacity(tab.id == pane.selectedTabId ? 1 : 0)
-                                .allowsHitTesting(tab.id == pane.selectedTabId)
+                                .allowsHitTesting(controller.draggingTab == nil && tab.id == pane.selectedTabId)
                         }
                     }
                     // Prevent SwiftUI from animating Metal-backed views during tab moves.
@@ -234,63 +239,40 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     }
 
     func performDrop(info: DropInfo) -> Bool {
+        if !Thread.isMainThread {
+            return DispatchQueue.main.sync {
+                performDrop(info: info)
+            }
+        }
+
         let zone = zoneForLocation(info.location)
 
-        // Clear visual state immediately to prevent lingering blue indicator.
-        // Must happen synchronously before returning, not in async callback.
-        // Setting dropLifecycle to idle prevents dropUpdated from re-setting activeDropZone.
+        // Capture drag source synchronously. This avoids relying on NSItemProvider timing and
+        // keeps behavior consistent even when the pane content is AppKit-backed (e.g. WKWebView).
+        guard let draggedTab = controller.draggingTab,
+              let sourcePaneId = controller.dragSourcePaneId else {
+            return false
+        }
+
+        // Clear visual/drag state immediately.
         dropLifecycle = .idle
         activeDropZone = nil
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
 
-        guard let provider = info.itemProviders(for: [.text]).first else {
-            return false
-        }
-
-        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
-            DispatchQueue.main.async {
-
-                // Handle both Data and String representations
-                let string: String?
-                if let data = item as? Data {
-                    string = String(data: data, encoding: .utf8)
-                } else if let nsString = item as? NSString {
-                    string = nsString as String
-                } else if let str = item as? String {
-                    string = str
-                } else {
-                    string = nil
-                }
-
-                guard let string, let transfer = decodeTransfer(from: string) else {
-                    return
-                }
-
-                // Find source pane
-                guard let sourcePaneId = controller.rootNode.allPaneIds.first(where: { $0.id == transfer.sourcePaneId }) else {
-                    return
-                }
-
-                if zone == .center {
-                    // Drop in center - move tab to this pane
-                    withAnimation(.spring(duration: 0.3, bounce: 0.15)) {
-                        controller.moveTab(transfer.tab, from: sourcePaneId, to: pane.id, atIndex: nil)
-                    }
-                } else if let orientation = zone.orientation {
-                    // Drop on edge - create a split by moving the tab into the new pane.
-                    //
-                    // Important: this must not "close the source pane if empty" when the source
-                    // pane is also the split target (drag-to-edge within the same pane), or we
-                    // can end up closing the pane we're trying to split.
-                    _ = bonsplitController.splitPane(
-                        pane.id,
-                        orientation: orientation,
-                        movingTab: TabID(id: transfer.tab.id),
-                        insertFirst: zone.insertsFirst
-                    )
+        if zone == .center {
+            if sourcePaneId != pane.id {
+                withTransaction(Transaction(animation: nil)) {
+                    controller.moveTab(draggedTab, from: sourcePaneId, to: pane.id, atIndex: nil)
                 }
             }
+        } else if let orientation = zone.orientation {
+            _ = bonsplitController.splitPane(
+                pane.id,
+                orientation: orientation,
+                movingTab: TabID(id: draggedTab.id),
+                insertFirst: zone.insertsFirst
+            )
         }
 
         return true
@@ -316,7 +298,9 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.text])
+        // Only accept drops originating from Bonsplit tab drags.
+        guard controller.draggingTab != nil else { return false }
+        return info.hasItemsConforming(to: [.text])
     }
 
     private func decodeTransfer(from string: String) -> TabTransferData? {

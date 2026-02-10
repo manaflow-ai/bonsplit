@@ -224,21 +224,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         nodeTypeChanged: Bool,
         controller: inout NSHostingController<AnyView>?
     ) {
-        if nodeTypeChanged {
-            // Clear + remove old content first to ensure native AppKit views (e.g. Metal)
-            // are fully detached before the new hierarchy installs them.
-            if let old = controller {
-                old.rootView = AnyView(EmptyView())
-                old.view.removeFromSuperview()
-            } else {
-                container.subviews.forEach { $0.removeFromSuperview() }
-            }
-
-            let newController = makeHostingController(for: node)
-            installHostingController(newController, into: container)
-            controller = newController
-            return
-        }
+        // Historically we recreated the NSHostingController when the child node type changed
+        // (pane <-> split) to force a full detach/reattach of native AppKit subviews.
+        //
+        // In practice, that can introduce a single-frame "blank flash" for Metal/IOSurface-backed
+        // content during split collapse (SwiftUI tears down the old subtree before the new subtree
+        // has produced its native backing views).
+        //
+        // Keeping the hosting controller stable and just swapping its rootView makes the update
+        // atomic from AppKit's perspective and avoids the transient blank frame.
+        _ = nodeTypeChanged // keep signature; behavior is intentionally identical either way.
 
         if let current = controller {
             current.rootView = AnyView(makeView(for: node))

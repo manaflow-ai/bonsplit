@@ -45,10 +45,18 @@ struct TabBarView: View {
                                     .id(tab.id)
                             }
 
-                            // Drop zone at end of tabs
-                            dropZoneAtEnd
+                            // Unified drop zone after the last tab. This is at least a small hit
+                            // target (so the user can always drop "after the last tab") and it
+                            // supports dropping after the last tab.
+                            dropZoneAfterTabs
                         }
                         .padding(.horizontal, TabBarMetrics.barPadding)
+                        // Tab insert/remove should be instant. SwiftUI otherwise likes to animate
+                        // ForEach changes, which is especially noticeable during drag/drop.
+                        .transaction { tx in
+                            tx.animation = nil
+                            tx.disablesAnimations = true
+                        }
                         .background(
                             GeometryReader { contentGeo in
                                 Color.clear
@@ -64,6 +72,23 @@ struct TabBarView: View {
                             }
                         )
                     }
+                    // When the tab strip is shorter than the visible area, allow dropping in the
+                    // empty trailing space without forcing tabs to stretch.
+                    .overlay(alignment: .trailing) {
+                        let trailing = max(0, containerGeo.size.width - contentWidth)
+                        if trailing >= 1 {
+                            Color.clear
+                                .frame(width: trailing, height: TabBarMetrics.tabHeight)
+                                .contentShape(Rectangle())
+                                .onDrop(of: [.text], delegate: TabDropDelegate(
+                                    targetIndex: pane.tabs.count,
+                                    pane: pane,
+                                    controller: splitViewController,
+                                    dropTargetIndex: $dropTargetIndex,
+                                    dropLifecycle: $dropLifecycle
+                                ))
+                        }
+                    }
                     .coordinateSpace(name: "tabScroll")
                     .onAppear {
                         containerWidth = containerGeo.size.width
@@ -76,7 +101,9 @@ struct TabBarView: View {
                     }
                     .onChange(of: pane.selectedTabId) { _, newTabId in
                         if let tabId = newTabId {
-                            withAnimation(.easeInOut(duration: 0.2)) {
+                            // Keep tab selection changes instant; scrolling to the focused tab should
+                            // not animate (avoids feeling like tabs "linger" during drag/drop).
+                            withTransaction(Transaction(animation: nil)) {
                                 proxy.scrollTo(tabId, anchor: .center)
                             }
                         }
@@ -85,8 +112,6 @@ struct TabBarView: View {
                 .frame(height: TabBarMetrics.barHeight)
                 .overlay(fadeOverlays)
             }
-
-            Spacer()
 
             // Split buttons
             if showSplitButtons {
@@ -175,7 +200,7 @@ struct TabBarView: View {
     // MARK: - Drop Zone at End
 
     @ViewBuilder
-    private var dropZoneAtEnd: some View {
+    private var dropZoneAfterTabs: some View {
         Rectangle()
             .fill(Color.clear)
             .frame(width: 30, height: TabBarMetrics.tabHeight)
@@ -203,7 +228,6 @@ struct TabBarView: View {
             .fill(TabBarColors.dropIndicator)
             .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
             .offset(x: -1)
-            .transition(.scale.combined(with: .opacity))
     }
 
     // MARK: - Split Buttons
@@ -249,7 +273,6 @@ struct TabBarView: View {
             )
             .frame(width: fadeWidth)
             .opacity(canScrollLeft ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: canScrollLeft)
             .allowsHitTesting(false)
 
             Spacer()
@@ -262,7 +285,6 @@ struct TabBarView: View {
             )
             .frame(width: fadeWidth)
             .opacity(canScrollRight ? 1 : 0)
-            .animation(.easeInOut(duration: 0.15), value: canScrollRight)
             .allowsHitTesting(false)
         }
     }
@@ -301,6 +323,42 @@ struct TabDropDelegate: DropDelegate {
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
 
+        // Ensure all drag/drop side-effects run on the main actor. SwiftUI can call these
+        // callbacks off-main, and SplitViewController is @MainActor.
+        if !Thread.isMainThread {
+            return DispatchQueue.main.sync {
+                performDrop(info: info)
+            }
+        }
+
+        // Capture the drag source synchronously. Relying on NSItemProvider.loadItem introduces
+        // a noticeable delay (often ~100-300ms) before the dragged tab disappears from its
+        // source pane, which feels laggy. Since we only accept Bonsplit-originated drags in
+        // validateDrop(), we can move immediately using the in-memory drag state.
+        guard let draggedTab = controller.draggingTab,
+              let sourcePaneId = controller.dragSourcePaneId else {
+            return false
+        }
+
+        // Execute synchronously when possible so the dragged tab disappears immediately.
+        let applyMove = {
+            // Ensure the move itself doesn't animate.
+            withTransaction(Transaction(animation: nil)) {
+                if sourcePaneId == pane.id {
+                    guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else { return }
+                    // Same-pane no-op: don't mutate the model (and don't show an indicator).
+                    if targetIndex == sourceIndex || targetIndex == sourceIndex + 1 {
+                        return
+                    }
+                    pane.moveTab(from: sourceIndex, to: targetIndex)
+                } else {
+                    controller.moveTab(draggedTab, from: sourcePaneId, to: pane.id, atIndex: targetIndex)
+                }
+            }
+        }
+
+        applyMove()
+
         // Clear visual state immediately to prevent lingering indicators.
         // Must happen synchronously before returning, not in async callback.
         // Setting dropLifecycle to idle prevents dropUpdated from re-setting dropTargetIndex.
@@ -308,52 +366,6 @@ struct TabDropDelegate: DropDelegate {
         dropTargetIndex = nil
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
-
-        guard let provider = info.itemProviders(for: [.text]).first else {
-            #if DEBUG
-            NSLog("[Bonsplit Drag] No item provider found")
-            #endif
-            return false
-        }
-
-        provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
-            DispatchQueue.main.async {
-
-                // Handle both Data and String representations
-                let string: String?
-                if let data = item as? Data {
-                    string = String(data: data, encoding: .utf8)
-                } else if let nsString = item as? NSString {
-                    string = nsString as String
-                } else if let str = item as? String {
-                    string = str
-                } else {
-                    string = nil
-                }
-
-                guard let string, let transfer = decodeTransfer(from: string) else {
-                    return
-                }
-
-                // Same pane - reorder
-                if transfer.sourcePaneId == pane.id.id {
-                    guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == transfer.tab.id }) else {
-                        return
-                    }
-                    withAnimation(.spring(duration: TabBarMetrics.reorderDuration, bounce: TabBarMetrics.reorderBounce)) {
-                        pane.moveTab(from: sourceIndex, to: targetIndex)
-                    }
-                } else {
-                    // Different pane - transfer
-                    guard let sourcePaneId = controller.rootNode.allPaneIds.first(where: { $0.id == transfer.sourcePaneId }) else {
-                        return
-                    }
-                    withAnimation(.spring(duration: TabBarMetrics.reorderDuration, bounce: TabBarMetrics.reorderBounce)) {
-                        controller.moveTab(transfer.tab, from: sourcePaneId, to: pane.id, atIndex: targetIndex)
-                    }
-                }
-            }
-        }
 
         return true
     }
@@ -363,7 +375,11 @@ struct TabDropDelegate: DropDelegate {
         NSLog("[Bonsplit Drag] dropEntered at index: \(targetIndex)")
         #endif
         dropLifecycle = .hovering
-        dropTargetIndex = targetIndex
+        if shouldSuppressIndicatorForNoopSamePaneDrop() {
+            dropTargetIndex = nil
+        } else {
+            dropTargetIndex = targetIndex
+        }
     }
 
     func dropExited(info: DropInfo) {
@@ -382,15 +398,32 @@ struct TabDropDelegate: DropDelegate {
         guard dropLifecycle == .hovering else {
             return DropProposal(operation: .move)
         }
-        // Only update if this is the active target
-        if dropTargetIndex != targetIndex {
+        // Only update if this is the active target, and suppress same-pane no-op indicators.
+        if shouldSuppressIndicatorForNoopSamePaneDrop() {
+            if dropTargetIndex == targetIndex {
+                dropTargetIndex = nil
+            }
+        } else if dropTargetIndex != targetIndex {
             dropTargetIndex = targetIndex
         }
         return DropProposal(operation: .move)
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.text])
+        // Only accept drops originating from Bonsplit tab drags.
+        guard controller.draggingTab != nil else { return false }
+        return info.hasItemsConforming(to: [.text])
+    }
+
+    private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {
+        guard let draggedTab = controller.draggingTab,
+              controller.dragSourcePaneId == pane.id,
+              let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else {
+            return false
+        }
+        // Insertion indices are expressed in "original array" coordinates; after removal,
+        // inserting at `sourceIndex` or `sourceIndex + 1` results in no change.
+        return targetIndex == sourceIndex || targetIndex == sourceIndex + 1
     }
 
     private func decodeTransfer(from string: String) -> TabTransferData? {

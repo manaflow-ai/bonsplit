@@ -102,4 +102,22 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(controller.configuration.allowSplits)
         XCTAssertTrue(controller.configuration.allowCloseTabs)
     }
+
+    @MainActor
+    func testMoveTabNoopAfterItself() {
+        let t0 = TabItem(title: "0")
+        let t1 = TabItem(title: "1")
+        let pane = PaneState(tabs: [t0, t1], selectedTabId: t1.id)
+
+        // Dragging the last tab to the right corresponds to moving it to `tabs.count`,
+        // which should be treated as a no-op.
+        pane.moveTab(from: 1, to: 2)
+        XCTAssertEqual(pane.tabs.map(\.id), [t0.id, t1.id])
+        XCTAssertEqual(pane.selectedTabId, t1.id)
+
+        // Still allow real moves.
+        pane.moveTab(from: 0, to: 2)
+        XCTAssertEqual(pane.tabs.map(\.id), [t1.id, t0.id])
+        XCTAssertEqual(pane.selectedTabId, t1.id)
+    }
 }
