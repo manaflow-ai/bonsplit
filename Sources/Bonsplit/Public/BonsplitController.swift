@@ -34,20 +34,24 @@ public final class BonsplitController {
     /// - Parameters:
     ///   - title: The tab title
     ///   - icon: Optional SF Symbol name for the tab icon
+    ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - isDirty: Whether the tab shows a dirty indicator
     ///   - showsNotificationBadge: Whether the tab shows an "unread/activity" badge
+    ///   - isLoading: Whether the tab shows an activity/loading indicator (e.g. spinning icon)
     ///   - pane: Optional pane to add the tab to (defaults to focused pane)
     /// - Returns: The TabID of the created tab, or nil if creation was vetoed by delegate
     @discardableResult
     public func createTab(
         title: String,
         icon: String? = "doc.text",
+        iconImageData: Data? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
+        isLoading: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
         let tabId = TabID()
-        let tab = Tab(id: tabId, title: title, icon: icon, isDirty: isDirty, showsNotificationBadge: showsNotificationBadge)
+        let tab = Tab(id: tabId, title: title, icon: icon, iconImageData: iconImageData, isDirty: isDirty, showsNotificationBadge: showsNotificationBadge, isLoading: isLoading)
         let targetPane = pane ?? focusedPaneId ?? PaneID(id: internalController.rootNode.allPaneIds.first!.id)
 
         // Check with delegate
@@ -77,8 +81,10 @@ public final class BonsplitController {
             id: tabId.id,
             title: title,
             icon: icon,
+            iconImageData: iconImageData,
             isDirty: isDirty,
-            showsNotificationBadge: showsNotificationBadge
+            showsNotificationBadge: showsNotificationBadge,
+            isLoading: isLoading
         )
         internalController.addTab(tabItem, toPane: PaneID(id: targetPane.id), atIndex: insertIndex)
 
@@ -93,14 +99,18 @@ public final class BonsplitController {
     ///   - tabId: The tab to update
     ///   - title: New title (pass nil to keep current)
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
+    ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - isDirty: New dirty state (pass nil to keep current)
     ///   - showsNotificationBadge: New badge state (pass nil to keep current)
+    ///   - isLoading: New loading/busy state (pass nil to keep current)
     public func updateTab(
         _ tabId: TabID,
         title: String? = nil,
         icon: String?? = nil,
+        iconImageData: Data?? = nil,
         isDirty: Bool? = nil,
-        showsNotificationBadge: Bool? = nil
+        showsNotificationBadge: Bool? = nil,
+        isLoading: Bool? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
 
@@ -110,11 +120,17 @@ public final class BonsplitController {
         if let icon = icon {
             pane.tabs[tabIndex].icon = icon
         }
+        if let iconImageData = iconImageData {
+            pane.tabs[tabIndex].iconImageData = iconImageData
+        }
         if let isDirty = isDirty {
             pane.tabs[tabIndex].isDirty = isDirty
         }
         if let showsNotificationBadge = showsNotificationBadge {
             pane.tabs[tabIndex].showsNotificationBadge = showsNotificationBadge
+        }
+        if let isLoading = isLoading {
+            pane.tabs[tabIndex].isLoading = isLoading
         }
     }
 
@@ -216,8 +232,10 @@ public final class BonsplitController {
                 id: tab.id.id,
                 title: tab.title,
                 icon: tab.icon,
+                iconImageData: tab.iconImageData,
                 isDirty: tab.isDirty,
-                showsNotificationBadge: tab.showsNotificationBadge
+                showsNotificationBadge: tab.showsNotificationBadge,
+                isLoading: tab.isLoading
             )
         } else {
             internalTab = nil
@@ -276,8 +294,10 @@ public final class BonsplitController {
             id: tab.id.id,
             title: tab.title,
             icon: tab.icon,
+            iconImageData: tab.iconImageData,
             isDirty: tab.isDirty,
-            showsNotificationBadge: tab.showsNotificationBadge
+            showsNotificationBadge: tab.showsNotificationBadge,
+            isLoading: tab.isLoading
         )
 
         // Perform split with insertion side.

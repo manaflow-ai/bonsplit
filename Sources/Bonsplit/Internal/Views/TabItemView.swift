@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 /// Individual tab view with icon, title, close button, and dirty indicator
 struct TabItemView: View {
@@ -10,24 +11,50 @@ struct TabItemView: View {
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
+    @State private var showGlobeFallback = true
+    @State private var globeFallbackWorkItem: DispatchWorkItem?
+    @State private var lastIsLoadingObserved = false
+    @State private var lastLoadingStoppedAt: Date?
 
     var body: some View {
         HStack(spacing: 0) {
             // Icon + title block uses the standard spacing, but keep the close affordance tight.
             HStack(spacing: TabBarMetrics.contentSpacing) {
-                if let iconName = tab.icon {
-                    let iconSize: CGFloat = {
-                        // `terminal.fill` reads visually heavier than most symbols at the same point size.
-                        // Keep other icons as-is, but slightly downsize terminal/browser icons.
-                        if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
-                            return max(10, TabBarMetrics.iconSize - 2.5)
+                let iconSlotSize = TabBarMetrics.iconSize
+                let iconTint = isSelected ? TabBarColors.activeText : TabBarColors.inactiveText
+
+                Group {
+                    if tab.isLoading {
+                        // Slightly smaller than the icon slot so it reads cleaner at tab scale.
+                        TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTint)
+                    } else if let data = tab.iconImageData, let image = NSImage(data: data) {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .aspectRatio(contentMode: .fit)
+                    } else if let iconName = tab.icon {
+                        if iconName == "globe", !showGlobeFallback {
+                            // Avoid a distracting "globe -> favicon" flash: show a neutral placeholder
+                            // briefly while the favicon fetch finishes. If no favicon arrives, we
+                            // reveal the globe after a short delay.
+                            RoundedRectangle(cornerRadius: 3)
+                                .stroke(iconTint.opacity(0.25), lineWidth: 1)
+                        } else {
+                            Image(systemName: iconName)
+                                .font(.system(size: glyphSize(for: iconName)))
+                                .foregroundStyle(iconTint)
                         }
-                        return TabBarMetrics.iconSize
-                    }()
-                    Image(systemName: iconName)
-                        .font(.system(size: iconSize))
-                        .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
+                    }
                 }
+                .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
+                .onAppear { updateGlobeFallback() }
+                .onDisappear {
+                    globeFallbackWorkItem?.cancel()
+                    globeFallbackWorkItem = nil
+                }
+                .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
+                .onChange(of: tab.iconImageData) { _ in updateGlobeFallback() }
+                .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
                 Text(tab.title)
                     .font(.system(size: TabBarMetrics.titleFontSize))
@@ -69,8 +96,48 @@ struct TabItemView: View {
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
+    private func glyphSize(for iconName: String) -> CGFloat {
+        // `terminal.fill` reads visually heavier than most symbols at the same point size.
+        // Hardcode sizes to avoid cross-glyph layout shifts.
+        if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
+            return max(10, TabBarMetrics.iconSize - 2.5)
+        }
+        return TabBarMetrics.iconSize
+    }
+
+    private func updateGlobeFallback() {
+        // Track load transitions so we can avoid an "empty placeholder -> globe" flash on brand-new tabs.
+        if lastIsLoadingObserved && !tab.isLoading {
+            lastLoadingStoppedAt = Date()
+        }
+        lastIsLoadingObserved = tab.isLoading
+
+        globeFallbackWorkItem?.cancel()
+        globeFallbackWorkItem = nil
+
+        // Only delay the globe fallback right after a navigation completes, when a favicon is likely to
+        // arrive soon. Otherwise (e.g. a brand-new tab), show the globe immediately.
+        let recentlyStoppedLoading: Bool = {
+            guard let t = lastLoadingStoppedAt else { return false }
+            return Date().timeIntervalSince(t) < 1.5
+        }()
+        let shouldDelayGlobe = (tab.icon == "globe") && (tab.iconImageData == nil) && !tab.isLoading && recentlyStoppedLoading
+        if !shouldDelayGlobe {
+            showGlobeFallback = true
+            return
+        }
+
+        showGlobeFallback = false
+        let work = DispatchWorkItem {
+            showGlobeFallback = true
+        }
+        globeFallbackWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+    }
+
     private var accessibilityValue: String {
         var parts: [String] = []
+        if tab.isLoading { parts.append("Loading") }
         if tab.showsNotificationBadge { parts.append("Unread") }
         if tab.isDirty { parts.append("Modified") }
         return parts.joined(separator: ", ")
@@ -155,6 +222,33 @@ struct TabItemView: View {
         .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isHovered)
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isCloseHovered)
+    }
+}
+
+private struct TabLoadingSpinner: View {
+    let size: CGFloat
+    let color: Color
+
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            // 0.9s per revolution feels a bit snappier at tab-icon scale.
+            let angle = (t.truncatingRemainder(dividingBy: 0.9) / 0.9) * 360.0
+
+            ZStack {
+                Circle()
+                    .stroke(color.opacity(0.20), lineWidth: ringWidth)
+                Circle()
+                    .trim(from: 0.0, to: 0.28)
+                    .stroke(color, style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                    .rotationEffect(.degrees(angle))
+            }
+            .frame(width: size, height: size)
+        }
+    }
+
+    private var ringWidth: CGFloat {
+        max(1.6, size * 0.14)
     }
 }
 

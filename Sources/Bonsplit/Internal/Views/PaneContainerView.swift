@@ -106,7 +106,11 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                 switch contentViewLifecycle {
                 case .recreateOnSwitch:
                     // Original behavior: only render selected tab
-                    if let selectedTab = pane.selectedTab {
+                    //
+                    // `selectedTabId` can be transiently nil (or point at a tab that is being moved/closed)
+                    // during rapid split/tab mutations. Rendering nothing for a single SwiftUI update causes
+                    // a visible blank flash. If we have tabs, always render a stable fallback.
+                    if let selectedTab = pane.selectedTab ?? pane.tabs.first {
                         contentBuilder(selectedTab, pane.id)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                             // When the content is an NSViewRepresentable (e.g. WKWebView), it can
@@ -124,12 +128,13 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
                 case .keepAllAlive:
                     // macOS-like behavior: keep all tab views in hierarchy
+                    let effectiveSelectedTabId = pane.selectedTabId ?? pane.tabs.first?.id
                     ZStack {
                         ForEach(pane.tabs) { tab in
                             contentBuilder(tab, pane.id)
                                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .opacity(tab.id == pane.selectedTabId ? 1 : 0)
-                                .allowsHitTesting(controller.draggingTab == nil && tab.id == pane.selectedTabId)
+                                .opacity(tab.id == effectiveSelectedTabId ? 1 : 0)
+                                .allowsHitTesting(controller.draggingTab == nil && tab.id == effectiveSelectedTabId)
                         }
                     }
                     // Prevent SwiftUI from animating Metal-backed views during tab moves.
