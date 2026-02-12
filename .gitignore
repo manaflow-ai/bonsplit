@@ -54,3 +54,6 @@ playground.xcworkspace
 
 # Archives
 *.xcarchive
+
+# Local build output
+build/
