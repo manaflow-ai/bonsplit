@@ -75,12 +75,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
-        // Wait for the split view to have a real size.
-        //
-        // During SwiftUI/AppKit view reparenting, NSSplitView can briefly report 0-sized bounds.
-        // If we bail out in that transient state, the divider position can get stuck at an edge
-        // (effectively collapsing a pane). Retry a few times until layout has a real size.
-        func applyInitialDividerPosition(attempt: Int) {
+        // Apply the initial divider position once after initial layout scheduling.
+        func applyInitialDividerPosition() {
             if context.coordinator.didApplyInitialDividerPosition {
                 return
             }
@@ -91,17 +87,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
             guard availableSize > 0 else {
-                if attempt < 200 {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                        applyInitialDividerPosition(attempt: attempt + 1)
-                    }
-                } else {
-                    // Give up; ensure we don't leave the new pane hidden forever.
-                    context.coordinator.didApplyInitialDividerPosition = true
-                    if animationOrigin != nil, shouldAnimate {
-                        splitView.arrangedSubviews[newPaneIndex].isHidden = false
-                        context.coordinator.isAnimating = false
-                    }
+                // Ensure we don't leave the new pane hidden forever.
+                context.coordinator.didApplyInitialDividerPosition = true
+                if animationOrigin != nil, shouldAnimate {
+                    splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                    context.coordinator.isAnimating = false
                 }
                 return
             }
@@ -147,7 +137,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 
         DispatchQueue.main.async {
-            applyInitialDividerPosition(attempt: 0)
+            applyInitialDividerPosition()
         }
 
         return splitView
@@ -287,10 +277,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var lastAppliedPosition: CGFloat = 0.5
         /// Track if user is actively dragging the divider
         var isDragging = false
-        /// A retry loop used when arranged subviews are temporarily removed during structural updates.
-        private var structuralSyncWorkItem: DispatchWorkItem?
-        private var structuralSyncRetryCount: Int = 0
-        private var structuralSyncGeneration: Int = 0
         /// Track child node types to detect structural changes
         var firstNodeType: SplitNode.NodeType
         var secondNodeType: SplitNode.NodeType
@@ -313,12 +299,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // If SwiftUI reused this representable for a different split node,
             // reset our cached sync state so we don't "pin" the divider to an edge.
             if newState.id != splitStateId {
-                // Cancel any pending structural sync; it belongs to the previous split node.
-                structuralSyncWorkItem?.cancel()
-                structuralSyncWorkItem = nil
-                structuralSyncRetryCount = 0
-                structuralSyncGeneration += 1
-
                 splitStateId = newState.id
                 splitState = newState
                 lastAppliedPosition = newState.dividerPosition
@@ -334,57 +314,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             splitState = newState
         }
 
-        private func scheduleStructuralSync(in splitView: NSSplitView, generation: Int) {
-            guard structuralSyncWorkItem == nil else { return }
-
-            let work = DispatchWorkItem { [weak self, weak splitView] in
-                guard let self, let splitView else { return }
-                self.structuralSyncWorkItem = nil
-                guard self.structuralSyncGeneration == generation else { return }
-
-                let totalSize = self.splitState.orientation == .horizontal
-                    ? splitView.bounds.width
-                    : splitView.bounds.height
-                let availableSize = max(totalSize - splitView.dividerThickness, 0)
-
-                guard splitView.arrangedSubviews.count >= 2, availableSize > 0 else {
-                    self.structuralSyncRetryCount += 1
-                    if self.structuralSyncRetryCount < 200 {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { [weak self, weak splitView] in
-                            guard let self, let splitView else { return }
-                            self.scheduleStructuralSync(in: splitView, generation: generation)
-                        }
-                    } else {
-                        self.structuralSyncRetryCount = 0
-                    }
-                    return
-                }
-
-                self.structuralSyncRetryCount = 0
-                let statePosition = self.splitState.dividerPosition
-                self.syncPosition(statePosition, in: splitView)
-                self.onGeometryChange?(false)
-            }
-
-            structuralSyncWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
-        }
-
-        private func scheduleStructuralSync(in splitView: NSSplitView) {
-            scheduleStructuralSync(in: splitView, generation: structuralSyncGeneration)
-        }
-
         /// Apply external position changes to the NSSplitView
         func syncPosition(_ statePosition: CGFloat, in splitView: NSSplitView) {
             guard !isAnimating else { return }
 
             guard splitView.arrangedSubviews.count >= 2 else {
-                // Structural updates can temporarily remove an arranged subview. Retry once the
-                // split view is back to a stable 2-subview layout.
+                // Structural updates can temporarily remove an arranged subview.
+                // A subsequent update/layout pass will re-apply the model position.
 #if DEBUG
                 BonsplitDebugCounters.recordArrangedSubviewUnderflow()
 #endif
-                scheduleStructuralSync(in: splitView)
                 return
             }
 
@@ -393,12 +332,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 : splitView.bounds.height
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard availableSize > 0 else {
-                // During view reparenting, NSSplitView can briefly report 0-sized bounds.
-                // Without a retry, the divider can remain pinned to a prior transient edge state.
-                scheduleStructuralSync(in: splitView)
-                return
-            }
+            // During view reparenting, NSSplitView can briefly report 0-sized bounds.
+            // A later layout pass with real bounds will apply the model ratio.
+            guard availableSize > 0 else { return }
 
             // Keep the view in sync even if the model hasn't changed. Structural updates (pane↔split)
             // can temporarily reset divider positions; lastAppliedPosition alone isn't enough.
@@ -483,7 +419,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #if DEBUG
                 BonsplitDebugCounters.recordArrangedSubviewUnderflow()
 #endif
-                scheduleStructuralSync(in: splitView)
                 return
             }
 
@@ -523,12 +458,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // dividerPosition should remain stable; syncPosition() will keep the view aligned.
                 guard wasDragging else {
                     let statePosition = self.splitState.dividerPosition
-                    DispatchQueue.main.async {
-                        // NSSplitView may resize subviews in a way that drifts away from our
-                        // normalized dividerPosition. Re-assert the model ratio.
-                        self.syncPosition(statePosition, in: splitView)
-                        self.onGeometryChange?(false)
-                    }
+                    // NSSplitView may resize subviews in a way that drifts away from our
+                    // normalized dividerPosition. Re-assert the model ratio synchronously in the
+                    // same resize callback so hosted content can observe final geometry immediately.
+                    self.syncPosition(statePosition, in: splitView)
+                    self.onGeometryChange?(false)
                     return
                 }
 

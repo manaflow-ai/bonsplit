@@ -173,6 +173,7 @@ public final class BonsplitController {
 
         // Notify delegate
         delegate?.splitTabBar(self, didCloseTab: tabId, fromPane: paneId)
+        notifyGeometryChange()
 
         return true
     }
@@ -254,10 +255,7 @@ public final class BonsplitController {
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
 
-        // Notify geometry change after a brief delay to allow layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.notifyGeometryChange()
-        }
+        notifyGeometryChange()
 
         return newPaneId
     }
@@ -313,10 +311,7 @@ public final class BonsplitController {
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
 
-        // Notify geometry change after a brief delay to allow layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.notifyGeometryChange()
-        }
+        notifyGeometryChange()
 
         return newPaneId
     }
@@ -382,10 +377,7 @@ public final class BonsplitController {
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
 
-        // Notify geometry change after a brief delay to allow layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.notifyGeometryChange()
-        }
+        notifyGeometryChange()
 
         return newPaneId
     }
@@ -410,10 +402,7 @@ public final class BonsplitController {
         // Notify delegate
         delegate?.splitTabBar(self, didClosePane: paneId)
 
-        // Notify geometry change after a brief delay to allow layout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
-            self?.notifyGeometryChange()
-        }
+        notifyGeometryChange()
 
         return true
     }
@@ -612,12 +601,13 @@ public final class BonsplitController {
             guard shouldNotify else { return }
         }
 
-        // Debounce: skip if less than 50ms since last notification
-        let now = Date().timeIntervalSince1970
-        let debounceInterval: TimeInterval = 0.05
-        guard now - internalController.lastGeometryNotificationTime >= debounceInterval else { return }
-
-        internalController.lastGeometryNotificationTime = now
+        if isDragging {
+            // Debounce drag updates to avoid flooding delegates during divider moves.
+            let now = Date().timeIntervalSince1970
+            let debounceInterval: TimeInterval = 0.05
+            guard now - internalController.lastGeometryNotificationTime >= debounceInterval else { return }
+            internalController.lastGeometryNotificationTime = now
+        }
 
         let snapshot = layoutSnapshot()
         delegate?.splitTabBar(self, didChangeGeometry: snapshot)
