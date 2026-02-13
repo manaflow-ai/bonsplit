@@ -1,6 +1,8 @@
 import SwiftUI
 import AppKit
 
+private var splitContainerProgrammaticSyncDepth = 0
+
 /// SwiftUI wrapper around NSSplitView for native split behavior
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Bindable var splitState: SplitState
@@ -105,8 +107,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 if shouldAnimate {
                     // Position at edge while new pane is hidden
                     let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : availableSize
-                    splitView.setPosition(startPosition, ofDividerAt: 0)
-                    splitView.layoutSubtreeIfNeeded()
+                    context.coordinator.setPositionSafely(startPosition, in: splitView, layout: true)
 
                     // Wait for layout
                     DispatchQueue.main.async {
@@ -127,12 +128,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     }
                 } else {
                     // No animation - just set the position immediately
-                    splitView.setPosition(targetPosition, ofDividerAt: 0)
+                    context.coordinator.setPositionSafely(targetPosition, in: splitView, layout: false)
                 }
             } else {
                 // No animation - just set the position
                 let position = availableSize * splitState.dividerPosition
-                splitView.setPosition(position, ofDividerAt: 0)
+                context.coordinator.setPositionSafely(position, in: splitView, layout: false)
             }
         }
 
@@ -275,6 +276,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var onGeometryChange: ((_ isDragging: Bool) -> Void)?
         /// Track last applied position to detect external changes
         var lastAppliedPosition: CGFloat = 0.5
+        // Guard programmatic `setPosition` re-entrancy from resize callbacks.
+        var isSyncingProgrammatically = false
         /// Track if user is actively dragging the divider
         var isDragging = false
         /// Track child node types to detect structural changes
@@ -315,8 +318,23 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 
         /// Apply external position changes to the NSSplitView
+        func setPositionSafely(_ position: CGFloat, in splitView: NSSplitView, layout: Bool = true) {
+            isSyncingProgrammatically = true
+            splitContainerProgrammaticSyncDepth += 1
+            defer {
+                isSyncingProgrammatically = false
+                splitContainerProgrammaticSyncDepth = max(0, splitContainerProgrammaticSyncDepth - 1)
+            }
+            splitView.setPosition(position, ofDividerAt: 0)
+            if layout {
+                splitView.layoutSubtreeIfNeeded()
+            }
+        }
+
         func syncPosition(_ statePosition: CGFloat, in splitView: NSSplitView) {
             guard !isAnimating else { return }
+            guard !isSyncingProgrammatically else { return }
+            guard splitContainerProgrammaticSyncDepth == 0 else { return }
 
             guard splitView.arrangedSubviews.count >= 2 else {
                 // Structural updates can temporarily remove an arranged subview.
@@ -349,8 +367,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
 
             let pixelPosition = availableSize * statePosition
-            splitView.setPosition(pixelPosition, ofDividerAt: 0)
-            splitView.layoutSubtreeIfNeeded()
+            setPositionSafely(pixelPosition, in: splitView, layout: true)
             lastAppliedPosition = statePosition
         }
 
@@ -408,6 +425,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Skip position updates during animation
             guard !isAnimating else { return }
             guard let splitView = notification.object as? NSSplitView else { return }
+            if isSyncingProgrammatically || splitContainerProgrammaticSyncDepth > 0 {
+                return
+            }
             // Prevent stale drag state from persisting through programmatic/async resizes.
             let leftDown = (NSEvent.pressedMouseButtons & 1) != 0
             if !leftDown {
@@ -458,10 +478,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // dividerPosition should remain stable; syncPosition() will keep the view aligned.
                 guard wasDragging else {
                     let statePosition = self.splitState.dividerPosition
-                    // NSSplitView may resize subviews in a way that drifts away from our
-                    // normalized dividerPosition. Re-assert the model ratio synchronously in the
-                    // same resize callback so hosted content can observe final geometry immediately.
-                    self.syncPosition(statePosition, in: splitView)
+                    // Re-assert on the next runloop turn to avoid recursive NSSplitView resize callbacks.
+                    DispatchQueue.main.async { [weak self, weak splitView] in
+                        guard let self, let splitView else { return }
+                        self.syncPosition(statePosition, in: splitView)
+                    }
                     self.onGeometryChange?(false)
                     return
                 }
