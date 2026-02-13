@@ -191,6 +191,61 @@ public final class BonsplitController {
         delegate?.splitTabBar(self, didSelectTab: tab, inPane: pane.id)
     }
 
+    /// Move a tab to a specific pane (and optional index) inside this controller.
+    /// - Parameters:
+    ///   - tabId: The tab to move.
+    ///   - targetPaneId: Destination pane.
+    ///   - index: Optional destination index. When nil, appends at the end.
+    /// - Returns: true if moved.
+    @discardableResult
+    public func moveTab(_ tabId: TabID, toPane targetPaneId: PaneID, atIndex index: Int? = nil) -> Bool {
+        guard let (sourcePane, sourceIndex) = findTabInternal(tabId) else { return false }
+        guard let targetPane = internalController.rootNode.findPane(PaneID(id: targetPaneId.id)) else { return false }
+
+        let tabItem = sourcePane.tabs[sourceIndex]
+        let movedTab = Tab(from: tabItem)
+        let sourcePaneId = sourcePane.id
+
+        if sourcePaneId == targetPane.id {
+            // Reorder within same pane.
+            let destinationIndex: Int = {
+                if let index { return max(0, min(index, sourcePane.tabs.count)) }
+                return sourcePane.tabs.count
+            }()
+            sourcePane.moveTab(from: sourceIndex, to: destinationIndex)
+            sourcePane.selectTab(tabItem.id)
+            internalController.focusPane(sourcePane.id)
+            delegate?.splitTabBar(self, didSelectTab: movedTab, inPane: sourcePane.id)
+            notifyGeometryChange()
+            return true
+        }
+
+        internalController.moveTab(tabItem, from: sourcePaneId, to: targetPane.id, atIndex: index)
+        delegate?.splitTabBar(self, didMoveTab: movedTab, fromPane: sourcePaneId, toPane: targetPane.id)
+        notifyGeometryChange()
+        return true
+    }
+
+    /// Reorder a tab within its pane.
+    /// - Parameters:
+    ///   - tabId: The tab to reorder.
+    ///   - toIndex: Destination index.
+    /// - Returns: true if reordered.
+    @discardableResult
+    public func reorderTab(_ tabId: TabID, toIndex: Int) -> Bool {
+        guard let (pane, sourceIndex) = findTabInternal(tabId) else { return false }
+        let destinationIndex = max(0, min(toIndex, pane.tabs.count))
+        pane.moveTab(from: sourceIndex, to: destinationIndex)
+        pane.selectTab(tabId.id)
+        internalController.focusPane(pane.id)
+        if let tabIndex = pane.tabs.firstIndex(where: { $0.id == tabId.id }) {
+            let tab = Tab(from: pane.tabs[tabIndex])
+            delegate?.splitTabBar(self, didSelectTab: tab, inPane: pane.id)
+        }
+        notifyGeometryChange()
+        return true
+    }
+
     /// Move to previous tab in focused pane
     public func selectPreviousTab() {
         internalController.selectPreviousTab()
