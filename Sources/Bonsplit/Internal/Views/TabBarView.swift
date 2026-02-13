@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UniformTypeIdentifiers
 
 /// Tab bar view with scrollable tabs, drag/drop support, and split buttons
@@ -15,6 +16,7 @@ struct TabBarView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
+    @StateObject private var controlKeyMonitor = TabControlShortcutKeyMonitor()
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -31,6 +33,10 @@ struct TabBarView: View {
 
     private var tabBarSaturation: Double {
         shouldShowFullSaturation ? 1.0 : 0.0
+    }
+
+    private var showsControlShortcutHints: Bool {
+        isFocused && controlKeyMonitor.isShortcutHintVisible
     }
 
     var body: some View {
@@ -51,12 +57,9 @@ struct TabBarView: View {
                             dropZoneAfterTabs
                         }
                         .padding(.horizontal, TabBarMetrics.barPadding)
-                        // Tab insert/remove should be instant. SwiftUI otherwise likes to animate
-                        // ForEach changes, which is especially noticeable during drag/drop.
-                        .transaction { tx in
-                            tx.animation = nil
-                            tx.disablesAnimations = true
-                        }
+                        // Keep tab insert/remove/reorder instant without suppressing unrelated
+                        // subtree animations (for example, shortcut-hint fades).
+                        .animation(nil, value: pane.tabs.map(\.id))
                         .background(
                             GeometryReader { contentGeo in
                                 Color.clear
@@ -129,6 +132,12 @@ struct TabBarView: View {
                 dropLifecycle = .idle
             }
         }
+        .onAppear {
+            controlKeyMonitor.start()
+        }
+        .onDisappear {
+            controlKeyMonitor.stop()
+        }
     }
 
     // MARK: - Tab Item
@@ -139,6 +148,9 @@ struct TabBarView: View {
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
             saturation: tabBarSaturation,
+            controlShortcutDigit: tabControlShortcutDigit(for: index, tabCount: pane.tabs.count),
+            showsControlShortcutHint: showsControlShortcutHints,
+            shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
@@ -195,6 +207,24 @@ struct TabBarView: View {
             return NSItemProvider(object: string as NSString)
         }
         return NSItemProvider()
+    }
+
+    private func tabControlShortcutDigit(for index: Int, tabCount: Int) -> Int? {
+        for digit in 1...9 {
+            if tabIndexForControlShortcutDigit(digit, tabCount: tabCount) == index {
+                return digit
+            }
+        }
+        return nil
+    }
+
+    private func tabIndexForControlShortcutDigit(_ digit: Int, tabCount: Int) -> Int? {
+        guard tabCount > 0, digit >= 1, digit <= 9 else { return nil }
+        if digit == 9 {
+            return tabCount - 1
+        }
+        let index = digit - 1
+        return index < tabCount ? index : nil
     }
 
     // MARK: - Drop Zone at End
@@ -302,6 +332,138 @@ struct TabBarView: View {
             }
     }
 }
+
+private enum TabControlShortcutModifier: Equatable {
+    case control
+    case command
+
+    var symbol: String {
+        switch self {
+        case .control:
+            return "⌃"
+        case .command:
+            // Command-hold can reveal pane hints, but pane navigation itself is control-based.
+            return "⌃"
+        }
+    }
+}
+
+private enum TabControlShortcutHintPolicy {
+    static let intentionalHoldDelay: TimeInterval = 0.30
+
+    static func hintModifier(for modifierFlags: NSEvent.ModifierFlags) -> TabControlShortcutModifier? {
+        let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == [.control] { return .control }
+        if flags == [.command] { return .command }
+        return nil
+    }
+}
+
+@MainActor
+private final class TabControlShortcutKeyMonitor: ObservableObject {
+    @Published private(set) var isShortcutHintVisible = false
+    @Published private(set) var shortcutModifierSymbol = "⌃"
+
+    private var flagsMonitor: Any?
+    private var keyDownMonitor: Any?
+    private var resignObserver: NSObjectProtocol?
+    private var pendingShowWorkItem: DispatchWorkItem?
+    private var pendingModifier: TabControlShortcutModifier?
+
+    func start() {
+        guard flagsMonitor == nil else {
+            update(from: NSEvent.modifierFlags)
+            return
+        }
+
+        flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            self?.update(from: event.modifierFlags)
+            return event
+        }
+
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.cancelPendingHintShow(resetVisible: true)
+            return event
+        }
+
+        resignObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.cancelPendingHintShow(resetVisible: true)
+            }
+        }
+
+        update(from: NSEvent.modifierFlags)
+    }
+
+    func stop() {
+        if let flagsMonitor {
+            NSEvent.removeMonitor(flagsMonitor)
+            self.flagsMonitor = nil
+        }
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
+            self.keyDownMonitor = nil
+        }
+        if let resignObserver {
+            NotificationCenter.default.removeObserver(resignObserver)
+            self.resignObserver = nil
+        }
+        cancelPendingHintShow(resetVisible: true)
+    }
+
+    private func update(from modifierFlags: NSEvent.ModifierFlags) {
+        guard let modifier = TabControlShortcutHintPolicy.hintModifier(for: modifierFlags) else {
+            cancelPendingHintShow(resetVisible: true)
+            return
+        }
+
+        if isShortcutHintVisible {
+            shortcutModifierSymbol = modifier.symbol
+            return
+        }
+
+        queueHintShow(for: modifier)
+    }
+
+    private func queueHintShow(for modifier: TabControlShortcutModifier) {
+        if pendingModifier == modifier, pendingShowWorkItem != nil {
+            return
+        }
+
+        pendingShowWorkItem?.cancel()
+
+        let workItem = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingShowWorkItem = nil
+            self.pendingModifier = nil
+            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(for: NSEvent.modifierFlags) else { return }
+            self.shortcutModifierSymbol = currentModifier.symbol
+            withAnimation(.easeInOut(duration: 0.14)) {
+                self.isShortcutHintVisible = true
+            }
+        }
+
+        pendingModifier = modifier
+        pendingShowWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + TabControlShortcutHintPolicy.intentionalHoldDelay, execute: workItem)
+    }
+
+    private func cancelPendingHintShow(resetVisible: Bool) {
+        pendingShowWorkItem?.cancel()
+        pendingShowWorkItem = nil
+        pendingModifier = nil
+        if resetVisible {
+            withAnimation(.easeInOut(duration: 0.14)) {
+                isShortcutHintVisible = false
+            }
+        }
+    }
+}
+
 
 /// Drop lifecycle state to prevent dropUpdated from re-setting state after performDrop
 enum TabDropLifecycle {
