@@ -120,4 +120,18 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(pane.tabs.map(\.id), [t1.id, t0.id])
         XCTAssertEqual(pane.selectedTabId, t1.id)
     }
+
+    func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {
+        XCTAssertEqual(
+            TabItemStyling.iconSaturation(hasRasterIcon: true, tabSaturation: 0.0),
+            1.0
+        )
+    }
+
+    func testIconSaturationStillDesaturatesSymbolIconsWhenInactive() {
+        XCTAssertEqual(
+            TabItemStyling.iconSaturation(hasRasterIcon: false, tabSaturation: 0.0),
+            0.0
+        )
+    }
 }

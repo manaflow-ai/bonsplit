@@ -15,6 +15,12 @@ private enum TabControlShortcutHintDebugSettings {
     }
 }
 
+enum TabItemStyling {
+    static func iconSaturation(hasRasterIcon: Bool, tabSaturation: Double) -> Double {
+        hasRasterIcon ? 1.0 : tabSaturation
+    }
+}
+
 /// Individual tab view with icon, title, close button, and dirty indicator
 struct TabItemView: View {
     let tab: TabItem
@@ -42,12 +48,13 @@ struct TabItemView: View {
             HStack(spacing: TabBarMetrics.contentSpacing) {
                 let iconSlotSize = TabBarMetrics.iconSize
                 let iconTint = isSelected ? TabBarColors.activeText : TabBarColors.inactiveText
+                let faviconImage = tab.iconImageData.flatMap { NSImage(data: $0) }
 
                 Group {
                     if tab.isLoading {
                         // Slightly smaller than the icon slot so it reads cleaner at tab scale.
                         TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTint)
-                    } else if let data = tab.iconImageData, let image = NSImage(data: data) {
+                    } else if let image = faviconImage {
                         Image(nsImage: image)
                             .resizable()
                             .interpolation(.high)
@@ -66,6 +73,8 @@ struct TabItemView: View {
                         }
                     }
                 }
+                // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
+                .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
                 .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
                 .onAppear { updateGlobeFallback() }
                 .onDisappear {
@@ -80,8 +89,8 @@ struct TabItemView: View {
                     .font(.system(size: TabBarMetrics.titleFontSize))
                     .lineLimit(1)
                     .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
+                    .saturation(saturation)
             }
-            .saturation(saturation)
 
             Spacer(minLength: 0)
 
