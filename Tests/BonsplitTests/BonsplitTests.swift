@@ -1,5 +1,6 @@
 import XCTest
 @testable import Bonsplit
+import AppKit
 
 final class BonsplitTests: XCTestCase {
 
@@ -133,5 +134,33 @@ final class BonsplitTests: XCTestCase {
             TabItemStyling.iconSaturation(hasRasterIcon: false, tabSaturation: 0.0),
             0.0
         )
+    }
+
+    func testResolvedFaviconImageUsesIncomingDataWhenDecodable() {
+        let existing = NSImage(size: NSSize(width: 12, height: 12))
+        let incoming = NSImage(size: NSSize(width: 16, height: 16))
+        incoming.lockFocus()
+        NSColor.systemBlue.setFill()
+        NSBezierPath(rect: NSRect(x: 0, y: 0, width: 16, height: 16)).fill()
+        incoming.unlockFocus()
+        let data = incoming.tiffRepresentation
+
+        let resolved = TabItemStyling.resolvedFaviconImage(existing: existing, incomingData: data)
+        XCTAssertNotNil(resolved)
+        XCTAssertFalse(resolved === existing)
+    }
+
+    func testResolvedFaviconImageKeepsExistingImageWhenIncomingDataIsInvalid() {
+        let existing = NSImage(size: NSSize(width: 16, height: 16))
+        let invalidData = Data([0x00, 0x11, 0x22, 0x33])
+
+        let resolved = TabItemStyling.resolvedFaviconImage(existing: existing, incomingData: invalidData)
+        XCTAssertTrue(resolved === existing)
+    }
+
+    func testResolvedFaviconImageClearsWhenIncomingDataIsNil() {
+        let existing = NSImage(size: NSSize(width: 16, height: 16))
+        let resolved = TabItemStyling.resolvedFaviconImage(existing: existing, incomingData: nil)
+        XCTAssertNil(resolved)
     }
 }

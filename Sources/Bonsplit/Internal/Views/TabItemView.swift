@@ -19,6 +19,16 @@ enum TabItemStyling {
     static func iconSaturation(hasRasterIcon: Bool, tabSaturation: Double) -> Double {
         hasRasterIcon ? 1.0 : tabSaturation
     }
+
+    static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
+        guard let incomingData else { return nil }
+        if let decoded = NSImage(data: incomingData) {
+            // Favicon bitmaps must never be treated as template/tintable symbols.
+            decoded.isTemplate = false
+            return decoded
+        }
+        return existing
+    }
 }
 
 /// Individual tab view with icon, title, close button, and dirty indicator
@@ -38,6 +48,8 @@ struct TabItemView: View {
     @State private var globeFallbackWorkItem: DispatchWorkItem?
     @State private var lastIsLoadingObserved = false
     @State private var lastLoadingStoppedAt: Date?
+    @State private var renderedFaviconData: Data?
+    @State private var renderedFaviconImage: NSImage?
     @AppStorage(TabControlShortcutHintDebugSettings.xKey) private var controlShortcutHintXOffset = TabControlShortcutHintDebugSettings.defaultX
     @AppStorage(TabControlShortcutHintDebugSettings.yKey) private var controlShortcutHintYOffset = TabControlShortcutHintDebugSettings.defaultY
     @AppStorage(TabControlShortcutHintDebugSettings.alwaysShowKey) private var alwaysShowShortcutHints = TabControlShortcutHintDebugSettings.defaultAlwaysShow
@@ -48,17 +60,16 @@ struct TabItemView: View {
             HStack(spacing: TabBarMetrics.contentSpacing) {
                 let iconSlotSize = TabBarMetrics.iconSize
                 let iconTint = isSelected ? TabBarColors.activeText : TabBarColors.inactiveText
-                let faviconImage = tab.iconImageData.flatMap { NSImage(data: $0) }
+                let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
 
                 Group {
                     if tab.isLoading {
                         // Slightly smaller than the icon slot so it reads cleaner at tab scale.
                         TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTint)
                     } else if let image = faviconImage {
-                        Image(nsImage: image)
-                            .resizable()
-                            .interpolation(.high)
-                            .aspectRatio(contentMode: .fit)
+                        FaviconIconView(image: image)
+                            .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
+                            .clipped()
                     } else if let iconName = tab.icon {
                         if iconName == "globe", !showGlobeFallback {
                             // Avoid a distracting "globe -> favicon" flash: show a neutral placeholder
@@ -75,14 +86,24 @@ struct TabItemView: View {
                 }
                 // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
                 .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
+                .transaction { tx in
+                    // Prevent incidental parent animations from briefly fading icon content.
+                    tx.animation = nil
+                }
                 .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
-                .onAppear { updateGlobeFallback() }
+                .onAppear {
+                    updateRenderedFaviconImage()
+                    updateGlobeFallback()
+                }
                 .onDisappear {
                     globeFallbackWorkItem?.cancel()
                     globeFallbackWorkItem = nil
                 }
                 .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
-                .onChange(of: tab.iconImageData) { _ in updateGlobeFallback() }
+                .onChange(of: tab.iconImageData) { _ in
+                    updateRenderedFaviconImage()
+                    updateGlobeFallback()
+                }
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
                 Text(tab.title)
@@ -116,9 +137,8 @@ struct TabItemView: View {
             onSelect()
         }
         .onHover { hovering in
-            withAnimation(.easeInOut(duration: TabBarMetrics.hoverDuration)) {
-                isHovered = hovering
-            }
+            // Keep icon rendering stable while hovering; only accessory/background elements animate.
+            isHovered = hovering
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tab.title)
@@ -222,7 +242,18 @@ struct TabItemView: View {
             showGlobeFallback = true
         }
         globeFallbackWorkItem = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: work)
+        // Give favicon fetches a little longer before showing the globe fallback to reduce brief flashes.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.90, execute: work)
+    }
+
+    private func updateRenderedFaviconImage() {
+        guard renderedFaviconData != tab.iconImageData ||
+                (renderedFaviconImage == nil && tab.iconImageData != nil) else { return }
+        renderedFaviconData = tab.iconImageData
+        renderedFaviconImage = TabItemStyling.resolvedFaviconImage(
+            existing: renderedFaviconImage,
+            incomingData: tab.iconImageData
+        )
     }
 
     private var accessibilityValue: String {
@@ -339,6 +370,52 @@ private struct TabLoadingSpinner: View {
 
     private var ringWidth: CGFloat {
         max(1.6, size * 0.14)
+    }
+}
+
+private struct FaviconIconView: NSViewRepresentable {
+    let image: NSImage
+
+    final class ContainerView: NSView {
+        let imageView = NSImageView(frame: .zero)
+
+        override init(frame frameRect: NSRect) {
+            super.init(frame: frameRect)
+            wantsLayer = true
+            layer?.masksToBounds = true
+            imageView.imageScaling = .scaleProportionallyDown
+            imageView.imageAlignment = .alignCenter
+            imageView.animates = false
+            imageView.contentTintColor = nil
+            imageView.autoresizingMask = [.width, .height]
+            addSubview(imageView)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override var intrinsicContentSize: NSSize {
+            .zero
+        }
+
+        override func layout() {
+            super.layout()
+            imageView.frame = bounds.integral
+        }
+    }
+
+    func makeNSView(context: Context) -> ContainerView {
+        ContainerView(frame: .zero)
+    }
+
+    func updateNSView(_ nsView: ContainerView, context: Context) {
+        image.isTemplate = false
+        if nsView.imageView.image !== image {
+            nsView.imageView.image = image
+        }
+        nsView.imageView.contentTintColor = nil
     }
 }
 
