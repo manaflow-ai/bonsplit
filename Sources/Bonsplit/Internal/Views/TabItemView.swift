@@ -445,15 +445,16 @@ private struct MiddleClickMonitorView: NSViewRepresentable {
         context.coordinator.onMiddleClick = onMiddleClick
 
         // Monitor only middle clicks so we don't break drag/reorder or normal selection.
-        context.coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseUp]) { event in
+        let coordinator = context.coordinator
+        coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.otherMouseUp]) { [weak coordinator] event in
             guard event.buttonNumber == 2 else { return event }
-            guard let v = context.coordinator.view, let w = v.window else { return event }
+            guard let coordinator, let v = coordinator.view, let w = v.window else { return event }
             guard event.window === w else { return event }
 
             let p = v.convert(event.locationInWindow, from: nil)
             guard v.bounds.contains(p) else { return event }
 
-            context.coordinator.onMiddleClick?()
+            coordinator.onMiddleClick?()
             return nil // swallow so it doesn't also select the tab
         }
 
