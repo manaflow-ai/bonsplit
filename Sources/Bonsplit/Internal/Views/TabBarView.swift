@@ -83,7 +83,7 @@ struct TabBarView: View {
                             Color.clear
                                 .frame(width: trailing, height: TabBarMetrics.tabHeight)
                                 .contentShape(Rectangle())
-                                .onDrop(of: [.text], delegate: TabDropDelegate(
+                                .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                                     targetIndex: pane.tabs.count,
                                     pane: pane,
                                     controller: splitViewController,
@@ -178,7 +178,7 @@ struct TabBarView: View {
         } preview: {
             TabDragPreview(tab: tab)
         }
-        .onDrop(of: [.text], delegate: TabDropDelegate(
+        .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
             targetIndex: index,
             pane: pane,
             controller: splitViewController,
@@ -207,6 +207,7 @@ struct TabBarView: View {
         dropLifecycle = .idle
 
         // Set drag source for visual feedback
+        splitViewController.dragGeneration += 1
         splitViewController.draggingTab = tab
         splitViewController.dragSourcePaneId = pane.id
 
@@ -215,6 +216,7 @@ struct TabBarView: View {
         // a drag-cancelled callback, so performDrop never fires and draggingTab stays set,
         // which disables hit testing on all content views.
         let controller = splitViewController
+        let dragGen = controller.dragGeneration
         var monitorRef: Any?
         monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
             // One-shot: remove ourselves, then clean up stale drag state.
@@ -224,6 +226,7 @@ struct TabBarView: View {
             }
             // Use async to avoid mutating @Observable state during event dispatch.
             DispatchQueue.main.async {
+                guard controller.dragGeneration == dragGen else { return }
                 if controller.draggingTab != nil {
 #if DEBUG
                     dlog("tab.dragCancel (stale draggingTab cleared)")
@@ -235,10 +238,34 @@ struct TabBarView: View {
             return event
         }
 
+        // Safety net: if the leftMouseUp monitor doesn't fire (e.g. AppKit's drag session
+        // consumes the mouse-up internally when a WKWebView intercepts the drag), clear stale
+        // drag state after a generous timeout. Only clear if the generation still matches
+        // (a new drag of the same tab would have incremented the generation).
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak controller] in
+            guard let controller, controller.dragGeneration == dragGen else { return }
+            if let m = monitorRef {
+                NSEvent.removeMonitor(m)
+                monitorRef = nil
+            }
+#if DEBUG
+            dlog("tab.dragCancel (timeout safety net)")
+#endif
+            controller.draggingTab = nil
+            controller.dragSourcePaneId = nil
+        }
+
         let transfer = TabTransferData(tab: tab, sourcePaneId: pane.id.id)
-        if let data = try? JSONEncoder().encode(transfer),
-           let string = String(data: data, encoding: .utf8) {
-            return NSItemProvider(object: string as NSString)
+        if let data = try? JSONEncoder().encode(transfer) {
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: UTType.tabTransfer.identifier,
+                visibility: .all
+            ) { completion in
+                completion(data, nil)
+                return nil
+            }
+            return provider
         }
         return NSItemProvider()
     }
@@ -269,7 +296,7 @@ struct TabBarView: View {
             .fill(Color.clear)
             .frame(width: 30, height: TabBarMetrics.tabHeight)
             .contentShape(Rectangle())
-            .onDrop(of: [.text], delegate: TabDropDelegate(
+            .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                 targetIndex: pane.tabs.count,
                 pane: pane,
                 controller: splitViewController,
@@ -610,8 +637,13 @@ struct TabDropDelegate: DropDelegate {
 
     func validateDrop(info: DropInfo) -> Bool {
         // Only accept drops originating from Bonsplit tab drags.
-        guard controller.draggingTab != nil else { return false }
-        return info.hasItemsConforming(to: [.text])
+        let hasDrag = controller.draggingTab != nil
+        let hasType = info.hasItemsConforming(to: [.tabTransfer])
+#if DEBUG
+        dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
+#endif
+        guard hasDrag else { return false }
+        return hasType
     }
 
     private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {

@@ -161,7 +161,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 #endif
                 controller.focusPane(pane.id)
             }
-            .onDrop(of: [.text], delegate: UnifiedPaneDropDelegate(
+            .onDrop(of: [.tabTransfer], delegate: UnifiedPaneDropDelegate(
                 size: size,
                 pane: pane,
                 controller: controller,
@@ -310,8 +310,13 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
     func validateDrop(info: DropInfo) -> Bool {
         // Only accept drops originating from Bonsplit tab drags.
-        guard controller.draggingTab != nil else { return false }
-        return info.hasItemsConforming(to: [.text])
+        let hasDrag = controller.draggingTab != nil
+        let hasType = info.hasItemsConforming(to: [.tabTransfer])
+#if DEBUG
+        dlog("pane.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
+#endif
+        guard hasDrag else { return false }
+        return hasType
     }
 
     private func decodeTransfer(from string: String) -> TabTransferData? {

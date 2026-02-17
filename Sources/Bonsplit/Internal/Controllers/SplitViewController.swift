@@ -14,6 +14,10 @@ final class SplitViewController {
     /// Tab currently being dragged (for visual feedback)
     var draggingTab: TabItem?
 
+    /// Monotonic counter incremented on each drag start. Used to invalidate stale
+    /// timeout timers that would otherwise cancel a new drag of the same tab.
+    var dragGeneration: Int = 0
+
     /// Source pane of the dragging tab
     var dragSourcePaneId: PaneID?
 
