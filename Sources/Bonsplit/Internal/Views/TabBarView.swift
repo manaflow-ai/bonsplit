@@ -265,6 +265,26 @@ struct TabBarView: View {
     @ViewBuilder
     private var splitButtons: some View {
         HStack(spacing: 4) {
+            Menu {
+                Button {
+                    controller.requestNewTab(kind: "terminal", inPane: pane.id)
+                } label: {
+                    Label("New Terminal", systemImage: "terminal")
+                }
+                Button {
+                    controller.requestNewTab(kind: "browser", inPane: pane.id)
+                } label: {
+                    Label("New Browser", systemImage: "globe")
+                }
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 12))
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("New Tab")
+
             Button {
                 // 120fps animation handled by SplitAnimator
                 controller.splitPane(pane.id, orientation: .horizontal)
