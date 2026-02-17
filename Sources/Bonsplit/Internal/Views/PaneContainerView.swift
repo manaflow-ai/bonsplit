@@ -258,18 +258,20 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         dlog("pane.drop pane=\(pane.id.id.uuidString.prefix(5)) zone=\(zone)")
 #endif
 
-        // Capture drag source synchronously. This avoids relying on NSItemProvider timing and
-        // keeps behavior consistent even when the pane content is AppKit-backed (e.g. WKWebView).
-        guard let draggedTab = controller.draggingTab,
-              let sourcePaneId = controller.dragSourcePaneId else {
+        // Read from non-observable drag state — @Observable writes from createItemProvider
+        // may not have propagated yet when performDrop runs.
+        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
+              let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             return false
         }
 
-        // Clear visual/drag state immediately.
+        // Clear both observable and non-observable drag state.
         dropLifecycle = .idle
         activeDropZone = nil
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
+        controller.activeDragTab = nil
+        controller.activeDragSourcePaneId = nil
 
         if zone == .center {
             if sourcePaneId != pane.id {
@@ -309,13 +311,16 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        // Only accept drops originating from Bonsplit tab drags.
-        let hasDrag = controller.draggingTab != nil
+        // Reject drops on inactive workspaces whose views are kept alive in a ZStack.
+        guard controller.isInteractive else { return false }
+        // The custom UTType alone is sufficient — only Bonsplit tab drags produce it.
+        // Do NOT gate on draggingTab != nil: @Observable changes from createItemProvider
+        // may not have propagated to the drop delegate yet, causing false rejections.
         let hasType = info.hasItemsConforming(to: [.tabTransfer])
 #if DEBUG
+        let hasDrag = controller.draggingTab != nil
         dlog("pane.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
 #endif
-        guard hasDrag else { return false }
         return hasType
     }
 

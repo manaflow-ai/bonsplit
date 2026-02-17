@@ -11,7 +11,8 @@ final class SplitViewController {
     /// Currently focused pane ID
     var focusedPaneId: PaneID?
 
-    /// Tab currently being dragged (for visual feedback)
+    /// Tab currently being dragged (for visual feedback and hit-testing).
+    /// This is @Observable so SwiftUI views react (e.g. allowsHitTesting).
     var draggingTab: TabItem?
 
     /// Monotonic counter incremented on each drag start. Used to invalidate stale
@@ -20,6 +21,17 @@ final class SplitViewController {
 
     /// Source pane of the dragging tab
     var dragSourcePaneId: PaneID?
+
+    /// Non-observable drag session state. Drop delegates read these instead of the
+    /// @Observable properties above, because SwiftUI batches observable updates and
+    /// createItemProvider's writes may not be visible to validateDrop/performDrop yet.
+    @ObservationIgnored var activeDragTab: TabItem?
+    @ObservationIgnored var activeDragSourcePaneId: PaneID?
+
+    /// When false, drop delegates reject all drags and NSViews are hidden.
+    /// Mirrors BonsplitController.isInteractive. Must be observable so
+    /// updateNSView is called to toggle isHidden on the AppKit containers.
+    var isInteractive: Bool = true
 
     /// During drop, SwiftUI may keep the source tab view alive briefly (default removal animation)
     /// even after we've updated the model. Hide it explicitly so it disappears immediately.

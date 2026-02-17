@@ -150,6 +150,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // the latest state to avoid syncing geometry against a stale model.
         context.coordinator.update(splitState: splitState, onGeometryChange: onGeometryChange)
 
+        // Hide the NSSplitView when inactive so AppKit's drag routing doesn't deliver
+        // drag sessions to views belonging to background workspaces. SwiftUI's
+        // .allowsHitTesting(false) only affects gesture recognizers, not AppKit's
+        // view-hierarchy-based NSDraggingDestination routing.
+        splitView.isHidden = !controller.isInteractive
+
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
 

@@ -206,10 +206,12 @@ struct TabBarView: View {
         dropTargetIndex = nil
         dropLifecycle = .idle
 
-        // Set drag source for visual feedback
+        // Set drag source for visual feedback (observable) and drop delegates (non-observable).
         splitViewController.dragGeneration += 1
         splitViewController.draggingTab = tab
         splitViewController.dragSourcePaneId = pane.id
+        splitViewController.activeDragTab = tab
+        splitViewController.activeDragSourcePaneId = pane.id
 
         // Install a one-shot mouse-up monitor to clear stale drag state if the drag is
         // cancelled (dropped outside any valid target). SwiftUI's onDrag doesn't provide
@@ -227,32 +229,17 @@ struct TabBarView: View {
             // Use async to avoid mutating @Observable state during event dispatch.
             DispatchQueue.main.async {
                 guard controller.dragGeneration == dragGen else { return }
-                if controller.draggingTab != nil {
+                if controller.draggingTab != nil || controller.activeDragTab != nil {
 #if DEBUG
                     dlog("tab.dragCancel (stale draggingTab cleared)")
 #endif
                     controller.draggingTab = nil
                     controller.dragSourcePaneId = nil
+                    controller.activeDragTab = nil
+                    controller.activeDragSourcePaneId = nil
                 }
             }
             return event
-        }
-
-        // Safety net: if the leftMouseUp monitor doesn't fire (e.g. AppKit's drag session
-        // consumes the mouse-up internally when a WKWebView intercepts the drag), clear stale
-        // drag state after a generous timeout. Only clear if the generation still matches
-        // (a new drag of the same tab would have incremented the generation).
-        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak controller] in
-            guard let controller, controller.dragGeneration == dragGen else { return }
-            if let m = monitorRef {
-                NSEvent.removeMonitor(m)
-                monitorRef = nil
-            }
-#if DEBUG
-            dlog("tab.dragCancel (timeout safety net)")
-#endif
-            controller.draggingTab = nil
-            controller.dragSourcePaneId = nil
         }
 
         let transfer = TabTransferData(tab: tab, sourcePaneId: pane.id.id)
@@ -557,12 +544,10 @@ struct TabDropDelegate: DropDelegate {
             }
         }
 
-        // Capture the drag source synchronously. Relying on NSItemProvider.loadItem introduces
-        // a noticeable delay (often ~100-300ms) before the dragged tab disappears from its
-        // source pane, which feels laggy. Since we only accept Bonsplit-originated drags in
-        // validateDrop(), we can move immediately using the in-memory drag state.
-        guard let draggedTab = controller.draggingTab,
-              let sourcePaneId = controller.dragSourcePaneId else {
+        // Read from non-observable drag state — @Observable writes from createItemProvider
+        // may not have propagated yet when performDrop runs.
+        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
+              let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             return false
         }
 
@@ -592,6 +577,8 @@ struct TabDropDelegate: DropDelegate {
         dropTargetIndex = nil
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
+        controller.activeDragTab = nil
+        controller.activeDragSourcePaneId = nil
 
         return true
     }
@@ -636,13 +623,16 @@ struct TabDropDelegate: DropDelegate {
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        // Only accept drops originating from Bonsplit tab drags.
-        let hasDrag = controller.draggingTab != nil
+        // Reject drops on inactive workspaces whose views are kept alive in a ZStack.
+        guard controller.isInteractive else { return false }
+        // The custom UTType alone is sufficient — only Bonsplit tab drags produce it.
+        // Do NOT gate on draggingTab != nil: @Observable changes from createItemProvider
+        // may not have propagated to the drop delegate yet, causing false rejections.
         let hasType = info.hasItemsConforming(to: [.tabTransfer])
 #if DEBUG
+        let hasDrag = controller.draggingTab != nil
         dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
 #endif
-        guard hasDrag else { return false }
         return hasType
     }
 
