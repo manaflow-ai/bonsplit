@@ -81,6 +81,10 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
+        // Hide the container when inactive so AppKit's drag routing doesn't deliver
+        // drag sessions to views belonging to background workspaces.
+        nsView.isHidden = !controller.isInteractive
+
         let paneView = PaneContainerView(
             pane: pane,
             controller: controller,

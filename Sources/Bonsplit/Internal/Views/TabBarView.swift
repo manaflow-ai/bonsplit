@@ -83,7 +83,7 @@ struct TabBarView: View {
                             Color.clear
                                 .frame(width: trailing, height: TabBarMetrics.tabHeight)
                                 .contentShape(Rectangle())
-                                .onDrop(of: [.text], delegate: TabDropDelegate(
+                                .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                                     targetIndex: pane.tabs.count,
                                     pane: pane,
                                     controller: splitViewController,
@@ -155,6 +155,9 @@ struct TabBarView: View {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
                 // terminal/browser surfaces.
+#if DEBUG
+                dlog("tab.select pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
                 withTransaction(Transaction(animation: nil)) {
                     pane.selectTab(tab.id)
                     controller.focusPane(pane.id)
@@ -162,6 +165,9 @@ struct TabBarView: View {
             },
             onClose: {
                 // Close should be instant (no fade-out/removal animation).
+#if DEBUG
+                dlog("tab.close pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
                 withTransaction(Transaction(animation: nil)) {
                     _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
                 }
@@ -172,7 +178,7 @@ struct TabBarView: View {
         } preview: {
             TabDragPreview(tab: tab)
         }
-        .onDrop(of: [.text], delegate: TabDropDelegate(
+        .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
             targetIndex: index,
             pane: pane,
             controller: splitViewController,
@@ -193,18 +199,60 @@ struct TabBarView: View {
         #if DEBUG
         NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
         #endif
+#if DEBUG
+        dlog("tab.dragStart pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
         // Clear any stale drop indicator from previous incomplete drag
         dropTargetIndex = nil
         dropLifecycle = .idle
 
-        // Set drag source for visual feedback
+        // Set drag source for visual feedback (observable) and drop delegates (non-observable).
+        splitViewController.dragGeneration += 1
         splitViewController.draggingTab = tab
         splitViewController.dragSourcePaneId = pane.id
+        splitViewController.activeDragTab = tab
+        splitViewController.activeDragSourcePaneId = pane.id
+
+        // Install a one-shot mouse-up monitor to clear stale drag state if the drag is
+        // cancelled (dropped outside any valid target). SwiftUI's onDrag doesn't provide
+        // a drag-cancelled callback, so performDrop never fires and draggingTab stays set,
+        // which disables hit testing on all content views.
+        let controller = splitViewController
+        let dragGen = controller.dragGeneration
+        var monitorRef: Any?
+        monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            // One-shot: remove ourselves, then clean up stale drag state.
+            if let m = monitorRef {
+                NSEvent.removeMonitor(m)
+                monitorRef = nil
+            }
+            // Use async to avoid mutating @Observable state during event dispatch.
+            DispatchQueue.main.async {
+                guard controller.dragGeneration == dragGen else { return }
+                if controller.draggingTab != nil || controller.activeDragTab != nil {
+#if DEBUG
+                    dlog("tab.dragCancel (stale draggingTab cleared)")
+#endif
+                    controller.draggingTab = nil
+                    controller.dragSourcePaneId = nil
+                    controller.activeDragTab = nil
+                    controller.activeDragSourcePaneId = nil
+                }
+            }
+            return event
+        }
 
         let transfer = TabTransferData(tab: tab, sourcePaneId: pane.id.id)
-        if let data = try? JSONEncoder().encode(transfer),
-           let string = String(data: data, encoding: .utf8) {
-            return NSItemProvider(object: string as NSString)
+        if let data = try? JSONEncoder().encode(transfer) {
+            let provider = NSItemProvider()
+            provider.registerDataRepresentation(
+                forTypeIdentifier: UTType.tabTransfer.identifier,
+                visibility: .all
+            ) { completion in
+                completion(data, nil)
+                return nil
+            }
+            return provider
         }
         return NSItemProvider()
     }
@@ -235,7 +283,7 @@ struct TabBarView: View {
             .fill(Color.clear)
             .frame(width: 30, height: TabBarMetrics.tabHeight)
             .contentShape(Rectangle())
-            .onDrop(of: [.text], delegate: TabDropDelegate(
+            .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                 targetIndex: pane.tabs.count,
                 pane: pane,
                 controller: splitViewController,
@@ -504,6 +552,9 @@ struct TabDropDelegate: DropDelegate {
         #if DEBUG
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
+#if DEBUG
+        dlog("tab.drop pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
+#endif
 
         // Ensure all drag/drop side-effects run on the main actor. SwiftUI can call these
         // callbacks off-main, and SplitViewController is @MainActor.
@@ -513,12 +564,10 @@ struct TabDropDelegate: DropDelegate {
             }
         }
 
-        // Capture the drag source synchronously. Relying on NSItemProvider.loadItem introduces
-        // a noticeable delay (often ~100-300ms) before the dragged tab disappears from its
-        // source pane, which feels laggy. Since we only accept Bonsplit-originated drags in
-        // validateDrop(), we can move immediately using the in-memory drag state.
-        guard let draggedTab = controller.draggingTab,
-              let sourcePaneId = controller.dragSourcePaneId else {
+        // Read from non-observable drag state — @Observable writes from createItemProvider
+        // may not have propagated yet when performDrop runs.
+        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
+              let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             return false
         }
 
@@ -548,6 +597,8 @@ struct TabDropDelegate: DropDelegate {
         dropTargetIndex = nil
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
+        controller.activeDragTab = nil
+        controller.activeDragSourcePaneId = nil
 
         return true
     }
@@ -592,9 +643,17 @@ struct TabDropDelegate: DropDelegate {
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        // Only accept drops originating from Bonsplit tab drags.
-        guard controller.draggingTab != nil else { return false }
-        return info.hasItemsConforming(to: [.text])
+        // Reject drops on inactive workspaces whose views are kept alive in a ZStack.
+        guard controller.isInteractive else { return false }
+        // The custom UTType alone is sufficient — only Bonsplit tab drags produce it.
+        // Do NOT gate on draggingTab != nil: @Observable changes from createItemProvider
+        // may not have propagated to the drop delegate yet, causing false rejections.
+        let hasType = info.hasItemsConforming(to: [.tabTransfer])
+#if DEBUG
+        let hasDrag = controller.draggingTab != nil
+        dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
+#endif
+        return hasType
     }
 
     private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {

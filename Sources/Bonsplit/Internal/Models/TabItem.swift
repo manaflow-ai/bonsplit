@@ -9,7 +9,7 @@ extension UTType {
     }
 
     static var tabTransfer: UTType {
-        UTType(exportedAs: "com.splittabbar.tabtransfer")
+        UTType(exportedAs: "com.splittabbar.tabtransfer", conformingTo: .data)
     }
 }
 
