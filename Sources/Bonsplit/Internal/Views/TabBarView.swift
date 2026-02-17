@@ -155,6 +155,9 @@ struct TabBarView: View {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
                 // terminal/browser surfaces.
+#if DEBUG
+                dlog("tab.select pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
                 withTransaction(Transaction(animation: nil)) {
                     pane.selectTab(tab.id)
                     controller.focusPane(pane.id)
@@ -162,6 +165,9 @@ struct TabBarView: View {
             },
             onClose: {
                 // Close should be instant (no fade-out/removal animation).
+#if DEBUG
+                dlog("tab.close pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
                 withTransaction(Transaction(animation: nil)) {
                     _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
                 }
@@ -193,6 +199,9 @@ struct TabBarView: View {
         #if DEBUG
         NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
         #endif
+#if DEBUG
+        dlog("tab.dragStart pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
+#endif
         // Clear any stale drop indicator from previous incomplete drag
         dropTargetIndex = nil
         dropLifecycle = .idle
@@ -200,6 +209,31 @@ struct TabBarView: View {
         // Set drag source for visual feedback
         splitViewController.draggingTab = tab
         splitViewController.dragSourcePaneId = pane.id
+
+        // Install a one-shot mouse-up monitor to clear stale drag state if the drag is
+        // cancelled (dropped outside any valid target). SwiftUI's onDrag doesn't provide
+        // a drag-cancelled callback, so performDrop never fires and draggingTab stays set,
+        // which disables hit testing on all content views.
+        let controller = splitViewController
+        var monitorRef: Any?
+        monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
+            // One-shot: remove ourselves, then clean up stale drag state.
+            if let m = monitorRef {
+                NSEvent.removeMonitor(m)
+                monitorRef = nil
+            }
+            // Use async to avoid mutating @Observable state during event dispatch.
+            DispatchQueue.main.async {
+                if controller.draggingTab != nil {
+#if DEBUG
+                    dlog("tab.dragCancel (stale draggingTab cleared)")
+#endif
+                    controller.draggingTab = nil
+                    controller.dragSourcePaneId = nil
+                }
+            }
+            return event
+        }
 
         let transfer = TabTransferData(tab: tab, sourcePaneId: pane.id.id)
         if let data = try? JSONEncoder().encode(transfer),
@@ -484,6 +518,9 @@ struct TabDropDelegate: DropDelegate {
         #if DEBUG
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
+#if DEBUG
+        dlog("tab.drop pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
+#endif
 
         // Ensure all drag/drop side-effects run on the main actor. SwiftUI can call these
         // callbacks off-main, and SplitViewController is @MainActor.

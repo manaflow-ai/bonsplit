@@ -51,6 +51,9 @@ final class SplitViewController {
     /// Set focus to a specific pane
     func focusPane(_ paneId: PaneID) {
         guard rootNode.findPane(paneId) != nil else { return }
+#if DEBUG
+        dlog("focus.bonsplit pane=\(paneId.id.uuidString.prefix(5))")
+#endif
         focusedPaneId = paneId
     }
 

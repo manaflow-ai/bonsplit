@@ -418,6 +418,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let hitRect = dividerRect.insetBy(dx: -4, dy: -4)
             if hitRect.contains(location) {
                 isDragging = true
+#if DEBUG
+                dlog("divider.dragStart split=\(splitState.id.uuidString.prefix(5))")
+#endif
             }
         }
 

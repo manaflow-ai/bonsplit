@@ -156,6 +156,9 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         // Single unified drop zone that determines zone based on position
         Color.clear
             .onTapGesture {
+#if DEBUG
+                dlog("pane.focus pane=\(pane.id.id.uuidString.prefix(5))")
+#endif
                 controller.focusPane(pane.id)
             }
             .onDrop(of: [.text], delegate: UnifiedPaneDropDelegate(
@@ -251,6 +254,9 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         }
 
         let zone = zoneForLocation(info.location)
+#if DEBUG
+        dlog("pane.drop pane=\(pane.id.id.uuidString.prefix(5)) zone=\(zone)")
+#endif
 
         // Capture drag source synchronously. This avoids relying on NSItemProvider timing and
         // keeps behavior consistent even when the pane content is AppKit-backed (e.g. WKWebView).
