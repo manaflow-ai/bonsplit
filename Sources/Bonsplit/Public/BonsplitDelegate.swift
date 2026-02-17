@@ -49,6 +49,12 @@ public protocol BonsplitDelegate: AnyObject {
     /// Called when focus changes to a different pane.
     func splitTabBar(_ controller: BonsplitController, didFocusPane pane: PaneID)
 
+    // MARK: - New Tab Request
+
+    /// Called when the user clicks a "new tab" action in the tab bar.
+    /// The `kind` string identifies the type of tab (e.g. "terminal", "browser").
+    func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID)
+
     // MARK: - Geometry
 
     /// Called when any pane geometry changes (resize, split, close)
@@ -72,6 +78,7 @@ public extension BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController, didSplitPane originalPane: PaneID, newPane: PaneID, orientation: SplitOrientation) {}
     func splitTabBar(_ controller: BonsplitController, didClosePane paneId: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didFocusPane pane: PaneID) {}
+    func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {}
     func splitTabBar(_ controller: BonsplitController, shouldNotifyDuringDrag: Bool) -> Bool { false }
 }

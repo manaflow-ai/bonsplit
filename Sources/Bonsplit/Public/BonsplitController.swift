@@ -101,6 +101,12 @@ public final class BonsplitController {
         return tabId
     }
 
+    /// Request the delegate to create a new tab of the given kind in a pane.
+    /// The delegate is responsible for the actual creation logic.
+    public func requestNewTab(kind: String, inPane pane: PaneID) {
+        delegate?.splitTabBar(self, didRequestNewTab: kind, inPane: pane)
+    }
+
     /// Update an existing tab's metadata
     /// - Parameters:
     ///   - tabId: The tab to update
