@@ -314,6 +314,24 @@ struct TabBarView: View {
     private var splitButtons: some View {
         HStack(spacing: 4) {
             Button {
+                controller.requestNewTab(kind: "terminal", inPane: pane.id)
+            } label: {
+                Image(systemName: "terminal")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.borderless)
+            .help("New Terminal  ⌘T")
+
+            Button {
+                controller.requestNewTab(kind: "browser", inPane: pane.id)
+            } label: {
+                Image(systemName: "globe")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.borderless)
+            .help("New Browser  ⌘⇧L")
+
+            Button {
                 // 120fps animation handled by SplitAnimator
                 controller.splitPane(pane.id, orientation: .horizontal)
             } label: {
@@ -655,3 +673,5 @@ struct TabDropDelegate: DropDelegate {
         return transfer
     }
 }
+
+
