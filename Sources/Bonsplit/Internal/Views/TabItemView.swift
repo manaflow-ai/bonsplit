@@ -319,8 +319,8 @@ struct TabItemView: View {
                 }
             }
 
-            // Close button (shown on hover)
-            if isHovered || isCloseHovered {
+            // Close button (always visible on active tab, shown on hover for others)
+            if isSelected || isHovered || isCloseHovered {
                 Button {
                     onClose()
                 } label: {
