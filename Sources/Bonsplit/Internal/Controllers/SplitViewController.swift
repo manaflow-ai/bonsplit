@@ -33,6 +33,10 @@ final class SplitViewController {
     /// updateNSView is called to toggle isHidden on the AppKit containers.
     var isInteractive: Bool = true
 
+    /// Handler for file/URL drops from external apps (e.g. Finder).
+    /// Receives the dropped URLs and the pane ID where the drop occurred.
+    @ObservationIgnored var onFileDrop: ((_ urls: [URL], _ paneId: PaneID) -> Bool)?
+
     /// During drop, SwiftUI may keep the source tab view alive briefly (default removal animation)
     /// even after we've updated the model. Hide it explicitly so it disappears immediately.
     var dragHiddenSourceTabId: UUID?

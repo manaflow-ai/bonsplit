@@ -42,6 +42,9 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     }
 }
 
+/// Container NSView for a pane inside SinglePaneWrapper.
+class PaneDragContainerView: NSView {}
+
 /// Wrapper that uses NSHostingController for proper AppKit layout constraints
 struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Environment(SplitViewController.self) private var controller
@@ -64,7 +67,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
         let hostingController = NSHostingController(rootView: paneView)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
-        let containerView = NSView()
+        let containerView = PaneDragContainerView()
         containerView.addSubview(hostingController.view)
 
         NSLayoutConstraint.activate([

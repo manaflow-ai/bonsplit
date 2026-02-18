@@ -302,8 +302,8 @@ struct TabItemView: View {
     @ViewBuilder
     private var closeOrDirtyIndicator: some View {
         ZStack {
-            // Dirty indicator (shown when dirty and not hovering)
-            if (!isHovered && !isCloseHovered) && (tab.isDirty || tab.showsNotificationBadge) {
+            // Dirty indicator (shown when dirty and not hovering, hidden for selected tab)
+            if (!isSelected && !isHovered && !isCloseHovered) && (tab.isDirty || tab.showsNotificationBadge) {
                 HStack(spacing: 2) {
                     if tab.showsNotificationBadge {
                         Circle()

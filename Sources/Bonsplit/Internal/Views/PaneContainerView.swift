@@ -153,7 +153,9 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private func dropZonesLayer(size: CGSize) -> some View {
-        // Single unified drop zone that determines zone based on position
+        // Single unified drop zone that determines zone based on position.
+        // Only hit-testable during tab drags so that file drops from Finder
+        // pass through to the AppKit terminal view underneath.
         Color.clear
             .onTapGesture {
 #if DEBUG
@@ -169,6 +171,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                 activeDropZone: $activeDropZone,
                 dropLifecycle: $dropLifecycle
             ))
+            .allowsHitTesting(controller.draggingTab != nil)
     }
 
     // MARK: - Drop Placeholder

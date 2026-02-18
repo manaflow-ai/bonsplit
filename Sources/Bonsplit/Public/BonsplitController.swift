@@ -23,6 +23,13 @@ public final class BonsplitController {
         didSet { internalController.isInteractive = isInteractive }
     }
 
+    /// Handler for file/URL drops from external apps (e.g., Finder).
+    /// Called when files are dropped onto a pane's content area.
+    /// Return `true` if the drop was handled.
+    @ObservationIgnored public var onFileDrop: ((_ urls: [URL], _ paneId: PaneID) -> Bool)? {
+        didSet { internalController.onFileDrop = onFileDrop }
+    }
+
     // MARK: - Internal State
 
     internal var internalController: SplitViewController
