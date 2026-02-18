@@ -313,7 +313,23 @@ struct TabBarView: View {
     @ViewBuilder
     private var splitButtons: some View {
         HStack(spacing: 4) {
-            NewTabMenuButton(controller: controller, paneId: pane.id)
+            Button {
+                controller.requestNewTab(kind: "terminal", inPane: pane.id)
+            } label: {
+                Image(systemName: "terminal")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.borderless)
+            .help("New Terminal  ⌘T")
+
+            Button {
+                controller.requestNewTab(kind: "browser", inPane: pane.id)
+            } label: {
+                Image(systemName: "globe")
+                    .font(.system(size: 12))
+            }
+            .buttonStyle(.borderless)
+            .help("New Browser  ⌘⇧L")
 
             Button {
                 // 120fps animation handled by SplitAnimator
@@ -658,77 +674,4 @@ struct TabDropDelegate: DropDelegate {
     }
 }
 
-// MARK: - "+" new tab menu button
-
-/// A button styled identically to the split buttons that shows an NSMenu below itself.
-private struct NewTabMenuButton: NSViewRepresentable {
-    let controller: BonsplitController
-    let paneId: PaneID
-
-    func makeNSView(context: Context) -> NSButton {
-        let button = NSButton(frame: .zero)
-        button.bezelStyle = .inline
-        button.isBordered = false
-        button.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New Tab")?.withSymbolConfiguration(
-            NSImage.SymbolConfiguration(pointSize: 12, weight: .regular)
-        )
-        button.imagePosition = .imageOnly
-        button.target = context.coordinator
-        button.action = #selector(Coordinator.showMenu(_:))
-        button.toolTip = "New Tab"
-        button.setContentHuggingPriority(.required, for: .horizontal)
-        button.setContentHuggingPriority(.required, for: .vertical)
-        return button
-    }
-
-    func updateNSView(_ nsView: NSButton, context: Context) {
-        context.coordinator.controller = controller
-        context.coordinator.paneId = paneId
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(controller: controller, paneId: paneId)
-    }
-
-    @MainActor final class Coordinator: NSObject {
-        var controller: BonsplitController
-        var paneId: PaneID
-
-        init(controller: BonsplitController, paneId: PaneID) {
-            self.controller = controller
-            self.paneId = paneId
-        }
-
-        @objc func showMenu(_ sender: NSButton) {
-            let menu = NSMenu()
-
-            let termItem = NSMenuItem(title: "New Terminal  \u{2318}T", action: #selector(menuItemClicked(_:)), keyEquivalent: "")
-            termItem.image = NSImage(systemSymbolName: "terminal.fill", accessibilityDescription: nil)
-            termItem.representedObject = { [weak self] in
-                guard let self else { return }
-                self.controller.requestNewTab(kind: "terminal", inPane: self.paneId)
-            } as () -> Void
-            termItem.target = self
-            menu.addItem(termItem)
-
-            let browserItem = NSMenuItem(title: "New Browser  \u{2318}\u{21E7}L", action: #selector(menuItemClicked(_:)), keyEquivalent: "")
-            browserItem.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)
-            browserItem.representedObject = { [weak self] in
-                guard let self else { return }
-                self.controller.requestNewTab(kind: "browser", inPane: self.paneId)
-            } as () -> Void
-            browserItem.target = self
-            menu.addItem(browserItem)
-
-            let point = NSPoint(x: 0, y: sender.bounds.height + 4)
-            menu.popUp(positioning: nil, at: point, in: sender)
-        }
-
-        @objc func menuItemClicked(_ sender: NSMenuItem) {
-            if let action = sender.representedObject as? () -> Void {
-                action()
-            }
-        }
-    }
-}
 
