@@ -2,7 +2,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// Drop zone positions for creating splits
-enum DropZone: Equatable {
+public enum DropZone: Equatable {
     case center
     case left
     case right
@@ -22,6 +22,22 @@ enum DropZone: Equatable {
         case .left, .top: return true
         default: return false
         }
+    }
+}
+
+// MARK: - Environment key for portal-hosted views
+
+/// Environment key so portal-hosted content (e.g. terminal surfaces rendered
+/// above SwiftUI via an AppKit portal) can read the active drop zone and show
+/// their own overlay, since the SwiftUI placeholder is hidden behind the portal.
+private struct ActiveDropZoneKey: EnvironmentKey {
+    static let defaultValue: DropZone? = nil
+}
+
+public extension EnvironmentValues {
+    var paneDropZone: DropZone? {
+        get { self[ActiveDropZoneKey.self] }
+        set { self[ActiveDropZoneKey.self] = newValue }
     }
 }
 
@@ -147,6 +163,9 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         }
         // Ensure a tab switch doesn't implicitly animate other animatable properties in this subtree.
         .animation(nil, value: pane.selectedTabId)
+        // Expose the active drop zone to portal-hosted content so it can render
+        // its own overlay above the AppKit surface.
+        .environment(\.paneDropZone, activeDropZone)
     }
 
     // MARK: - Drop Zones Layer
