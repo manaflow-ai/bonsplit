@@ -317,6 +317,7 @@ struct TabBarView: View {
 
     @ViewBuilder
     private var splitButtons: some View {
+        let iconColor = TabBarColors.inactiveText(for: appearance)
         HStack(spacing: 4) {
             Button {
                 controller.requestNewTab(kind: "terminal", inPane: pane.id)
@@ -356,6 +357,7 @@ struct TabBarView: View {
             .buttonStyle(.borderless)
             .help("Split Down")
         }
+        .foregroundStyle(iconColor)
         .padding(.trailing, 8)
     }
 

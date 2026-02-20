@@ -147,6 +147,24 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(ra, fa, accuracy: 0.0001)
     }
 
+    func testInactiveTextUsesLightForegroundOnDarkCustomChromeBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#272822")
+        )
+        let color = TabBarColors.nsColorInactiveText(for: appearance).usingColorSpace(.sRGB)!
+
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        XCTAssertGreaterThan(red, 0.5)
+        XCTAssertGreaterThan(green, 0.5)
+        XCTAssertGreaterThan(blue, 0.5)
+        XCTAssertGreaterThan(alpha, 0.6)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")

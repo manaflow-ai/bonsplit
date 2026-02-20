@@ -106,12 +106,20 @@ enum TabBarColors {
         Color(nsColor: effectiveTextColor(for: appearance, secondary: false))
     }
 
+    static func nsColorActiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        effectiveTextColor(for: appearance, secondary: false)
+    }
+
     static var inactiveText: Color {
         Color(nsColor: .secondaryLabelColor)
     }
 
     static func inactiveText(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: effectiveTextColor(for: appearance, secondary: true))
+    }
+
+    static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        effectiveTextColor(for: appearance, secondary: true)
     }
 
     // MARK: - Borders & Indicators
