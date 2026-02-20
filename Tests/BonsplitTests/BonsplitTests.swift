@@ -104,6 +104,32 @@ final class BonsplitTests: XCTestCase {
         XCTAssertTrue(controller.configuration.allowCloseTabs)
     }
 
+    func testDefaultSplitButtonTooltips() {
+        let defaults = BonsplitConfiguration.SplitButtonTooltips.default
+        XCTAssertEqual(defaults.newTerminal, "New Terminal")
+        XCTAssertEqual(defaults.newBrowser, "New Browser")
+        XCTAssertEqual(defaults.splitRight, "Split Right")
+        XCTAssertEqual(defaults.splitDown, "Split Down")
+    }
+
+    @MainActor
+    func testConfigurationAcceptsCustomSplitButtonTooltips() {
+        let customTooltips = BonsplitConfiguration.SplitButtonTooltips(
+            newTerminal: "Terminal (⌘T)",
+            newBrowser: "Browser (⌘⇧L)",
+            splitRight: "Split Right (⌘D)",
+            splitDown: "Split Down (⌘⇧D)"
+        )
+        let config = BonsplitConfiguration(
+            appearance: .init(
+                splitButtonTooltips: customTooltips
+            )
+        )
+        let controller = BonsplitController(configuration: config)
+
+        XCTAssertEqual(controller.configuration.appearance.splitButtonTooltips, customTooltips)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")

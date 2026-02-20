@@ -312,6 +312,7 @@ struct TabBarView: View {
 
     @ViewBuilder
     private var splitButtons: some View {
+        let tooltips = controller.configuration.appearance.splitButtonTooltips
         HStack(spacing: 4) {
             Button {
                 controller.requestNewTab(kind: "terminal", inPane: pane.id)
@@ -320,7 +321,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
-            .help("New Terminal  ⌘T")
+            .help(tooltips.newTerminal)
 
             Button {
                 controller.requestNewTab(kind: "browser", inPane: pane.id)
@@ -329,7 +330,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
-            .help("New Browser  ⌘⇧L")
+            .help(tooltips.newBrowser)
 
             Button {
                 // 120fps animation handled by SplitAnimator
@@ -339,7 +340,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
-            .help("Split Right")
+            .help(tooltips.splitRight)
 
             Button {
                 // 120fps animation handled by SplitAnimator
@@ -349,7 +350,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(.borderless)
-            .help("Split Down")
+            .help(tooltips.splitDown)
         }
         .padding(.trailing, 8)
     }
@@ -673,5 +674,4 @@ struct TabDropDelegate: DropDelegate {
         return transfer
     }
 }
-
 

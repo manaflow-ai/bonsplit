@@ -102,6 +102,27 @@ public struct BonsplitConfiguration: Sendable {
 // MARK: - Appearance Configuration
 
 extension BonsplitConfiguration {
+    public struct SplitButtonTooltips: Sendable, Equatable {
+        public var newTerminal: String
+        public var newBrowser: String
+        public var splitRight: String
+        public var splitDown: String
+
+        public static let `default` = SplitButtonTooltips()
+
+        public init(
+            newTerminal: String = "New Terminal",
+            newBrowser: String = "New Browser",
+            splitRight: String = "Split Right",
+            splitDown: String = "Split Down"
+        ) {
+            self.newTerminal = newTerminal
+            self.newBrowser = newBrowser
+            self.splitRight = splitRight
+            self.splitDown = splitDown
+        }
+    }
+
     public struct Appearance: Sendable {
         // MARK: - Tab Bar
 
@@ -129,6 +150,9 @@ extension BonsplitConfiguration {
 
         /// Whether to show split buttons in the tab bar
         public var showSplitButtons: Bool
+
+        /// Tooltip text for the tab bar's right-side action buttons
+        public var splitButtonTooltips: SplitButtonTooltips
 
         // MARK: - Animations
 
@@ -165,6 +189,7 @@ extension BonsplitConfiguration {
             minimumPaneWidth: CGFloat = 100,
             minimumPaneHeight: CGFloat = 100,
             showSplitButtons: Bool = true,
+            splitButtonTooltips: SplitButtonTooltips = .default,
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true
         ) {
@@ -175,6 +200,7 @@ extension BonsplitConfiguration {
             self.minimumPaneWidth = minimumPaneWidth
             self.minimumPaneHeight = minimumPaneHeight
             self.showSplitButtons = showSplitButtons
+            self.splitButtonTooltips = splitButtonTooltips
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
         }
