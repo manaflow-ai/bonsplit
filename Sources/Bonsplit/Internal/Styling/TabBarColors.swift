@@ -134,18 +134,6 @@ enum TabBarColors {
         isPressed ? nsColorActiveText(for: appearance) : nsColorInactiveText(for: appearance)
     }
 
-    static func splitActionBackground(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
-        Color(nsColor: nsColorSplitActionBackground(for: appearance, isPressed: isPressed))
-    }
-
-    static func nsColorSplitActionBackground(
-        for appearance: BonsplitConfiguration.Appearance,
-        isPressed: Bool
-    ) -> NSColor {
-        let alpha: CGFloat = isPressed ? 0.18 : 0.0
-        return nsColorActiveText(for: appearance).withAlphaComponent(alpha)
-    }
-
     // MARK: - Borders & Indicators
 
     static var separator: Color {

@@ -420,14 +420,7 @@ private struct SplitActionButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(width: 16, height: 16)
-            .padding(4)
-            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
-            .background(
-                RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    .fill(TabBarColors.splitActionBackground(for: appearance, isPressed: configuration.isPressed))
-            )
     }
 }
 
