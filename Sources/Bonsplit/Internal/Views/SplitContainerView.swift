@@ -3,6 +3,66 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
+#if DEBUG
+private func debugPointString(_ point: NSPoint) -> String {
+    let x = Int(point.x.rounded())
+    let y = Int(point.y.rounded())
+    return "\(x)x\(y)"
+}
+
+private func debugRectString(_ rect: NSRect) -> String {
+    let x = Int(rect.origin.x.rounded())
+    let y = Int(rect.origin.y.rounded())
+    let w = Int(rect.size.width.rounded())
+    let h = Int(rect.size.height.rounded())
+    return "\(x):\(y)+\(w)x\(h)"
+}
+
+private final class DebugSplitView: NSSplitView {
+    var debugSplitToken: String = "none"
+    private var lastLoggedEventNumber: Int = -1
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let result = super.hitTest(point)
+        guard let event = NSApp.currentEvent else { return result }
+        guard event.type == .leftMouseDown else { return result }
+        guard event.window == window else { return result }
+        guard event.eventNumber != lastLoggedEventNumber else { return result }
+        lastLoggedEventNumber = event.eventNumber
+
+        let dividerRect = debugDividerRect()
+        let hitRect = dividerRect?.insetBy(dx: -4, dy: -4)
+        let onDivider = dividerRect?.contains(point) == true
+        let nearDivider = hitRect?.contains(point) == true
+        let targetClass = result.map { NSStringFromClass(type(of: $0)) } ?? "nil"
+
+        dlog(
+            "divider.hitTest split=\(debugSplitToken) point=\(debugPointString(point)) target=\(targetClass) onDivider=\(onDivider ? 1 : 0) nearDivider=\(nearDivider ? 1 : 0)"
+        )
+
+        return result
+    }
+
+    private func debugDividerRect() -> NSRect? {
+        guard arrangedSubviews.count >= 2 else { return nil }
+
+        let a = arrangedSubviews[0].frame
+        let b = arrangedSubviews[1].frame
+        let thickness = dividerThickness
+
+        if isVertical {
+            guard a.width > 1, b.width > 1 else { return nil }
+            let x = max(0, a.maxX)
+            return NSRect(x: x, y: 0, width: thickness, height: bounds.height)
+        }
+
+        guard a.height > 1, b.height > 1 else { return nil }
+        let y = max(0, a.maxY)
+        return NSRect(x: 0, y: y, width: bounds.width, height: thickness)
+    }
+}
+#endif
+
 /// SwiftUI wrapper around NSSplitView for native split behavior
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Bindable var splitState: SplitState
@@ -22,7 +82,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     }
 
     func makeNSView(context: Context) -> NSSplitView {
+#if DEBUG
+        let splitView = DebugSplitView()
+        splitView.debugSplitToken = String(splitState.id.uuidString.prefix(5))
+#else
         let splitView = NSSplitView()
+#endif
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
@@ -323,6 +388,41 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             splitState = newState
         }
 
+#if DEBUG
+        private func debugLogDividerDragSkip(
+            _ reason: String,
+            splitView: NSSplitView,
+            event: NSEvent? = nil,
+            location: NSPoint? = nil,
+            dividerRect: NSRect? = nil,
+            hitRect: NSRect? = nil
+        ) {
+            var message = "divider.dragCheck.skip split=\(splitState.id.uuidString.prefix(5)) reason=\(reason)"
+            if let event {
+                let ageMs = Int(((ProcessInfo.processInfo.systemUptime - event.timestamp) * 1000).rounded())
+                message += " eventType=\(event.type.rawValue) ageMs=\(ageMs) eventNo=\(event.eventNumber)"
+                if let eventWindow = event.window {
+                    message += " eventWin=\(eventWindow.windowNumber)"
+                } else {
+                    message += " eventWin=nil"
+                }
+            } else {
+                message += " event=nil"
+            }
+            message += " splitWin=\(splitView.window?.windowNumber ?? -1)"
+            if let location {
+                message += " loc=\(debugPointString(location))"
+            }
+            if let dividerRect {
+                message += " divider=\(debugRectString(dividerRect))"
+            }
+            if let hitRect {
+                message += " hit=\(debugRectString(hitRect))"
+            }
+            dlog(message)
+        }
+#endif
+
         /// Apply external position changes to the NSSplitView
         func setPositionSafely(_ position: CGFloat, in splitView: NSSplitView, layout: Bool = true) {
             isSyncingProgrammatically = true
@@ -382,6 +482,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // If the left mouse button isn't down, this can't be an interactive divider drag.
             // (`splitViewWillResizeSubviews` can fire for programmatic/layout-driven resizes too.)
             guard (NSEvent.pressedMouseButtons & 1) != 0 else {
+#if DEBUG
+                if let event = NSApp.currentEvent,
+                   event.type == .leftMouseDown || event.type == .leftMouseDragged {
+                    debugLogDividerDragSkip("leftMouseNotPressed", splitView: splitView, event: event)
+                }
+#endif
                 isDragging = false
                 return
             }
@@ -391,7 +497,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 return
             }
 
-            guard let event = NSApp.currentEvent else { return }
+            guard let event = NSApp.currentEvent else {
+#if DEBUG
+                debugLogDividerDragSkip("noCurrentEvent", splitView: splitView, event: nil)
+#endif
+                return
+            }
 
             // Only treat this as a divider drag if the pointer is actually on the divider.
             // This delegate callback can also fire during window resizes or structural updates,
@@ -399,10 +510,30 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let now = ProcessInfo.processInfo.systemUptime
             // `NSApp.currentEvent` can be stale when called from async UI work (e.g. socket commands).
             // Only trust very recent events.
-            guard (now - event.timestamp) < 0.1 else { return }
-            guard event.type == .leftMouseDown || event.type == .leftMouseDragged else { return }
-            guard event.window == splitView.window else { return }
-            guard splitView.arrangedSubviews.count >= 2 else { return }
+            guard (now - event.timestamp) < 0.1 else {
+#if DEBUG
+                debugLogDividerDragSkip("staleCurrentEvent", splitView: splitView, event: event)
+#endif
+                return
+            }
+            guard event.type == .leftMouseDown || event.type == .leftMouseDragged else {
+#if DEBUG
+                debugLogDividerDragSkip("wrongEventType", splitView: splitView, event: event)
+#endif
+                return
+            }
+            guard event.window == splitView.window else {
+#if DEBUG
+                debugLogDividerDragSkip("windowMismatch", splitView: splitView, event: event)
+#endif
+                return
+            }
+            guard splitView.arrangedSubviews.count >= 2 else {
+#if DEBUG
+                debugLogDividerDragSkip("arrangedUnderflow", splitView: splitView, event: event)
+#endif
+                return
+            }
 
             let location = splitView.convert(event.locationInWindow, from: nil)
             let a = splitView.arrangedSubviews[0].frame
@@ -411,12 +542,22 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let dividerRect: NSRect
             if splitView.isVertical {
                 // If we don't have real frames yet (during structural updates), don't infer dragging.
-                guard a.width > 1, b.width > 1 else { return }
+                guard a.width > 1, b.width > 1 else {
+#if DEBUG
+                    debugLogDividerDragSkip("invalidSubviewWidths", splitView: splitView, event: event, location: location)
+#endif
+                    return
+                }
                 // Vertical divider between left/right arranged subviews.
                 let x = max(0, a.maxX)
                 dividerRect = NSRect(x: x, y: 0, width: thickness, height: splitView.bounds.height)
             } else {
-                guard a.height > 1, b.height > 1 else { return }
+                guard a.height > 1, b.height > 1 else {
+#if DEBUG
+                    debugLogDividerDragSkip("invalidSubviewHeights", splitView: splitView, event: event, location: location)
+#endif
+                    return
+                }
                 // Horizontal divider between top/bottom arranged subviews.
                 let y = max(0, a.maxY)
                 dividerRect = NSRect(x: 0, y: y, width: splitView.bounds.width, height: thickness)
@@ -425,7 +566,20 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             if hitRect.contains(location) {
                 isDragging = true
 #if DEBUG
-                dlog("divider.dragStart split=\(splitState.id.uuidString.prefix(5))")
+                dlog(
+                    "divider.dragStart split=\(splitState.id.uuidString.prefix(5)) loc=\(debugPointString(location)) divider=\(debugRectString(dividerRect)) hit=\(debugRectString(hitRect))"
+                )
+#endif
+            } else {
+#if DEBUG
+                debugLogDividerDragSkip(
+                    "hitRectMiss",
+                    splitView: splitView,
+                    event: event,
+                    location: location,
+                    dividerRect: dividerRect,
+                    hitRect: hitRect
+                )
 #endif
             }
         }
@@ -440,6 +594,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Prevent stale drag state from persisting through programmatic/async resizes.
             let leftDown = (NSEvent.pressedMouseButtons & 1) != 0
             if !leftDown {
+#if DEBUG
+                if isDragging {
+                    dlog("divider.dragStateReset split=\(splitState.id.uuidString.prefix(5)) reason=leftMouseReleased")
+                }
+#endif
                 isDragging = false
             }
             // During structural updates (pane↔split), arranged subviews can be temporarily removed.
@@ -479,6 +638,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // Check if drag ended (mouse up)
                 let wasDragging = isDragging && leftDown
                 if let event = NSApp.currentEvent, event.type == .leftMouseUp {
+#if DEBUG
+                    dlog("divider.dragEnd split=\(splitState.id.uuidString.prefix(5))")
+#endif
                     isDragging = false
                 }
 
@@ -486,6 +648,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // (window resizes, view reparenting, pane↔split structural updates), the model's
                 // dividerPosition should remain stable; syncPosition() will keep the view aligned.
                 guard wasDragging else {
+#if DEBUG
+                    let eventType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "none"
+                    dlog(
+                        "divider.resizeIgnored split=\(splitState.id.uuidString.prefix(5)) eventType=\(eventType) leftDown=\(leftDown ? 1 : 0) isDragging=\(isDragging ? 1 : 0) normalized=\(String(format: "%.3f", normalizedPosition)) model=\(String(format: "%.3f", self.splitState.dividerPosition))"
+                    )
+#endif
                     let statePosition = self.splitState.dividerPosition
                     // Re-assert on the next runloop turn to avoid recursive NSSplitView resize callbacks.
                     DispatchQueue.main.async { [weak self, weak splitView] in
@@ -497,6 +665,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 }
 
                 Task { @MainActor in
+#if DEBUG
+                    dlog(
+                        "divider.dragUpdate split=\(splitState.id.uuidString.prefix(5)) normalized=\(String(format: "%.3f", normalizedPosition)) px=\(Int(dividerPosition.rounded())) available=\(Int(availableSize.rounded()))"
+                    )
+#endif
                     self.splitState.dividerPosition = normalizedPosition
                     self.lastAppliedPosition = normalizedPosition
                     // Notify geometry change with drag state
