@@ -678,6 +678,32 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
+        func splitView(_ splitView: NSSplitView, effectiveRect proposedEffectiveRect: NSRect, forDrawnRect drawnRect: NSRect, ofDividerAt dividerIndex: Int) -> NSRect {
+            let expanded = drawnRect.insetBy(dx: -5, dy: -5)
+            return proposedEffectiveRect.union(expanded)
+        }
+
+        func splitView(_ splitView: NSSplitView, additionalEffectiveRectOfDividerAt dividerIndex: Int) -> NSRect {
+            guard splitView.arrangedSubviews.count >= dividerIndex + 2 else { return .zero }
+
+            let first = splitView.arrangedSubviews[dividerIndex].frame
+            let second = splitView.arrangedSubviews[dividerIndex + 1].frame
+            let thickness = splitView.dividerThickness
+
+            let dividerRect: NSRect
+            if splitView.isVertical {
+                guard first.width > 1, second.width > 1 else { return .zero }
+                let x = max(0, first.maxX)
+                dividerRect = NSRect(x: x, y: 0, width: thickness, height: splitView.bounds.height)
+            } else {
+                guard first.height > 1, second.height > 1 else { return .zero }
+                let y = max(0, first.maxY)
+                dividerRect = NSRect(x: 0, y: y, width: splitView.bounds.width, height: thickness)
+            }
+
+            return dividerRect.insetBy(dx: -5, dy: -5)
+        }
+
         func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
             // Allow edge positions during animation
             guard !isAnimating else { return proposedMinimumPosition }
