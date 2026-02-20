@@ -318,7 +318,6 @@ struct TabBarView: View {
     @ViewBuilder
     private var splitButtons: some View {
         let tooltips = controller.configuration.appearance.splitButtonTooltips
-        let iconColor = TabBarColors.inactiveText(for: appearance)
         HStack(spacing: 4) {
             Button {
                 controller.requestNewTab(kind: "terminal", inPane: pane.id)
@@ -326,7 +325,7 @@ struct TabBarView: View {
                 Image(systemName: "terminal")
                     .font(.system(size: 12))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.newTerminal)
 
             Button {
@@ -335,7 +334,7 @@ struct TabBarView: View {
                 Image(systemName: "globe")
                     .font(.system(size: 12))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.newBrowser)
 
             Button {
@@ -345,7 +344,7 @@ struct TabBarView: View {
                 Image(systemName: "square.split.2x1")
                     .font(.system(size: 12))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.splitRight)
 
             Button {
@@ -355,10 +354,9 @@ struct TabBarView: View {
                 Image(systemName: "square.split.1x2")
                     .font(.system(size: 12))
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.splitDown)
         }
-        .foregroundStyle(iconColor)
         .padding(.trailing, 8)
     }
 
@@ -414,6 +412,22 @@ struct TabBarView: View {
                     .fill(TabBarColors.separator(for: appearance))
                     .frame(height: 1)
             }
+    }
+}
+
+private struct SplitActionButtonStyle: ButtonStyle {
+    let appearance: BonsplitConfiguration.Appearance
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: 16, height: 16)
+            .padding(4)
+            .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
+            .background(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(TabBarColors.splitActionBackground(for: appearance, isPressed: configuration.isPressed))
+            )
     }
 }
 

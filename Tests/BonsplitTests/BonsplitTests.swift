@@ -216,6 +216,33 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(alpha, 0.6)
     }
 
+    func testSplitActionPressedStateUsesHigherContrastAndVisibleBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#272822")
+        )
+
+        let idleIcon = TabBarColors.nsColorSplitActionIcon(for: appearance, isPressed: false).usingColorSpace(.sRGB)!
+        let pressedIcon = TabBarColors.nsColorSplitActionIcon(for: appearance, isPressed: true).usingColorSpace(.sRGB)!
+
+        var idleAlpha: CGFloat = 0
+        idleIcon.getRed(nil, green: nil, blue: nil, alpha: &idleAlpha)
+        var pressedAlpha: CGFloat = 0
+        pressedIcon.getRed(nil, green: nil, blue: nil, alpha: &pressedAlpha)
+
+        XCTAssertGreaterThan(pressedAlpha, idleAlpha)
+
+        let idleBackground = TabBarColors.nsColorSplitActionBackground(for: appearance, isPressed: false).usingColorSpace(.sRGB)!
+        let pressedBackground = TabBarColors.nsColorSplitActionBackground(for: appearance, isPressed: true).usingColorSpace(.sRGB)!
+
+        var idleBackgroundAlpha: CGFloat = 0
+        idleBackground.getRed(nil, green: nil, blue: nil, alpha: &idleBackgroundAlpha)
+        var pressedBackgroundAlpha: CGFloat = 0
+        pressedBackground.getRed(nil, green: nil, blue: nil, alpha: &pressedBackgroundAlpha)
+
+        XCTAssertEqual(idleBackgroundAlpha, 0, accuracy: 0.0001)
+        XCTAssertGreaterThan(pressedBackgroundAlpha, 0.1)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")
