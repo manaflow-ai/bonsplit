@@ -45,6 +45,7 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
             emptyPaneBuilder: { internalPaneId in
                 emptyPaneBuilder(PaneID(id: internalPaneId.id))
             },
+            appearance: controller.configuration.appearance,
             showSplitButtons: controller.configuration.allowSplits && controller.configuration.appearance.showSplitButtons,
             contentViewLifecycle: controller.configuration.contentViewLifecycle,
             onGeometryChange: { [weak controller] isDragging in

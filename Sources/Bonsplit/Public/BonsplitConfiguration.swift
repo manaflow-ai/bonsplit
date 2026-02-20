@@ -103,6 +103,16 @@ public struct BonsplitConfiguration: Sendable {
 
 extension BonsplitConfiguration {
     public struct Appearance: Sendable {
+        public struct ChromeColors: Sendable {
+            /// Optional hex color (`#RRGGBB`) for tab/pane chrome backgrounds.
+            /// When unset, Bonsplit uses native system colors.
+            public var backgroundHex: String?
+
+            public init(backgroundHex: String? = nil) {
+                self.backgroundHex = backgroundHex
+            }
+        }
+
         // MARK: - Tab Bar
 
         /// Height of the tab bar
@@ -138,6 +148,11 @@ extension BonsplitConfiguration {
         /// Whether to enable animations
         public var enableAnimations: Bool
 
+        // MARK: - Theme Overrides
+
+        /// Optional color overrides for tab/pane chrome.
+        public var chromeColors: ChromeColors
+
         // MARK: - Presets
 
         public static let `default` = Appearance()
@@ -166,7 +181,8 @@ extension BonsplitConfiguration {
             minimumPaneHeight: CGFloat = 100,
             showSplitButtons: Bool = true,
             animationDuration: Double = 0.15,
-            enableAnimations: Bool = true
+            enableAnimations: Bool = true,
+            chromeColors: ChromeColors = .init()
         ) {
             self.tabBarHeight = tabBarHeight
             self.tabMinWidth = tabMinWidth
@@ -177,6 +193,7 @@ extension BonsplitConfiguration {
             self.showSplitButtons = showSplitButtons
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
+            self.chromeColors = chromeColors
         }
     }
 }

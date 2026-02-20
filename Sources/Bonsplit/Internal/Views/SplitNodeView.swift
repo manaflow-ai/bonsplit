@@ -8,6 +8,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     let node: SplitNode
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
+    let appearance: BonsplitConfiguration.Appearance
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
@@ -30,6 +31,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
             SplitContainerView(
                 splitState: splitState,
                 controller: controller,
+                appearance: appearance,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
