@@ -130,6 +130,92 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(controller.configuration.appearance.splitButtonTooltips, customTooltips)
     }
 
+    func testChromeBackgroundHexOverrideParsesForPaneBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#FDF6E3")
+        )
+        let color = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
+
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        XCTAssertEqual(Int(round(red * 255)), 253)
+        XCTAssertEqual(Int(round(green * 255)), 246)
+        XCTAssertEqual(Int(round(blue * 255)), 227)
+        XCTAssertEqual(Int(round(alpha * 255)), 255)
+    }
+
+    func testInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#ZZZZZZ")
+        )
+        let resolved = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
+        let fallback = NSColor.textBackgroundColor.usingColorSpace(.sRGB)!
+
+        var rr: CGFloat = 0
+        var rg: CGFloat = 0
+        var rb: CGFloat = 0
+        var ra: CGFloat = 0
+        resolved.getRed(&rr, green: &rg, blue: &rb, alpha: &ra)
+
+        var fr: CGFloat = 0
+        var fg: CGFloat = 0
+        var fb: CGFloat = 0
+        var fa: CGFloat = 0
+        fallback.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+
+        XCTAssertEqual(rr, fr, accuracy: 0.0001)
+        XCTAssertEqual(rg, fg, accuracy: 0.0001)
+        XCTAssertEqual(rb, fb, accuracy: 0.0001)
+        XCTAssertEqual(ra, fa, accuracy: 0.0001)
+    }
+
+    func testPartiallyInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#FF000G")
+        )
+        let resolved = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
+        let fallback = NSColor.textBackgroundColor.usingColorSpace(.sRGB)!
+
+        var rr: CGFloat = 0
+        var rg: CGFloat = 0
+        var rb: CGFloat = 0
+        var ra: CGFloat = 0
+        resolved.getRed(&rr, green: &rg, blue: &rb, alpha: &ra)
+
+        var fr: CGFloat = 0
+        var fg: CGFloat = 0
+        var fb: CGFloat = 0
+        var fa: CGFloat = 0
+        fallback.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+
+        XCTAssertEqual(rr, fr, accuracy: 0.0001)
+        XCTAssertEqual(rg, fg, accuracy: 0.0001)
+        XCTAssertEqual(rb, fb, accuracy: 0.0001)
+        XCTAssertEqual(ra, fa, accuracy: 0.0001)
+    }
+
+    func testInactiveTextUsesLightForegroundOnDarkCustomChromeBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#272822")
+        )
+        let color = TabBarColors.nsColorInactiveText(for: appearance).usingColorSpace(.sRGB)!
+
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        XCTAssertGreaterThan(red, 0.5)
+        XCTAssertGreaterThan(green, 0.5)
+        XCTAssertGreaterThan(blue, 0.5)
+        XCTAssertGreaterThan(alpha, 0.6)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")

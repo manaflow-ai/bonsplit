@@ -65,6 +65,10 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         controller.focusedPaneId == pane.id
     }
 
+    private var appearance: BonsplitConfiguration.Appearance {
+        bonsplitController.configuration.appearance
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             // Tab bar
@@ -78,7 +82,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
             contentAreaWithDropZones
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(nsColor: .textBackgroundColor))
+        .background(TabBarColors.paneBackground(for: appearance))
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: controller.draggingTab) { _, newValue in
             if newValue == nil {
