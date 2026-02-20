@@ -281,10 +281,7 @@ struct TabItemView: View {
     private var tabBackground: some View {
         ZStack(alignment: .top) {
             // Background fill
-            if isSelected {
-                Rectangle()
-                    .fill(TabBarColors.activeTabBackground(for: appearance))
-            } else if isHovered {
+            if !isSelected && isHovered {
                 Rectangle()
                     .fill(TabBarColors.hoveredTabBackground(for: appearance))
             } else {
