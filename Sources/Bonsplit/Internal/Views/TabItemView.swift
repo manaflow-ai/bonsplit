@@ -35,6 +35,7 @@ enum TabItemStyling {
 struct TabItemView: View {
     let tab: TabItem
     let isSelected: Bool
+    let appearance: BonsplitConfiguration.Appearance
     let saturation: Double
     let controlShortcutDigit: Int?
     let showsControlShortcutHint: Bool
@@ -59,7 +60,9 @@ struct TabItemView: View {
             // Icon + title block uses the standard spacing, but keep the close affordance tight.
             HStack(spacing: TabBarMetrics.contentSpacing) {
                 let iconSlotSize = TabBarMetrics.iconSize
-                let iconTint = isSelected ? TabBarColors.activeText : TabBarColors.inactiveText
+                let iconTint = isSelected
+                    ? TabBarColors.activeText(for: appearance)
+                    : TabBarColors.inactiveText(for: appearance)
                 let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
 
                 Group {
@@ -109,7 +112,11 @@ struct TabItemView: View {
                 Text(tab.title)
                     .font(.system(size: TabBarMetrics.titleFontSize))
                     .lineLimit(1)
-                    .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
+                    .foregroundStyle(
+                        isSelected
+                            ? TabBarColors.activeText(for: appearance)
+                            : TabBarColors.inactiveText(for: appearance)
+                    )
                     .saturation(saturation)
             }
 
@@ -187,7 +194,11 @@ struct TabItemView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .foregroundStyle(isSelected ? TabBarColors.activeText : TabBarColors.inactiveText)
+                    .foregroundStyle(
+                        isSelected
+                            ? TabBarColors.activeText(for: appearance)
+                            : TabBarColors.inactiveText(for: appearance)
+                    )
                     .padding(.horizontal, 4)
                     .padding(.vertical, 1)
                     .background(
@@ -272,10 +283,10 @@ struct TabItemView: View {
             // Background fill
             if isSelected {
                 Rectangle()
-                    .fill(TabBarColors.activeTabBackground)
+                    .fill(TabBarColors.activeTabBackground(for: appearance))
             } else if isHovered {
                 Rectangle()
-                    .fill(TabBarColors.hoveredTabBackground)
+                    .fill(TabBarColors.hoveredTabBackground(for: appearance))
             } else {
                 Color.clear
             }
@@ -291,7 +302,7 @@ struct TabItemView: View {
             HStack {
                 Spacer()
                 Rectangle()
-                    .fill(TabBarColors.separator)
+                    .fill(TabBarColors.separator(for: appearance))
                     .frame(width: 1)
             }
         }
@@ -307,12 +318,12 @@ struct TabItemView: View {
                 HStack(spacing: 2) {
                     if tab.showsNotificationBadge {
                         Circle()
-                            .fill(TabBarColors.notificationBadge)
+                            .fill(TabBarColors.notificationBadge(for: appearance))
                             .frame(width: TabBarMetrics.notificationBadgeSize, height: TabBarMetrics.notificationBadgeSize)
                     }
                     if tab.isDirty {
                         Circle()
-                            .fill(TabBarColors.dirtyIndicator)
+                            .fill(TabBarColors.dirtyIndicator(for: appearance))
                             .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
                             .saturation(saturation)
                     }
@@ -326,11 +337,19 @@ struct TabItemView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
-                        .foregroundStyle(isCloseHovered ? TabBarColors.activeText : TabBarColors.inactiveText)
+                        .foregroundStyle(
+                            isCloseHovered
+                                ? TabBarColors.activeText(for: appearance)
+                                : TabBarColors.inactiveText(for: appearance)
+                        )
                         .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
                         .background(
                             Circle()
-                                .fill(isCloseHovered ? TabBarColors.hoveredTabBackground : .clear)
+                                .fill(
+                                    isCloseHovered
+                                        ? TabBarColors.hoveredTabBackground(for: appearance)
+                                        : .clear
+                                )
                         )
                 }
                 .buttonStyle(.plain)

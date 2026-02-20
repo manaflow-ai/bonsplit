@@ -35,6 +35,10 @@ struct TabBarView: View {
         shouldShowFullSaturation ? 1.0 : 0.0
     }
 
+    private var appearance: BonsplitConfiguration.Appearance {
+        controller.configuration.appearance
+    }
+
     private var showsControlShortcutHints: Bool {
         isFocused && controlKeyMonitor.isShortcutHintVisible
     }
@@ -147,6 +151,7 @@ struct TabBarView: View {
         TabItemView(
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
+            appearance: appearance,
             saturation: tabBarSaturation,
             controlShortcutDigit: tabControlShortcutDigit(for: index, tabCount: pane.tabs.count),
             showsControlShortcutHint: showsControlShortcutHints,
@@ -176,7 +181,7 @@ struct TabBarView: View {
         .onDrag {
             createItemProvider(for: tab)
         } preview: {
-            TabDragPreview(tab: tab)
+            TabDragPreview(tab: tab, appearance: appearance)
         }
         .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
             targetIndex: index,
@@ -303,7 +308,7 @@ struct TabBarView: View {
     @ViewBuilder
     private var dropIndicator: some View {
         Capsule()
-            .fill(TabBarColors.dropIndicator)
+            .fill(TabBarColors.dropIndicator(for: appearance))
             .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
             .offset(x: -1)
     }
@@ -363,7 +368,10 @@ struct TabBarView: View {
         HStack(spacing: 0) {
             // Left fade
             LinearGradient(
-                colors: [TabBarColors.barBackground, TabBarColors.barBackground.opacity(0)],
+                colors: [
+                    TabBarColors.barBackground(for: appearance),
+                    TabBarColors.barBackground(for: appearance).opacity(0),
+                ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -375,7 +383,10 @@ struct TabBarView: View {
 
             // Right fade
             LinearGradient(
-                colors: [TabBarColors.barBackground.opacity(0), TabBarColors.barBackground],
+                colors: [
+                    TabBarColors.barBackground(for: appearance).opacity(0),
+                    TabBarColors.barBackground(for: appearance),
+                ],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -390,10 +401,14 @@ struct TabBarView: View {
     @ViewBuilder
     private var tabBarBackground: some View {
         Rectangle()
-            .fill(isFocused ? TabBarColors.barBackground : TabBarColors.barBackground.opacity(0.95))
+            .fill(
+                isFocused
+                    ? TabBarColors.barBackground(for: appearance)
+                    : TabBarColors.barBackground(for: appearance).opacity(0.95)
+            )
             .overlay(alignment: .bottom) {
                 Rectangle()
-                    .fill(TabBarColors.separator)
+                    .fill(TabBarColors.separator(for: appearance))
                     .frame(height: 1)
             }
     }
@@ -673,5 +688,3 @@ struct TabDropDelegate: DropDelegate {
         return transfer
     }
 }
-
-

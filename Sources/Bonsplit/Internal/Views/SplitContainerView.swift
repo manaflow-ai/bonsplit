@@ -67,6 +67,7 @@ private final class DebugSplitView: NSSplitView {
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Bindable var splitState: SplitState
     let controller: SplitViewController
+    let appearance: BonsplitConfiguration.Appearance
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
@@ -79,6 +80,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
     func makeCoordinator() -> Coordinator {
         Coordinator(splitState: splitState, onGeometryChange: onGeometryChange)
+    }
+
+    private var chromeBackgroundColor: NSColor {
+        TabBarColors.nsColorPaneBackground(for: appearance)
     }
 
     func makeNSView(context: Context) -> NSSplitView {
@@ -95,13 +100,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // split view itself is not fully transparent so divider regions don't "show through"
         // to whatever is behind the split hierarchy.
         splitView.wantsLayer = true
-        splitView.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
 
         // Keep arranged subviews stable (always 2) to avoid transient "collapse" flashes when
         // replacing pane<->split content. We swap the hosted content within these containers.
         let firstContainer = NSView()
         firstContainer.wantsLayer = true
-        firstContainer.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
         firstContainer.layer?.masksToBounds = true
         let firstController = makeHostingController(for: splitState.first)
         installHostingController(firstController, into: firstContainer)
@@ -110,7 +115,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         let secondContainer = NSView()
         secondContainer.wantsLayer = true
-        secondContainer.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
         secondContainer.layer?.masksToBounds = true
         let secondController = makeHostingController(for: splitState.second)
         installHostingController(secondController, into: secondContainer)
@@ -220,6 +225,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // .allowsHitTesting(false) only affects gesture recognizers, not AppKit's
         // view-hierarchy-based NSDraggingDestination routing.
         splitView.isHidden = !controller.isInteractive
+        splitView.wantsLayer = true
+        splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
@@ -235,6 +242,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
             let firstContainer = arranged[0]
             let secondContainer = arranged[1]
+            firstContainer.wantsLayer = true
+            firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+            secondContainer.wantsLayer = true
+            secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
 
             updateHostedContent(
                 in: firstContainer,
@@ -325,6 +336,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             SplitContainerView(
                 splitState: nestedSplitState,
                 controller: controller,
+                appearance: appearance,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
