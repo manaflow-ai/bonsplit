@@ -18,9 +18,10 @@ enum TabBarColors {
     }
 
     private static func effectiveBackgroundColor(
-        for appearance: BonsplitConfiguration.Appearance
+        for appearance: BonsplitConfiguration.Appearance,
+        fallback fallbackColor: NSColor
     ) -> NSColor {
-        chromeBackgroundColor(for: appearance) ?? NSColor.windowBackgroundColor
+        chromeBackgroundColor(for: appearance) ?? fallbackColor
     }
 
     private static func effectiveTextColor(
@@ -41,11 +42,11 @@ enum TabBarColors {
     }
 
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveBackgroundColor(for: appearance))
+        Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
     }
 
     static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveBackgroundColor(for: appearance)
+        effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
     }
 
     // MARK: - Tab Bar Background
@@ -55,7 +56,7 @@ enum TabBarColors {
     }
 
     static func barBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveBackgroundColor(for: appearance))
+        Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .windowBackgroundColor))
     }
 
     static var barMaterial: Material {
@@ -178,14 +179,16 @@ enum TabBarColors {
 }
 
 private extension NSColor {
+    private static let bonsplitHexDigits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
+
     convenience init?(bonsplitHex value: String) {
         var hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
         if hex.hasPrefix("#") {
             hex.removeFirst()
         }
         guard hex.count == 6 else { return nil }
-        var rgb: UInt64 = 0
-        guard Scanner(string: hex).scanHexInt64(&rgb) else { return nil }
+        guard hex.unicodeScalars.allSatisfy({ Self.bonsplitHexDigits.contains($0) }) else { return nil }
+        guard let rgb = UInt64(hex, radix: 16) else { return nil }
         let red = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
         let green = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
         let blue = CGFloat(rgb & 0x0000FF) / 255.0

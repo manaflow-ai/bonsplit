@@ -122,12 +122,37 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(Int(round(alpha * 255)), 255)
     }
 
-    func testInvalidChromeBackgroundHexFallsBackToWindowColor() {
+    func testInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(backgroundHex: "#ZZZZZZ")
         )
         let resolved = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
-        let fallback = NSColor.windowBackgroundColor.usingColorSpace(.sRGB)!
+        let fallback = NSColor.textBackgroundColor.usingColorSpace(.sRGB)!
+
+        var rr: CGFloat = 0
+        var rg: CGFloat = 0
+        var rb: CGFloat = 0
+        var ra: CGFloat = 0
+        resolved.getRed(&rr, green: &rg, blue: &rb, alpha: &ra)
+
+        var fr: CGFloat = 0
+        var fg: CGFloat = 0
+        var fb: CGFloat = 0
+        var fa: CGFloat = 0
+        fallback.getRed(&fr, green: &fg, blue: &fb, alpha: &fa)
+
+        XCTAssertEqual(rr, fr, accuracy: 0.0001)
+        XCTAssertEqual(rg, fg, accuracy: 0.0001)
+        XCTAssertEqual(rb, fb, accuracy: 0.0001)
+        XCTAssertEqual(ra, fa, accuracy: 0.0001)
+    }
+
+    func testPartiallyInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#FF000G")
+        )
+        let resolved = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
+        let fallback = NSColor.textBackgroundColor.usingColorSpace(.sRGB)!
 
         var rr: CGFloat = 0
         var rg: CGFloat = 0
