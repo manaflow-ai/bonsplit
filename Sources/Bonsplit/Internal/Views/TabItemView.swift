@@ -341,10 +341,17 @@ struct TabItemView: View {
             onContextAction(.togglePin)
         }
 
-        Button("Mark Tab as Unread") {
-            onContextAction(.markAsUnread)
+        if contextMenuState.isUnread {
+            Button("Mark Tab as Read") {
+                onContextAction(.markAsRead)
+            }
+            .disabled(!contextMenuState.canMarkAsRead)
+        } else {
+            Button("Mark Tab as Unread") {
+                onContextAction(.markAsUnread)
+            }
+            .disabled(!contextMenuState.canMarkAsUnread)
         }
-        .disabled(!contextMenuState.canMarkAsUnread)
     }
 
     // MARK: - Tab Background

@@ -14,6 +14,10 @@ struct TabContextMenuState {
     var canMarkAsUnread: Bool {
         !isUnread
     }
+
+    var canMarkAsRead: Bool {
+        isUnread
+    }
 }
 
 /// Tab bar view with scrollable tabs, drag/drop support, and split buttons

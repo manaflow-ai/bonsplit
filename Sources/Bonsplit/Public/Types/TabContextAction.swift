@@ -12,5 +12,6 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case reload
     case duplicate
     case togglePin
+    case markAsRead
     case markAsUnread
 }

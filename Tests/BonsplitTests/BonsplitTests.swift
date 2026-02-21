@@ -371,6 +371,21 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(spy.paneId, pane)
     }
 
+    @MainActor
+    func testRequestTabContextActionForwardsMarkAsReadToDelegate() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Test", kind: "terminal")!
+        let spy = TabContextActionDelegateSpy()
+        controller.delegate = spy
+
+        controller.requestTabContextAction(.markAsRead, for: tabId, inPane: pane)
+
+        XCTAssertEqual(spy.action, .markAsRead)
+        XCTAssertEqual(spy.tabId, tabId)
+        XCTAssertEqual(spy.paneId, pane)
+    }
+
     func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {
         XCTAssertEqual(
             TabItemStyling.iconSaturation(hasRasterIcon: true, tabSaturation: 0.0),
