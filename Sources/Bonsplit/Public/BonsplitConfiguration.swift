@@ -125,7 +125,7 @@ extension BonsplitConfiguration {
 
     public struct Appearance: Sendable {
         public struct ChromeColors: Sendable {
-            /// Optional hex color (`#RRGGBB`) for tab/pane chrome backgrounds.
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for tab/pane chrome backgrounds.
             /// When unset, Bonsplit uses native system colors.
             public var backgroundHex: String?
 

@@ -159,6 +159,33 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(Int(round(alpha * 255)), 255)
     }
 
+    func testChromeBackgroundHexOverrideParsesRGBAForTabBarBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#11223380")
+        )
+        let color = NSColor(TabBarColors.barBackground(for: appearance)).usingColorSpace(.sRGB)!
+
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        XCTAssertEqual(Int(round(red * 255)), 17)
+        XCTAssertEqual(Int(round(green * 255)), 34)
+        XCTAssertEqual(Int(round(blue * 255)), 51)
+        XCTAssertEqual(Int(round(alpha * 255)), 128)
+    }
+
+    func testTranslucentChromeUsesClearPaneBackground() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#11223380")
+        )
+        let color = TabBarColors.nsColorPaneBackground(for: appearance).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(color.alphaComponent, 0.0, accuracy: 0.0001)
+    }
+
     func testInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(backgroundHex: "#ZZZZZZ")

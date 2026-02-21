@@ -92,6 +92,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         TabBarColors.nsColorPaneBackground(for: appearance)
     }
 
+    private var chromeBackgroundIsOpaque: Bool {
+        chromeBackgroundColor.alphaComponent >= 0.999
+    }
+
     func makeNSView(context: Context) -> NSSplitView {
 #if DEBUG
         let splitView = DebugSplitView()
@@ -107,12 +111,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // to whatever is behind the split hierarchy.
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        splitView.layer?.isOpaque = chromeBackgroundIsOpaque
 
         // Keep arranged subviews stable (always 2) to avoid transient "collapse" flashes when
         // replacing pane<->split content. We swap the hosted content within these containers.
         let firstContainer = NSView()
         firstContainer.wantsLayer = true
         firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        firstContainer.layer?.isOpaque = chromeBackgroundIsOpaque
         firstContainer.layer?.masksToBounds = true
         let firstController = makeHostingController(for: splitState.first)
         installHostingController(firstController, into: firstContainer)
@@ -122,6 +128,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let secondContainer = NSView()
         secondContainer.wantsLayer = true
         secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        secondContainer.layer?.isOpaque = chromeBackgroundIsOpaque
         secondContainer.layer?.masksToBounds = true
         let secondController = makeHostingController(for: splitState.second)
         installHostingController(secondController, into: secondContainer)
@@ -297,6 +304,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.isHidden = !controller.isInteractive
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        splitView.layer?.isOpaque = chromeBackgroundIsOpaque
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
@@ -314,8 +322,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let secondContainer = arranged[1]
             firstContainer.wantsLayer = true
             firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+            firstContainer.layer?.isOpaque = chromeBackgroundIsOpaque
             secondContainer.wantsLayer = true
             secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+            secondContainer.layer?.isOpaque = chromeBackgroundIsOpaque
 
             updateHostedContent(
                 in: firstContainer,
@@ -342,6 +352,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
     // MARK: - Helpers
 
+    private func configureHostingViewTransparency(_ view: NSView) {
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.layer?.isOpaque = false
+    }
+
     private func makeHostingController(for node: SplitNode) -> NSHostingController<AnyView> {
         let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
         // NSSplitView lays out arranged subviews by setting frames. Leaving Auto Layout
@@ -349,11 +365,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // structural updates, collapsing panes.
         hostingController.view.translatesAutoresizingMaskIntoConstraints = true
         hostingController.view.autoresizingMask = [.width, .height]
+        configureHostingViewTransparency(hostingController.view)
         return hostingController
     }
 
     private func installHostingController(_ hostingController: NSHostingController<AnyView>, into container: NSView) {
         let hostedView = hostingController.view
+        configureHostingViewTransparency(hostedView)
         hostedView.frame = container.bounds
         hostedView.autoresizingMask = [.width, .height]
         if hostedView.superview !== container {
@@ -380,6 +398,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         if let current = controller {
             current.rootView = AnyView(makeView(for: node))
+            configureHostingViewTransparency(current.view)
             // Ensure fill if container bounds changed without a layout pass yet.
             current.view.frame = container.bounds
             return

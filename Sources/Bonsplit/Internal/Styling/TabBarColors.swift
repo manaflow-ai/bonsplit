@@ -24,6 +24,13 @@ enum TabBarColors {
         chromeBackgroundColor(for: appearance) ?? fallbackColor
     }
 
+    private static func usesTranslucentChromeBackground(
+        for appearance: BonsplitConfiguration.Appearance
+    ) -> Bool {
+        guard let custom = chromeBackgroundColor(for: appearance) else { return false }
+        return custom.alphaComponent < 0.999
+    }
+
     private static func effectiveTextColor(
         for appearance: BonsplitConfiguration.Appearance,
         secondary: Bool
@@ -42,11 +49,19 @@ enum TabBarColors {
     }
 
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
+        if usesTranslucentChromeBackground(for: appearance) {
+            // Keep pane/content region clear so terminal/browser surfaces are the only background
+            // contributors; otherwise repeated alpha fills across nested split containers become opaque.
+            return .clear
+        }
+        return Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
     }
 
     static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
+        if usesTranslucentChromeBackground(for: appearance) {
+            return .clear
+        }
+        return effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
     }
 
     // MARK: - Tab Bar Background
@@ -197,13 +212,27 @@ private extension NSColor {
         if hex.hasPrefix("#") {
             hex.removeFirst()
         }
-        guard hex.count == 6 else { return nil }
+        guard hex.count == 6 || hex.count == 8 else { return nil }
         guard hex.unicodeScalars.allSatisfy({ Self.bonsplitHexDigits.contains($0) }) else { return nil }
-        guard let rgb = UInt64(hex, radix: 16) else { return nil }
-        let red = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
-        let green = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
-        let blue = CGFloat(rgb & 0x0000FF) / 255.0
-        self.init(red: red, green: green, blue: blue, alpha: 1.0)
+        guard let raw = UInt64(hex, radix: 16) else { return nil }
+        let red: CGFloat
+        let green: CGFloat
+        let blue: CGFloat
+        let alpha: CGFloat
+
+        if hex.count == 8 {
+            red = CGFloat((raw & 0xFF00_0000) >> 24) / 255.0
+            green = CGFloat((raw & 0x00FF_0000) >> 16) / 255.0
+            blue = CGFloat((raw & 0x0000_FF00) >> 8) / 255.0
+            alpha = CGFloat(raw & 0x0000_00FF) / 255.0
+        } else {
+            red = CGFloat((raw & 0xFF0000) >> 16) / 255.0
+            green = CGFloat((raw & 0x00FF00) >> 8) / 255.0
+            blue = CGFloat(raw & 0x0000FF) / 255.0
+            alpha = 1.0
+        }
+
+        self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
 
     var isBonsplitLightColor: Bool {
