@@ -50,6 +50,7 @@ public final class BonsplitController {
     ///   - icon: Optional SF Symbol name for the tab icon
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
+    ///   - hasCustomTitle: Whether the tab title came from a custom user override
     ///   - isDirty: Whether the tab shows a dirty indicator
     ///   - showsNotificationBadge: Whether the tab shows an "unread/activity" badge
     ///   - isLoading: Whether the tab shows an activity/loading indicator (e.g. spinning icon)
@@ -59,6 +60,7 @@ public final class BonsplitController {
     @discardableResult
     public func createTab(
         title: String,
+        hasCustomTitle: Bool = false,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         kind: String? = nil,
@@ -72,6 +74,7 @@ public final class BonsplitController {
         let tab = Tab(
             id: tabId,
             title: title,
+            hasCustomTitle: hasCustomTitle,
             icon: icon,
             iconImageData: iconImageData,
             kind: kind,
@@ -108,6 +111,7 @@ public final class BonsplitController {
         let tabItem = TabItem(
             id: tabId.id,
             title: title,
+            hasCustomTitle: hasCustomTitle,
             icon: icon,
             iconImageData: iconImageData,
             kind: kind,
@@ -143,6 +147,7 @@ public final class BonsplitController {
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
+    ///   - hasCustomTitle: New custom-title state (pass nil to keep current)
     ///   - isDirty: New dirty state (pass nil to keep current)
     ///   - showsNotificationBadge: New badge state (pass nil to keep current)
     ///   - isLoading: New loading/busy state (pass nil to keep current)
@@ -153,6 +158,7 @@ public final class BonsplitController {
         icon: String?? = nil,
         iconImageData: Data?? = nil,
         kind: String?? = nil,
+        hasCustomTitle: Bool? = nil,
         isDirty: Bool? = nil,
         showsNotificationBadge: Bool? = nil,
         isLoading: Bool? = nil,
@@ -171,6 +177,9 @@ public final class BonsplitController {
         }
         if let kind = kind {
             pane.tabs[tabIndex].kind = kind
+        }
+        if let hasCustomTitle = hasCustomTitle {
+            pane.tabs[tabIndex].hasCustomTitle = hasCustomTitle
         }
         if let isDirty = isDirty {
             pane.tabs[tabIndex].isDirty = isDirty

@@ -310,6 +310,20 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testCreateAndUpdateTabCustomTitleFlag() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Infra",
+            hasCustomTitle: true
+        )!
+
+        XCTAssertEqual(controller.tab(tabId)?.hasCustomTitle, true)
+
+        controller.updateTab(tabId, hasCustomTitle: false)
+        XCTAssertEqual(controller.tab(tabId)?.hasCustomTitle, false)
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!

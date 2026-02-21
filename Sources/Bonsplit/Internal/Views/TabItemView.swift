@@ -290,6 +290,12 @@ struct TabItemView: View {
             onContextAction(.rename)
         }
 
+        if contextMenuState.hasCustomTitle {
+            Button("Remove Custom Tab Name") {
+                onContextAction(.clearName)
+            }
+        }
+
         Divider()
 
         Button("Close Tabs to Left") {

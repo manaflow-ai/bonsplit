@@ -17,6 +17,7 @@ extension UTType {
 struct TabItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
+    var hasCustomTitle: Bool
     var icon: String?
     var iconImageData: Data?
     var kind: String?
@@ -28,6 +29,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     init(
         id: UUID = UUID(),
         title: String,
+        hasCustomTitle: Bool = false,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         kind: String? = nil,
@@ -38,6 +40,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     ) {
         self.id = id
         self.title = title
+        self.hasCustomTitle = hasCustomTitle
         self.icon = icon
         self.iconImageData = iconImageData
         self.kind = kind
@@ -58,6 +61,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     private enum CodingKeys: String, CodingKey {
         case id
         case title
+        case hasCustomTitle
         case icon
         case iconImageData
         case kind
@@ -71,6 +75,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decode(UUID.self, forKey: .id)
         self.title = try c.decode(String.self, forKey: .title)
+        self.hasCustomTitle = try c.decodeIfPresent(Bool.self, forKey: .hasCustomTitle) ?? false
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
         self.iconImageData = try c.decodeIfPresent(Data.self, forKey: .iconImageData)
         self.kind = try c.decodeIfPresent(String.self, forKey: .kind)
@@ -84,6 +89,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
         try c.encode(title, forKey: .title)
+        try c.encode(hasCustomTitle, forKey: .hasCustomTitle)
         try c.encodeIfPresent(icon, forKey: .icon)
         try c.encodeIfPresent(iconImageData, forKey: .iconImageData)
         try c.encodeIfPresent(kind, forKey: .kind)

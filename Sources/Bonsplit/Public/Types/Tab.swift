@@ -4,6 +4,7 @@ import Foundation
 public struct Tab: Identifiable, Hashable, Sendable {
     public let id: TabID
     public let title: String
+    public let hasCustomTitle: Bool
     public let icon: String?
     /// Optional image data (PNG recommended) for the tab icon. When present, this takes precedence over `icon`.
     public let iconImageData: Data?
@@ -20,6 +21,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public init(
         id: TabID = TabID(),
         title: String,
+        hasCustomTitle: Bool = false,
         icon: String? = nil,
         iconImageData: Data? = nil,
         kind: String? = nil,
@@ -30,6 +32,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
     ) {
         self.id = id
         self.title = title
+        self.hasCustomTitle = hasCustomTitle
         self.icon = icon
         self.iconImageData = iconImageData
         self.kind = kind
@@ -42,6 +45,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
     internal init(from tabItem: TabItem) {
         self.id = TabID(id: tabItem.id)
         self.title = tabItem.title
+        self.hasCustomTitle = tabItem.hasCustomTitle
         self.icon = tabItem.icon
         self.iconImageData = tabItem.iconImageData
         self.kind = tabItem.kind
