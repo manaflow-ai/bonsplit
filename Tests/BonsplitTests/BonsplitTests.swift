@@ -324,6 +324,39 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testSplitPaneWithOptionalTabPreservesCustomTitleFlag() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        let sourcePaneId = controller.focusedPaneId!
+        let customTab = Tab(title: "Custom", hasCustomTitle: true)
+
+        guard let newPaneId = controller.splitPane(sourcePaneId, orientation: .horizontal, withTab: customTab) else {
+            return XCTFail("Expected splitPane to return new pane")
+        }
+        let inserted = controller.tabs(inPane: newPaneId).first(where: { $0.id == customTab.id })
+        XCTAssertEqual(inserted?.hasCustomTitle, true)
+    }
+
+    @MainActor
+    func testSplitPaneWithInsertSidePreservesCustomTitleFlag() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        let sourcePaneId = controller.focusedPaneId!
+        let customTab = Tab(title: "Custom", hasCustomTitle: true)
+
+        guard let newPaneId = controller.splitPane(
+            sourcePaneId,
+            orientation: .vertical,
+            withTab: customTab,
+            insertFirst: true
+        ) else {
+            return XCTFail("Expected splitPane(insertFirst:) to return new pane")
+        }
+        let inserted = controller.tabs(inPane: newPaneId).first(where: { $0.id == customTab.id })
+        XCTAssertEqual(inserted?.hasCustomTitle, true)
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!

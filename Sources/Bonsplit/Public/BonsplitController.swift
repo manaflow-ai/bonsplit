@@ -348,6 +348,7 @@ public final class BonsplitController {
             internalTab = TabItem(
                 id: tab.id.id,
                 title: tab.title,
+                hasCustomTitle: tab.hasCustomTitle,
                 icon: tab.icon,
                 iconImageData: tab.iconImageData,
                 kind: tab.kind,
@@ -409,6 +410,7 @@ public final class BonsplitController {
         let internalTab = TabItem(
             id: tab.id.id,
             title: tab.title,
+            hasCustomTitle: tab.hasCustomTitle,
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             kind: tab.kind,
