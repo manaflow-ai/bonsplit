@@ -79,7 +79,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     var animationDuration: Double = 0.15
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(splitState: splitState, onGeometryChange: onGeometryChange)
+        Coordinator(
+            splitState: splitState,
+            minimumPaneWidth: appearance.minimumPaneWidth,
+            minimumPaneHeight: appearance.minimumPaneHeight,
+            onGeometryChange: onGeometryChange
+        )
     }
 
     private var chromeBackgroundColor: NSColor {
@@ -277,7 +282,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // SwiftUI may reuse the same NSSplitView/Coordinator instance while the underlying SplitState
         // object changes (e.g., during split tree restructuring). Keep the coordinator pointed at
         // the latest state to avoid syncing geometry against a stale model.
-        context.coordinator.update(splitState: splitState, onGeometryChange: onGeometryChange)
+        context.coordinator.update(
+            splitState: splitState,
+            minimumPaneWidth: appearance.minimumPaneWidth,
+            minimumPaneHeight: appearance.minimumPaneHeight,
+            onGeometryChange: onGeometryChange
+        )
 
         // Hide the NSSplitView when inactive so AppKit's drag routing doesn't deliver
         // drag sessions to views belonging to background workspaces. SwiftUI's
@@ -412,6 +422,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     class Coordinator: NSObject, NSSplitViewDelegate {
         var splitState: SplitState
         private var splitStateId: UUID
+        private var minimumPaneWidth: CGFloat
+        private var minimumPaneHeight: CGFloat
         weak var splitView: NSSplitView?
         var isAnimating = false
         var didApplyInitialDividerPosition = false
@@ -432,17 +444,31 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var firstHostingController: NSHostingController<AnyView>?
         var secondHostingController: NSHostingController<AnyView>?
 
-        init(splitState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
+        init(
+            splitState: SplitState,
+            minimumPaneWidth: CGFloat,
+            minimumPaneHeight: CGFloat,
+            onGeometryChange: ((_ isDragging: Bool) -> Void)?
+        ) {
             self.splitState = splitState
             self.splitStateId = splitState.id
+            self.minimumPaneWidth = minimumPaneWidth
+            self.minimumPaneHeight = minimumPaneHeight
             self.onGeometryChange = onGeometryChange
             self.lastAppliedPosition = splitState.dividerPosition
             self.firstNodeType = splitState.first.nodeType
             self.secondNodeType = splitState.second.nodeType
         }
 
-        func update(splitState newState: SplitState, onGeometryChange: ((_ isDragging: Bool) -> Void)?) {
+        func update(
+            splitState newState: SplitState,
+            minimumPaneWidth: CGFloat,
+            minimumPaneHeight: CGFloat,
+            onGeometryChange: ((_ isDragging: Bool) -> Void)?
+        ) {
             self.onGeometryChange = onGeometryChange
+            self.minimumPaneWidth = minimumPaneWidth
+            self.minimumPaneHeight = minimumPaneHeight
 
             // If SwiftUI reused this representable for a different split node,
             // reset our cached sync state so we don't "pin" the divider to an edge.
@@ -463,6 +489,45 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             splitState = newState
         }
 
+        private func splitTotalSize(in splitView: NSSplitView) -> CGFloat {
+            splitState.orientation == .horizontal
+                ? splitView.bounds.width
+                : splitView.bounds.height
+        }
+
+        private func splitAvailableSize(in splitView: NSSplitView) -> CGFloat {
+            max(splitTotalSize(in: splitView) - splitView.dividerThickness, 0)
+        }
+
+        private func requestedMinimumPaneSize() -> CGFloat {
+            max(
+                splitState.orientation == .horizontal ? minimumPaneWidth : minimumPaneHeight,
+                1
+            )
+        }
+
+        private func effectiveMinimumPaneSize(in splitView: NSSplitView) -> CGFloat {
+            let available = splitAvailableSize(in: splitView)
+            guard available > 0 else { return 0 }
+            // When the container is too small for both configured minimums, keep both panes
+            // visible by evenly splitting the available space rather than forcing invalid bounds.
+            return min(requestedMinimumPaneSize(), available / 2)
+        }
+
+        private func normalizedDividerBounds(in splitView: NSSplitView) -> ClosedRange<CGFloat> {
+            let available = splitAvailableSize(in: splitView)
+            guard available > 0 else { return 0...1 }
+            let minNormalized = min(0.5, effectiveMinimumPaneSize(in: splitView) / available)
+            return minNormalized...(1 - minNormalized)
+        }
+
+        private func clampedDividerPosition(_ position: CGFloat, in splitView: NSSplitView) -> CGFloat {
+            let available = splitAvailableSize(in: splitView)
+            guard available > 0 else { return 0 }
+            let minPaneSize = effectiveMinimumPaneSize(in: splitView)
+            let maxPosition = max(minPaneSize, available - minPaneSize)
+            return min(max(position, minPaneSize), maxPosition)
+        }
 #if DEBUG
         private func debugLogDividerDragSkip(
             _ reason: String,
@@ -497,7 +562,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             dlog(message)
         }
 #endif
-
         /// Apply external position changes to the NSSplitView
         func setPositionSafely(_ position: CGFloat, in splitView: NSSplitView, layout: Bool = true) {
             isSyncingProgrammatically = true
@@ -506,7 +570,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 isSyncingProgrammatically = false
                 splitContainerProgrammaticSyncDepth = max(0, splitContainerProgrammaticSyncDepth - 1)
             }
-            splitView.setPosition(position, ofDividerAt: 0)
+            let clampedPosition = clampedDividerPosition(position, in: splitView)
+            splitView.setPosition(clampedPosition, ofDividerAt: 0)
             if layout {
                 splitView.layoutSubtreeIfNeeded()
             }
@@ -526,14 +591,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 return
             }
 
-            let totalSize = splitState.orientation == .horizontal
-                ? splitView.bounds.width
-                : splitView.bounds.height
-            let availableSize = max(totalSize - splitView.dividerThickness, 0)
+            let availableSize = splitAvailableSize(in: splitView)
 
             // During view reparenting, NSSplitView can briefly report 0-sized bounds.
             // A later layout pass with real bounds will apply the model ratio.
             guard availableSize > 0 else { return }
+            let stateBounds = normalizedDividerBounds(in: splitView)
+            let clampedStatePosition = max(
+                stateBounds.lowerBound,
+                min(stateBounds.upperBound, statePosition)
+            )
 
             // Keep the view in sync even if the model hasn't changed. Structural updates (pane↔split)
             // can temporarily reset divider positions; lastAppliedPosition alone isn't enough.
@@ -541,15 +608,19 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let firstSubview = splitView.arrangedSubviews[0]
                 return splitState.orientation == .horizontal ? firstSubview.frame.width : firstSubview.frame.height
             }()
-            let currentNormalized = currentDividerPixels / availableSize
+            let currentNormalized = max(
+                stateBounds.lowerBound,
+                min(stateBounds.upperBound, currentDividerPixels / availableSize)
+            )
 
-            if abs(statePosition - lastAppliedPosition) <= 0.01 && abs(currentNormalized - statePosition) <= 0.01 {
+            if abs(clampedStatePosition - lastAppliedPosition) <= 0.01 &&
+                abs(currentNormalized - clampedStatePosition) <= 0.01 {
                 return
             }
 
-            let pixelPosition = availableSize * statePosition
+            let pixelPosition = availableSize * clampedStatePosition
             setPositionSafely(pixelPosition, in: splitView, layout: true)
-            lastAppliedPosition = statePosition
+            lastAppliedPosition = clampedStatePosition
         }
 
         func splitViewWillResizeSubviews(_ notification: Notification) {
@@ -685,10 +756,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 return
             }
 
-            let totalSize = splitState.orientation == .horizontal
-                ? splitView.bounds.width
-                : splitView.bounds.height
-            let availableSize = max(totalSize - splitView.dividerThickness, 0)
+            let availableSize = splitAvailableSize(in: splitView)
 
             guard availableSize > 0 else { return }
 
@@ -701,9 +769,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
                 // Never persist a fully-collapsed pane ratio. (This can happen if we ever
                 // see a transient 0-sized layout during a drag or structural update.)
-                let minNormalized = min(0.5, TabBarMetrics.minimumPaneWidth / availableSize)
-                let maxNormalized = 1 - minNormalized
-                normalizedPosition = max(minNormalized, min(maxNormalized, normalizedPosition))
+                let normalizedBounds = normalizedDividerBounds(in: splitView)
+                normalizedPosition = max(
+                    normalizedBounds.lowerBound,
+                    min(normalizedBounds.upperBound, normalizedPosition)
+                )
 
                 // Snap to 0.5 if very close (prevents pixel-rounding drift)
                 if abs(normalizedPosition - 0.5) < 0.01 {
@@ -782,16 +852,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
             // Allow edge positions during animation
             guard !isAnimating else { return proposedMinimumPosition }
-            return max(proposedMinimumPosition, TabBarMetrics.minimumPaneWidth)
+            return max(proposedMinimumPosition, effectiveMinimumPaneSize(in: splitView))
         }
 
         func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
             // Allow edge positions during animation
             guard !isAnimating else { return proposedMaximumPosition }
-            let totalSize = splitState.orientation == .horizontal
-                ? splitView.bounds.width
-                : splitView.bounds.height
-            return min(proposedMaximumPosition, totalSize - splitView.dividerThickness - TabBarMetrics.minimumPaneWidth)
+            let availableSize = splitAvailableSize(in: splitView)
+            let minimumPaneSize = effectiveMinimumPaneSize(in: splitView)
+            let maxCoordinate = max(minimumPaneSize, availableSize - minimumPaneSize)
+            return min(proposedMaximumPosition, maxCoordinate)
         }
     }
 }
