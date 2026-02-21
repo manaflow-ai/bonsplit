@@ -352,7 +352,13 @@ struct TabItemView: View {
     @ViewBuilder
     private var tabBackground: some View {
         ZStack(alignment: .top) {
-            Color.clear
+            // Background fill (hover)
+            if isHovered {
+                Rectangle()
+                    .fill(TabBarColors.hoveredTabBackground(for: appearance))
+            } else {
+                Color.clear
+            }
 
             // Top accent indicator for selected tab
             if isSelected {
