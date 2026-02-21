@@ -45,7 +45,9 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
 }
 
 /// Container NSView for a pane inside SinglePaneWrapper.
-class PaneDragContainerView: NSView {}
+class PaneDragContainerView: NSView {
+    override var isOpaque: Bool { false }
+}
 
 /// Wrapper that uses NSHostingController for proper AppKit layout constraints
 struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable {
@@ -56,6 +58,12 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
+
+    private func configureHostingViewTransparency(_ view: NSView) {
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.layer?.isOpaque = false
+    }
 
     func makeNSView(context: Context) -> NSView {
         let paneView = PaneContainerView(
@@ -68,8 +76,12 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
         )
         let hostingController = NSHostingController(rootView: paneView)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
+        configureHostingViewTransparency(hostingController.view)
 
         let containerView = PaneDragContainerView()
+        containerView.wantsLayer = true
+        containerView.layer?.backgroundColor = NSColor.clear.cgColor
+        containerView.layer?.isOpaque = false
         containerView.addSubview(hostingController.view)
 
         NSLayoutConstraint.activate([
@@ -98,7 +110,10 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             showSplitButtons: showSplitButtons,
             contentViewLifecycle: contentViewLifecycle
         )
-        context.coordinator.hostingController?.rootView = paneView
+        if let hostingController = context.coordinator.hostingController {
+            hostingController.rootView = paneView
+            configureHostingViewTransparency(hostingController.view)
+        }
     }
 
     func makeCoordinator() -> Coordinator {

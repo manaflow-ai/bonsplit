@@ -341,6 +341,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
     // MARK: - Helpers
 
+    private func configureHostingViewTransparency(_ view: NSView) {
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.clear.cgColor
+        view.layer?.isOpaque = false
+    }
+
     private func makeHostingController(for node: SplitNode) -> NSHostingController<AnyView> {
         let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
         // NSSplitView lays out arranged subviews by setting frames. Leaving Auto Layout
@@ -348,11 +354,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // structural updates, collapsing panes.
         hostingController.view.translatesAutoresizingMaskIntoConstraints = true
         hostingController.view.autoresizingMask = [.width, .height]
+        configureHostingViewTransparency(hostingController.view)
         return hostingController
     }
 
     private func installHostingController(_ hostingController: NSHostingController<AnyView>, into container: NSView) {
         let hostedView = hostingController.view
+        configureHostingViewTransparency(hostedView)
         hostedView.frame = container.bounds
         hostedView.autoresizingMask = [.width, .height]
         if hostedView.superview !== container {
@@ -379,6 +387,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         if let current = controller {
             current.rootView = AnyView(makeView(for: node))
+            configureHostingViewTransparency(current.view)
             // Ensure fill if container bounds changed without a layout pass yet.
             current.view.frame = container.bounds
             return
