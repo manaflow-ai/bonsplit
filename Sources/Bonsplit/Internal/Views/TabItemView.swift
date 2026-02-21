@@ -286,56 +286,56 @@ struct TabItemView: View {
 
     @ViewBuilder
     private var contextMenuContent: some View {
-        Button("Rename") {
+        Button("Rename Tab…") {
             onContextAction(.rename)
         }
 
         Divider()
 
-        Button("Close to Left") {
+        Button("Close Tabs to Left") {
             onContextAction(.closeToLeft)
         }
         .disabled(!contextMenuState.canCloseToLeft)
 
-        Button("Close to Right") {
+        Button("Close Tabs to Right") {
             onContextAction(.closeToRight)
         }
         .disabled(!contextMenuState.canCloseToRight)
 
-        Button("Close Others") {
+        Button("Close Other Tabs") {
             onContextAction(.closeOthers)
         }
         .disabled(!contextMenuState.canCloseOthers)
 
         Divider()
 
-        Button("New Terminal to Right") {
+        Button("New Terminal Tab to Right") {
             onContextAction(.newTerminalToRight)
         }
 
-        Button("New Browser to Right") {
+        Button("New Browser Tab to Right") {
             onContextAction(.newBrowserToRight)
         }
 
         if contextMenuState.isBrowser {
             Divider()
 
-            Button("Reload") {
+            Button("Reload Tab") {
                 onContextAction(.reload)
             }
 
-            Button("Duplicate") {
+            Button("Duplicate Tab") {
                 onContextAction(.duplicate)
             }
         }
 
         Divider()
 
-        Button(contextMenuState.isPinned ? "Unpin" : "Pin") {
+        Button(contextMenuState.isPinned ? "Unpin Tab" : "Pin Tab") {
             onContextAction(.togglePin)
         }
 
-        Button("Mark as Unread") {
+        Button("Mark Tab as Unread") {
             onContextAction(.markAsUnread)
         }
         .disabled(!contextMenuState.canMarkAsUnread)
