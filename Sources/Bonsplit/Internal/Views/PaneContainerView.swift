@@ -102,6 +102,18 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                 dropLifecycle = .idle
             }
         }
+        .onChange(of: activeDropZone) { oldValue, newValue in
+#if DEBUG
+            let oldZone = oldValue.map { String(describing: $0) } ?? "none"
+            let newZone = newValue.map { String(describing: $0) } ?? "none"
+            let selected = pane.selectedTab ?? pane.tabs.first
+            let icon = selected?.icon ?? "nil"
+            dlog(
+                "pane.overlayZone pane=\(pane.id.id.uuidString.prefix(5)) " +
+                "old=\(oldZone) new=\(newZone) selectedIcon=\(icon)"
+            )
+#endif
+        }
     }
 
     // MARK: - Content Area with Drop Zones
@@ -188,25 +200,32 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private func dropZonesLayer(size: CGSize) -> some View {
-        // Single unified drop zone that determines zone based on position.
-        // Only hit-testable during tab drags so that file drops from Finder
-        // pass through to the AppKit terminal view underneath.
-        Color.clear
-            .onTapGesture {
+        // Keep tap-to-focus and drag-drop routing as separate layers.
+        //
+        // Why: SwiftUI state propagation for `isTabDragActive` can lag behind the
+        // actual AppKit drag lifecycle (especially over portal-hosted terminals),
+        // causing a drag to start while this view is still non-hit-testable.
+        // The drop layer therefore stays always available for `.tabTransfer`.
+        ZStack {
+            Color.clear
+                .onTapGesture {
 #if DEBUG
-                dlog("pane.focus pane=\(pane.id.id.uuidString.prefix(5))")
+                    dlog("pane.focus pane=\(pane.id.id.uuidString.prefix(5))")
 #endif
-                controller.focusPane(pane.id)
-            }
-            .onDrop(of: [.tabTransfer], delegate: UnifiedPaneDropDelegate(
-                size: size,
-                pane: pane,
-                controller: controller,
-                bonsplitController: bonsplitController,
-                activeDropZone: $activeDropZone,
-                dropLifecycle: $dropLifecycle
-            ))
-            .allowsHitTesting(isTabDragActive)
+                    controller.focusPane(pane.id)
+                }
+                .allowsHitTesting(!isTabDragActive)
+
+            Color.clear
+                .onDrop(of: [.tabTransfer], delegate: UnifiedPaneDropDelegate(
+                    size: size,
+                    pane: pane,
+                    controller: controller,
+                    bonsplitController: bonsplitController,
+                    activeDropZone: $activeDropZone,
+                    dropLifecycle: $dropLifecycle
+                ))
+        }
     }
 
     // MARK: - Drop Placeholder
@@ -323,12 +342,26 @@ struct UnifiedPaneDropDelegate: DropDelegate {
                 }
             }
         } else if let orientation = zone.orientation {
-            _ = bonsplitController.splitPane(
+#if DEBUG
+            dlog(
+                "pane.drop.splitRequest targetPane=\(pane.id.id.uuidString.prefix(5)) " +
+                "sourcePane=\(sourcePaneId.id.uuidString.prefix(5)) zone=\(zone) " +
+                "orientation=\(orientation) insertFirst=\(zone.insertsFirst ? 1 : 0) " +
+                "draggedTab=\(draggedTab.id.uuidString.prefix(5))"
+            )
+#endif
+            let newPaneId = bonsplitController.splitPane(
                 pane.id,
                 orientation: orientation,
                 movingTab: TabID(id: draggedTab.id),
                 insertFirst: zone.insertsFirst
             )
+#if DEBUG
+            dlog(
+                "pane.drop.splitResult targetPane=\(pane.id.id.uuidString.prefix(5)) " +
+                "newPane=\(newPaneId?.id.uuidString.prefix(5) ?? "nil")"
+            )
+#endif
         }
 
         return true

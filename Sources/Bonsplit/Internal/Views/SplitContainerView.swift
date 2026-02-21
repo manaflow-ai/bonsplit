@@ -126,6 +126,17 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         // Capture animation origin before it gets cleared
         let animationOrigin = splitState.animationOrigin
+#if DEBUG
+        let splitDebugToken = String(splitState.id.uuidString.prefix(5))
+        let orientationToken = splitState.orientation == .horizontal ? "horizontal" : "vertical"
+        let animationOriginToken: String = {
+            guard let animationOrigin else { return "none" }
+            switch animationOrigin {
+            case .fromFirst: return "fromFirst"
+            case .fromSecond: return "fromSecond"
+            }
+        }()
+#endif
 
         // Determine which pane is new (will be hidden initially)
         let newPaneIndex = animationOrigin == .fromFirst ? 0 : 1
@@ -162,6 +173,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 // makeNSView can run before NSSplitView has a real frame; retry on the
                 // next runloop so we still get the intended entry animation.
                 context.coordinator.initialDividerApplyAttempts += 1
+#if DEBUG
+                let attempt = context.coordinator.initialDividerApplyAttempts
+                if attempt == 1 || attempt == 4 || attempt == 8 || attempt == 12 {
+                    dlog(
+                        "split.entry.wait split=\(splitDebugToken) orientation=\(orientationToken) " +
+                        "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) " +
+                        "attempt=\(attempt) total=\(Int(totalSize.rounded())) available=\(Int(availableSize.rounded()))"
+                    )
+                }
+#endif
                 if context.coordinator.initialDividerApplyAttempts < 12 {
                     DispatchQueue.main.async {
                         applyInitialDividerPosition()
@@ -175,6 +196,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     splitView.arrangedSubviews[newPaneIndex].isHidden = false
                     context.coordinator.isAnimating = false
                 }
+#if DEBUG
+                dlog(
+                    "split.entry.fallback split=\(splitDebugToken) orientation=\(orientationToken) " +
+                    "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) attempts=\(context.coordinator.initialDividerApplyAttempts)"
+                )
+#endif
                 return
             }
 
@@ -188,6 +215,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 if shouldAnimate {
                     // Position at edge while new pane is hidden
                     let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : availableSize
+#if DEBUG
+                    dlog(
+                        "split.entry.start split=\(splitDebugToken) orientation=\(orientationToken) " +
+                        "origin=\(animationOriginToken) newPaneIndex=\(newPaneIndex) " +
+                        "startPx=\(Int(startPosition.rounded())) targetPx=\(Int(targetPosition.rounded())) " +
+                        "available=\(Int(availableSize.rounded()))"
+                    )
+#endif
                     context.coordinator.setPositionSafely(startPosition, in: splitView, layout: true)
 
                     // Wait for layout
@@ -205,11 +240,24 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                             // Re-assert exact 0.5 ratio to prevent pixel-rounding drift
                             splitState.dividerPosition = 0.5
                             context.coordinator.lastAppliedPosition = 0.5
+#if DEBUG
+                            dlog(
+                                "split.entry.complete split=\(splitDebugToken) orientation=\(orientationToken) " +
+                                "origin=\(animationOriginToken) finalRatio=\(String(format: "%.3f", splitState.dividerPosition))"
+                            )
+#endif
                         }
                     }
                 } else {
                     // No animation - just set the position immediately
                     context.coordinator.setPositionSafely(targetPosition, in: splitView, layout: false)
+#if DEBUG
+                    dlog(
+                        "split.entry.noAnimation split=\(splitDebugToken) orientation=\(orientationToken) " +
+                        "origin=\(animationOriginToken) targetPx=\(Int(targetPosition.rounded())) " +
+                        "enableAnimations=\(enableAnimations ? 1 : 0)"
+                    )
+#endif
                 }
             } else {
                 // No animation - just set the position
