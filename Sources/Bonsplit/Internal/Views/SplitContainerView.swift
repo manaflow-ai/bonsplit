@@ -86,6 +86,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         TabBarColors.nsColorPaneBackground(for: appearance)
     }
 
+    private var chromeBackgroundIsOpaque: Bool {
+        chromeBackgroundColor.alphaComponent >= 0.999
+    }
+
     func makeNSView(context: Context) -> NSSplitView {
 #if DEBUG
         let splitView = DebugSplitView()
@@ -101,12 +105,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // to whatever is behind the split hierarchy.
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        splitView.layer?.isOpaque = chromeBackgroundIsOpaque
 
         // Keep arranged subviews stable (always 2) to avoid transient "collapse" flashes when
         // replacing pane<->split content. We swap the hosted content within these containers.
         let firstContainer = NSView()
         firstContainer.wantsLayer = true
         firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        firstContainer.layer?.isOpaque = chromeBackgroundIsOpaque
         firstContainer.layer?.masksToBounds = true
         let firstController = makeHostingController(for: splitState.first)
         installHostingController(firstController, into: firstContainer)
@@ -116,6 +122,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let secondContainer = NSView()
         secondContainer.wantsLayer = true
         secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        secondContainer.layer?.isOpaque = chromeBackgroundIsOpaque
         secondContainer.layer?.masksToBounds = true
         let secondController = makeHostingController(for: splitState.second)
         installHostingController(secondController, into: secondContainer)
@@ -286,6 +293,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.isHidden = !controller.isInteractive
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = chromeBackgroundColor.cgColor
+        splitView.layer?.isOpaque = chromeBackgroundIsOpaque
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
@@ -303,8 +311,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let secondContainer = arranged[1]
             firstContainer.wantsLayer = true
             firstContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+            firstContainer.layer?.isOpaque = chromeBackgroundIsOpaque
             secondContainer.wantsLayer = true
             secondContainer.layer?.backgroundColor = chromeBackgroundColor.cgColor
+            secondContainer.layer?.isOpaque = chromeBackgroundIsOpaque
 
             updateHostedContent(
                 in: firstContainer,

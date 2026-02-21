@@ -24,6 +24,13 @@ enum TabBarColors {
         chromeBackgroundColor(for: appearance) ?? fallbackColor
     }
 
+    private static func usesTranslucentChromeBackground(
+        for appearance: BonsplitConfiguration.Appearance
+    ) -> Bool {
+        guard let custom = chromeBackgroundColor(for: appearance) else { return false }
+        return custom.alphaComponent < 0.999
+    }
+
     private static func effectiveTextColor(
         for appearance: BonsplitConfiguration.Appearance,
         secondary: Bool
@@ -42,11 +49,19 @@ enum TabBarColors {
     }
 
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
+        if usesTranslucentChromeBackground(for: appearance) {
+            // Keep pane/content region clear so terminal/browser surfaces are the only background
+            // contributors; otherwise repeated alpha fills across nested split containers become opaque.
+            return .clear
+        }
+        return Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
     }
 
     static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
+        if usesTranslucentChromeBackground(for: appearance) {
+            return .clear
+        }
+        return effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
     }
 
     // MARK: - Tab Bar Background
