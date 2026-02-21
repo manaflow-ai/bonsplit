@@ -159,7 +159,17 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
             guard availableSize > 0 else {
-                // Ensure we don't leave the new pane hidden forever.
+                // makeNSView can run before NSSplitView has a real frame; retry on the
+                // next runloop so we still get the intended entry animation.
+                context.coordinator.initialDividerApplyAttempts += 1
+                if context.coordinator.initialDividerApplyAttempts < 12 {
+                    DispatchQueue.main.async {
+                        applyInitialDividerPosition()
+                    }
+                    return
+                }
+
+                // Safety fallback: don't leave the new pane hidden forever.
                 context.coordinator.didApplyInitialDividerPosition = true
                 if animationOrigin != nil, shouldAnimate {
                     splitView.arrangedSubviews[newPaneIndex].isHidden = false
@@ -169,6 +179,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
 
             context.coordinator.didApplyInitialDividerPosition = true
+            context.coordinator.initialDividerApplyAttempts = 0
 
             if animationOrigin != nil {
                 let targetPosition = availableSize * 0.5
@@ -356,6 +367,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         weak var splitView: NSSplitView?
         var isAnimating = false
         var didApplyInitialDividerPosition = false
+        /// Initial divider placement can run before NSSplitView has a real size.
+        /// Retry a few turns so entry animations are not dropped on first layout.
+        var initialDividerApplyAttempts = 0
         var onGeometryChange: ((_ isDragging: Bool) -> Void)?
         /// Track last applied position to detect external changes
         var lastAppliedPosition: CGFloat = 0.5
@@ -389,6 +403,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 splitState = newState
                 lastAppliedPosition = newState.dividerPosition
                 didApplyInitialDividerPosition = false
+                initialDividerApplyAttempts = 0
                 isAnimating = false
                 isDragging = false
                 firstNodeType = newState.first.nodeType
