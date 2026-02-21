@@ -19,26 +19,32 @@ struct TabItem: Identifiable, Hashable, Codable {
     var title: String
     var icon: String?
     var iconImageData: Data?
+    var kind: String?
     var isDirty: Bool
     var showsNotificationBadge: Bool
     var isLoading: Bool
+    var isPinned: Bool
 
     init(
         id: UUID = UUID(),
         title: String,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
+        kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
-        isLoading: Bool = false
+        isLoading: Bool = false,
+        isPinned: Bool = false
     ) {
         self.id = id
         self.title = title
         self.icon = icon
         self.iconImageData = iconImageData
+        self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
         self.isLoading = isLoading
+        self.isPinned = isPinned
     }
 
     func hash(into hasher: inout Hasher) {
@@ -54,9 +60,11 @@ struct TabItem: Identifiable, Hashable, Codable {
         case title
         case icon
         case iconImageData
+        case kind
         case isDirty
         case showsNotificationBadge
         case isLoading
+        case isPinned
     }
 
     init(from decoder: Decoder) throws {
@@ -65,9 +73,11 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.title = try c.decode(String.self, forKey: .title)
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
         self.iconImageData = try c.decodeIfPresent(Data.self, forKey: .iconImageData)
+        self.kind = try c.decodeIfPresent(String.self, forKey: .kind)
         self.isDirty = try c.decodeIfPresent(Bool.self, forKey: .isDirty) ?? false
         self.showsNotificationBadge = try c.decodeIfPresent(Bool.self, forKey: .showsNotificationBadge) ?? false
         self.isLoading = try c.decodeIfPresent(Bool.self, forKey: .isLoading) ?? false
+        self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -76,9 +86,11 @@ struct TabItem: Identifiable, Hashable, Codable {
         try c.encode(title, forKey: .title)
         try c.encodeIfPresent(icon, forKey: .icon)
         try c.encodeIfPresent(iconImageData, forKey: .iconImageData)
+        try c.encodeIfPresent(kind, forKey: .kind)
         try c.encode(isDirty, forKey: .isDirty)
         try c.encode(showsNotificationBadge, forKey: .showsNotificationBadge)
         try c.encode(isLoading, forKey: .isLoading)
+        try c.encode(isPinned, forKey: .isPinned)
     }
 }
 

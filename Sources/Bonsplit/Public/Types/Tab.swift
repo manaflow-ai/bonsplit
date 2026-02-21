@@ -7,28 +7,36 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let icon: String?
     /// Optional image data (PNG recommended) for the tab icon. When present, this takes precedence over `icon`.
     public let iconImageData: Data?
+    /// Consumer-defined tab kind identifier (for example, "terminal" or "browser").
+    public let kind: String?
     public let isDirty: Bool
     /// Whether the tab should show an "unread/activity" badge (library consumer-defined meaning).
     public let showsNotificationBadge: Bool
     /// Whether the tab should show an activity/loading indicator (e.g. spinning icon).
     public let isLoading: Bool
+    /// Whether the tab is pinned in its pane.
+    public let isPinned: Bool
 
     public init(
         id: TabID = TabID(),
         title: String,
         icon: String? = nil,
         iconImageData: Data? = nil,
+        kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
-        isLoading: Bool = false
+        isLoading: Bool = false,
+        isPinned: Bool = false
     ) {
         self.id = id
         self.title = title
         self.icon = icon
         self.iconImageData = iconImageData
+        self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
         self.isLoading = isLoading
+        self.isPinned = isPinned
     }
 
     internal init(from tabItem: TabItem) {
@@ -36,8 +44,10 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.title = tabItem.title
         self.icon = tabItem.icon
         self.iconImageData = tabItem.iconImageData
+        self.kind = tabItem.kind
         self.isDirty = tabItem.isDirty
         self.showsNotificationBadge = tabItem.showsNotificationBadge
         self.isLoading = tabItem.isLoading
+        self.isPinned = tabItem.isPinned
     }
 }

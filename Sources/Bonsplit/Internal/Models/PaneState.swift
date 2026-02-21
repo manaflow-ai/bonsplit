@@ -31,7 +31,9 @@ final class PaneState: Identifiable {
 
     /// Add a new tab
     func addTab(_ tab: TabItem, select: Bool = true) {
-        tabs.append(tab)
+        let pinnedCount = tabs.filter { $0.isPinned }.count
+        let insertIndex = tab.isPinned ? pinnedCount : tabs.count
+        tabs.insert(tab, at: insertIndex)
         if select {
             selectedTabId = tab.id
         }
@@ -39,7 +41,14 @@ final class PaneState: Identifiable {
 
     /// Insert a tab at a specific index
     func insertTab(_ tab: TabItem, at index: Int, select: Bool = true) {
-        let safeIndex = min(max(0, index), tabs.count)
+        let pinnedCount = tabs.filter { $0.isPinned }.count
+        let requested = min(max(0, index), tabs.count)
+        let safeIndex: Int
+        if tab.isPinned {
+            safeIndex = min(requested, pinnedCount)
+        } else {
+            safeIndex = max(requested, pinnedCount)
+        }
         tabs.insert(tab, at: safeIndex)
         if select {
             selectedTabId = tab.id
@@ -79,8 +88,16 @@ final class PaneState: Identifiable {
         }
 
         let tab = tabs.remove(at: sourceIndex)
-        let adjustedIndex = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
-        tabs.insert(tab, at: adjustedIndex)
+        let requestedIndex = destinationIndex > sourceIndex ? destinationIndex - 1 : destinationIndex
+        let pinnedCount = tabs.filter { $0.isPinned }.count
+        let adjustedIndex: Int
+        if tab.isPinned {
+            adjustedIndex = min(requestedIndex, pinnedCount)
+        } else {
+            adjustedIndex = max(requestedIndex, pinnedCount)
+        }
+        let safeIndex = min(max(0, adjustedIndex), tabs.count)
+        tabs.insert(tab, at: safeIndex)
     }
 }
 

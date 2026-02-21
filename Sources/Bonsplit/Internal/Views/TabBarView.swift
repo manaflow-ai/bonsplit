@@ -2,6 +2,19 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+struct TabContextMenuState {
+    let isPinned: Bool
+    let isUnread: Bool
+    let isBrowser: Bool
+    let canCloseToLeft: Bool
+    let canCloseToRight: Bool
+    let canCloseOthers: Bool
+
+    var canMarkAsUnread: Bool {
+        !isUnread
+    }
+}
+
 /// Tab bar view with scrollable tabs, drag/drop support, and split buttons
 struct TabBarView: View {
     @Environment(BonsplitController.self) private var controller
@@ -148,6 +161,7 @@ struct TabBarView: View {
 
     @ViewBuilder
     private func tabItem(for tab: TabItem, at index: Int) -> some View {
+        let contextMenuState = contextMenuState(for: tab, at: index)
         TabItemView(
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
@@ -156,6 +170,7 @@ struct TabBarView: View {
             controlShortcutDigit: tabControlShortcutDigit(for: index, tabCount: pane.tabs.count),
             showsControlShortcutHint: showsControlShortcutHints,
             shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
+            contextMenuState: contextMenuState,
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
@@ -169,6 +184,7 @@ struct TabBarView: View {
                 }
             },
             onClose: {
+                guard !tab.isPinned else { return }
                 // Close should be instant (no fade-out/removal animation).
 #if DEBUG
                 dlog("tab.close pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
@@ -176,6 +192,9 @@ struct TabBarView: View {
                 withTransaction(Transaction(animation: nil)) {
                     _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
                 }
+            },
+            onContextAction: { action in
+                controller.requestTabContextAction(action, for: TabID(id: tab.id), inPane: pane.id)
             }
         )
         .onDrag {
@@ -196,6 +215,28 @@ struct TabBarView: View {
                     .saturation(tabBarSaturation)
             }
         }
+    }
+
+    private func contextMenuState(for tab: TabItem, at index: Int) -> TabContextMenuState {
+        let leftTabs = pane.tabs.prefix(index)
+        let canCloseToLeft = leftTabs.contains(where: { !$0.isPinned })
+        let canCloseToRight: Bool
+        if (index + 1) < pane.tabs.count {
+            canCloseToRight = pane.tabs.suffix(from: index + 1).contains(where: { !$0.isPinned })
+        } else {
+            canCloseToRight = false
+        }
+        let canCloseOthers = pane.tabs.enumerated().contains { itemIndex, item in
+            itemIndex != index && !item.isPinned
+        }
+        return TabContextMenuState(
+            isPinned: tab.isPinned,
+            isUnread: tab.showsNotificationBadge,
+            isBrowser: tab.kind == "browser",
+            canCloseToLeft: canCloseToLeft,
+            canCloseToRight: canCloseToRight,
+            canCloseOthers: canCloseOthers
+        )
     }
 
     // MARK: - Item Provider

@@ -49,9 +49,11 @@ public final class BonsplitController {
     ///   - title: The tab title
     ///   - icon: Optional SF Symbol name for the tab icon
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
+    ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
     ///   - isDirty: Whether the tab shows a dirty indicator
     ///   - showsNotificationBadge: Whether the tab shows an "unread/activity" badge
     ///   - isLoading: Whether the tab shows an activity/loading indicator (e.g. spinning icon)
+    ///   - isPinned: Whether the tab should be treated as pinned
     ///   - pane: Optional pane to add the tab to (defaults to focused pane)
     /// - Returns: The TabID of the created tab, or nil if creation was vetoed by delegate
     @discardableResult
@@ -59,13 +61,25 @@ public final class BonsplitController {
         title: String,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
+        kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
         isLoading: Bool = false,
+        isPinned: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
         let tabId = TabID()
-        let tab = Tab(id: tabId, title: title, icon: icon, iconImageData: iconImageData, isDirty: isDirty, showsNotificationBadge: showsNotificationBadge, isLoading: isLoading)
+        let tab = Tab(
+            id: tabId,
+            title: title,
+            icon: icon,
+            iconImageData: iconImageData,
+            kind: kind,
+            isDirty: isDirty,
+            showsNotificationBadge: showsNotificationBadge,
+            isLoading: isLoading,
+            isPinned: isPinned
+        )
         let targetPane = pane ?? focusedPaneId ?? PaneID(id: internalController.rootNode.allPaneIds.first!.id)
 
         // Check with delegate
@@ -96,9 +110,11 @@ public final class BonsplitController {
             title: title,
             icon: icon,
             iconImageData: iconImageData,
+            kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
-            isLoading: isLoading
+            isLoading: isLoading,
+            isPinned: isPinned
         )
         internalController.addTab(tabItem, toPane: PaneID(id: targetPane.id), atIndex: insertIndex)
 
@@ -114,23 +130,33 @@ public final class BonsplitController {
         delegate?.splitTabBar(self, didRequestNewTab: kind, inPane: pane)
     }
 
+    /// Request the delegate to handle a tab context-menu action.
+    public func requestTabContextAction(_ action: TabContextAction, for tabId: TabID, inPane pane: PaneID) {
+        guard let tab = tab(tabId) else { return }
+        delegate?.splitTabBar(self, didRequestTabContextAction: action, for: tab, inPane: pane)
+    }
+
     /// Update an existing tab's metadata
     /// - Parameters:
     ///   - tabId: The tab to update
     ///   - title: New title (pass nil to keep current)
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
+    ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
     ///   - isDirty: New dirty state (pass nil to keep current)
     ///   - showsNotificationBadge: New badge state (pass nil to keep current)
     ///   - isLoading: New loading/busy state (pass nil to keep current)
+    ///   - isPinned: New pinned state (pass nil to keep current)
     public func updateTab(
         _ tabId: TabID,
         title: String? = nil,
         icon: String?? = nil,
         iconImageData: Data?? = nil,
+        kind: String?? = nil,
         isDirty: Bool? = nil,
         showsNotificationBadge: Bool? = nil,
-        isLoading: Bool? = nil
+        isLoading: Bool? = nil,
+        isPinned: Bool? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
 
@@ -143,6 +169,9 @@ public final class BonsplitController {
         if let iconImageData = iconImageData {
             pane.tabs[tabIndex].iconImageData = iconImageData
         }
+        if let kind = kind {
+            pane.tabs[tabIndex].kind = kind
+        }
         if let isDirty = isDirty {
             pane.tabs[tabIndex].isDirty = isDirty
         }
@@ -151,6 +180,9 @@ public final class BonsplitController {
         }
         if let isLoading = isLoading {
             pane.tabs[tabIndex].isLoading = isLoading
+        }
+        if let isPinned = isPinned {
+            pane.tabs[tabIndex].isPinned = isPinned
         }
     }
 
@@ -309,9 +341,11 @@ public final class BonsplitController {
                 title: tab.title,
                 icon: tab.icon,
                 iconImageData: tab.iconImageData,
+                kind: tab.kind,
                 isDirty: tab.isDirty,
                 showsNotificationBadge: tab.showsNotificationBadge,
-                isLoading: tab.isLoading
+                isLoading: tab.isLoading,
+                isPinned: tab.isPinned
             )
         } else {
             internalTab = nil
@@ -368,9 +402,11 @@ public final class BonsplitController {
             title: tab.title,
             icon: tab.icon,
             iconImageData: tab.iconImageData,
+            kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,
-            isLoading: tab.isLoading
+            isLoading: tab.isLoading,
+            isPinned: tab.isPinned
         )
 
         // Perform split with insertion side.

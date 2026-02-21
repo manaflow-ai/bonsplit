@@ -3,6 +3,17 @@ import XCTest
 import AppKit
 
 final class BonsplitTests: XCTestCase {
+    private final class TabContextActionDelegateSpy: BonsplitDelegate {
+        var action: TabContextAction?
+        var tabId: TabID?
+        var paneId: PaneID?
+
+        func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID) {
+            self.action = action
+            self.tabId = tab.id
+            self.paneId = pane
+        }
+    }
 
     @MainActor
     func testControllerCreation() {
@@ -248,6 +259,69 @@ final class BonsplitTests: XCTestCase {
         pane.moveTab(from: 0, to: 2)
         XCTAssertEqual(pane.tabs.map(\.id), [t1.id, t0.id])
         XCTAssertEqual(pane.selectedTabId, t1.id)
+    }
+
+    @MainActor
+    func testPinnedTabInsertionsStayAheadOfUnpinnedTabs() {
+        let unpinnedA = TabItem(title: "A", isPinned: false)
+        let unpinnedB = TabItem(title: "B", isPinned: false)
+        let pinned = TabItem(title: "Pinned", isPinned: true)
+        let pane = PaneState(tabs: [unpinnedA, unpinnedB], selectedTabId: unpinnedA.id)
+
+        pane.insertTab(pinned, at: 2)
+
+        XCTAssertEqual(pane.tabs.map(\.isPinned), [true, false, false])
+        XCTAssertEqual(pane.tabs.first?.id, pinned.id)
+    }
+
+    @MainActor
+    func testMovingUnpinnedTabCannotCrossPinnedBoundary() {
+        let pinnedA = TabItem(title: "Pinned A", isPinned: true)
+        let pinnedB = TabItem(title: "Pinned B", isPinned: true)
+        let unpinnedA = TabItem(title: "A", isPinned: false)
+        let unpinnedB = TabItem(title: "B", isPinned: false)
+        let pane = PaneState(
+            tabs: [pinnedA, pinnedB, unpinnedA, unpinnedB],
+            selectedTabId: unpinnedB.id
+        )
+
+        // Attempt to move an unpinned tab ahead of pinned tabs; move should clamp to
+        // the first unpinned position.
+        pane.moveTab(from: 3, to: 0)
+
+        XCTAssertEqual(pane.tabs.map(\.id), [pinnedA.id, pinnedB.id, unpinnedB.id, unpinnedA.id])
+        XCTAssertEqual(pane.tabs.prefix(2).allSatisfy(\.isPinned), true)
+        XCTAssertEqual(pane.tabs.suffix(2).allSatisfy { !$0.isPinned }, true)
+    }
+
+    @MainActor
+    func testCreateTabStoresKindAndPinnedState() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Browser",
+            icon: "globe",
+            kind: "browser",
+            isPinned: true
+        )!
+
+        let tab = controller.tab(tabId)
+        XCTAssertEqual(tab?.kind, "browser")
+        XCTAssertEqual(tab?.isPinned, true)
+    }
+
+    @MainActor
+    func testRequestTabContextActionForwardsToDelegate() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Test", kind: "browser")!
+        let spy = TabContextActionDelegateSpy()
+        controller.delegate = spy
+
+        controller.requestTabContextAction(.reload, for: tabId, inPane: pane)
+
+        XCTAssertEqual(spy.action, .reload)
+        XCTAssertEqual(spy.tabId, tabId)
+        XCTAssertEqual(spy.paneId, pane)
     }
 
     func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {

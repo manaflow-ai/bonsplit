@@ -40,8 +40,10 @@ struct TabItemView: View {
     let controlShortcutDigit: Int?
     let showsControlShortcutHint: Bool
     let shortcutModifierSymbol: String
+    let contextMenuState: TabContextMenuState
     let onSelect: () -> Void
     let onClose: () -> Void
+    let onContextAction: (TabContextAction) -> Void
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
@@ -139,13 +141,19 @@ struct TabItemView: View {
         .contentShape(Rectangle())
         // Middle click to close (macOS convention).
         // Uses an AppKit event monitor so it doesn't interfere with left click selection or drag/reorder.
-        .background(MiddleClickMonitorView(onMiddleClick: onClose))
+        .background(MiddleClickMonitorView(onMiddleClick: {
+            guard !tab.isPinned else { return }
+            onClose()
+        }))
         .onTapGesture {
             onSelect()
         }
         .onHover { hovering in
             // Keep icon rendering stable while hovering; only accessory/background elements animate.
             isHovered = hovering
+        }
+        .contextMenu {
+            contextMenuContent
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tab.title)
@@ -270,9 +278,67 @@ struct TabItemView: View {
     private var accessibilityValue: String {
         var parts: [String] = []
         if tab.isLoading { parts.append("Loading") }
+        if tab.isPinned { parts.append("Pinned") }
         if tab.showsNotificationBadge { parts.append("Unread") }
         if tab.isDirty { parts.append("Modified") }
         return parts.joined(separator: ", ")
+    }
+
+    @ViewBuilder
+    private var contextMenuContent: some View {
+        Button("Rename") {
+            onContextAction(.rename)
+        }
+
+        Divider()
+
+        Button("Close to Left") {
+            onContextAction(.closeToLeft)
+        }
+        .disabled(!contextMenuState.canCloseToLeft)
+
+        Button("Close to Right") {
+            onContextAction(.closeToRight)
+        }
+        .disabled(!contextMenuState.canCloseToRight)
+
+        Button("Close Others") {
+            onContextAction(.closeOthers)
+        }
+        .disabled(!contextMenuState.canCloseOthers)
+
+        Divider()
+
+        Button("New Terminal to Right") {
+            onContextAction(.newTerminalToRight)
+        }
+
+        Button("New Browser to Right") {
+            onContextAction(.newBrowserToRight)
+        }
+
+        if contextMenuState.isBrowser {
+            Divider()
+
+            Button("Reload") {
+                onContextAction(.reload)
+            }
+
+            Button("Duplicate") {
+                onContextAction(.duplicate)
+            }
+        }
+
+        Divider()
+
+        Button(contextMenuState.isPinned ? "Unpin" : "Pin") {
+            onContextAction(.togglePin)
+        }
+
+        Button("Mark as Unread") {
+            onContextAction(.markAsUnread)
+        }
+        .disabled(!contextMenuState.canMarkAsUnread)
     }
 
     // MARK: - Tab Background
@@ -327,8 +393,16 @@ struct TabItemView: View {
                 }
             }
 
-            // Close button (always visible on active tab, shown on hover for others)
-            if isSelected || isHovered || isCloseHovered {
+            if tab.isPinned {
+                if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
+                    Image(systemName: "pin.fill")
+                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .foregroundStyle(TabBarColors.inactiveText(for: appearance))
+                        .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
+                        .saturation(saturation)
+                }
+            } else if isSelected || isHovered || isCloseHovered {
+                // Close button (always visible on active tab, shown on hover for others)
                 Button {
                     onClose()
                 } label: {
