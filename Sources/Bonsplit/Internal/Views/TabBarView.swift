@@ -131,6 +131,13 @@ struct TabBarView: View {
         .background(tabBarBackground)
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: splitViewController.draggingTab) { _, newValue in
+#if DEBUG
+            dlog(
+                "tab.dragState pane=\(pane.id.id.uuidString.prefix(5)) " +
+                "draggingTab=\(newValue != nil ? 1 : 0) " +
+                "activeDragTab=\(splitViewController.activeDragTab != nil ? 1 : 0)"
+            )
+#endif
             if newValue == nil {
                 dropTargetIndex = nil
                 dropLifecycle = .idle
@@ -257,6 +264,12 @@ struct TabBarView: View {
                 completion(data, nil)
                 return nil
             }
+#if DEBUG
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                let types = NSPasteboard(name: .drag).types?.map(\.rawValue).joined(separator: ",") ?? "-"
+                dlog("tab.dragPasteboard types=\(types)")
+            }
+#endif
             return provider
         }
         return NSItemProvider()
@@ -629,6 +642,11 @@ struct TabDropDelegate: DropDelegate {
     func dropEntered(info: DropInfo) {
         #if DEBUG
         NSLog("[Bonsplit Drag] dropEntered at index: \(targetIndex)")
+        dlog(
+            "tab.dropEntered pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
+            "hasDrag=\(controller.draggingTab != nil ? 1 : 0) " +
+            "hasActive=\(controller.activeDragTab != nil ? 1 : 0)"
+        )
         #endif
         dropLifecycle = .hovering
         if shouldSuppressIndicatorForNoopSamePaneDrop() {
@@ -641,6 +659,7 @@ struct TabDropDelegate: DropDelegate {
     func dropExited(info: DropInfo) {
         #if DEBUG
         NSLog("[Bonsplit Drag] dropExited from index: \(targetIndex)")
+        dlog("tab.dropExited pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
         #endif
         dropLifecycle = .idle
         if dropTargetIndex == targetIndex {
@@ -652,6 +671,9 @@ struct TabDropDelegate: DropDelegate {
         // Guard against dropUpdated firing after performDrop/dropExited
         // This is the key fix for the lingering indicator bug
         guard dropLifecycle == .hovering else {
+#if DEBUG
+            dlog("tab.dropUpdated.skip pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) reason=lifecycle_idle")
+#endif
             return DropProposal(operation: .move)
         }
         // Only update if this is the active target, and suppress same-pane no-op indicators.
@@ -662,19 +684,34 @@ struct TabDropDelegate: DropDelegate {
         } else if dropTargetIndex != targetIndex {
             dropTargetIndex = targetIndex
         }
+#if DEBUG
+        dlog(
+            "tab.dropUpdated pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
+            "dropTarget=\(dropTargetIndex.map(String.init) ?? "nil")"
+        )
+#endif
         return DropProposal(operation: .move)
     }
 
     func validateDrop(info: DropInfo) -> Bool {
         // Reject drops on inactive workspaces whose views are kept alive in a ZStack.
-        guard controller.isInteractive else { return false }
+        guard controller.isInteractive else {
+#if DEBUG
+            dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) allowed=0 reason=inactive")
+#endif
+            return false
+        }
         // The custom UTType alone is sufficient — only Bonsplit tab drags produce it.
         // Do NOT gate on draggingTab != nil: @Observable changes from createItemProvider
         // may not have propagated to the drop delegate yet, causing false rejections.
         let hasType = info.hasItemsConforming(to: [.tabTransfer])
 #if DEBUG
         let hasDrag = controller.draggingTab != nil
-        dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) hasDrag=\(hasDrag) hasType=\(hasType)")
+        let hasActive = controller.activeDragTab != nil
+        dlog(
+            "tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) " +
+            "allowed=\(hasType ? 1 : 0) hasDrag=\(hasDrag ? 1 : 0) hasActive=\(hasActive ? 1 : 0)"
+        )
 #endif
         return hasType
     }
