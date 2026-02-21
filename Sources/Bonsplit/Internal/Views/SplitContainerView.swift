@@ -20,15 +20,16 @@ private func debugRectString(_ rect: NSRect) -> String {
 
 private final class DebugSplitView: NSSplitView {
     var debugSplitToken: String = "none"
-    private var lastLoggedEventNumber: Int = -1
+    private var lastLoggedEventTimestampMs: Int = -1
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let result = super.hitTest(point)
         guard let event = NSApp.currentEvent else { return result }
         guard event.type == .leftMouseDown else { return result }
         guard event.window == window else { return result }
-        guard event.eventNumber != lastLoggedEventNumber else { return result }
-        lastLoggedEventNumber = event.eventNumber
+        let eventTimestampMs = Int((event.timestamp * 1000).rounded())
+        guard eventTimestampMs != lastLoggedEventTimestampMs else { return result }
+        lastLoggedEventTimestampMs = eventTimestampMs
 
         let dividerRect = debugDividerRect()
         let hitRect = dividerRect?.insetBy(dx: -4, dy: -4)
@@ -540,12 +541,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             var message = "divider.dragCheck.skip split=\(splitState.id.uuidString.prefix(5)) reason=\(reason)"
             if let event {
                 let ageMs = Int(((ProcessInfo.processInfo.systemUptime - event.timestamp) * 1000).rounded())
-                message += " eventType=\(event.type.rawValue) ageMs=\(ageMs) eventNo=\(event.eventNumber)"
-                if let eventWindow = event.window {
-                    message += " eventWin=\(eventWindow.windowNumber)"
-                } else {
-                    message += " eventWin=nil"
-                }
+                message += " eventType=\(event.type.rawValue) ageMs=\(ageMs)"
             } else {
                 message += " event=nil"
             }
