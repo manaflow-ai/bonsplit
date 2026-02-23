@@ -79,6 +79,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     let appearance: BonsplitConfiguration.Appearance
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
+    var excludedPaneID: PaneID? = nil
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     /// Callback when geometry changes. Bool indicates if change is during active divider drag.
@@ -420,14 +421,18 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     private func makeView(for node: SplitNode) -> some View {
         switch node {
         case .pane(let paneState):
-            PaneContainerView(
-                pane: paneState,
-                controller: controller,
-                contentBuilder: contentBuilder,
-                emptyPaneBuilder: emptyPaneBuilder,
-                showSplitButtons: showSplitButtons,
-                contentViewLifecycle: contentViewLifecycle
-            )
+            if paneState.id == excludedPaneID {
+                Color.clear
+            } else {
+                PaneContainerView(
+                    pane: paneState,
+                    controller: controller,
+                    contentBuilder: contentBuilder,
+                    emptyPaneBuilder: emptyPaneBuilder,
+                    showSplitButtons: showSplitButtons,
+                    contentViewLifecycle: contentViewLifecycle
+                )
+            }
         case .split(let nestedSplitState):
             SplitContainerView(
                 splitState: nestedSplitState,
@@ -435,6 +440,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 appearance: appearance,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                excludedPaneID: excludedPaneID,
                 showSplitButtons: showSplitButtons,
                 contentViewLifecycle: contentViewLifecycle,
                 onGeometryChange: onGeometryChange,

@@ -550,6 +550,35 @@ public final class BonsplitController {
         return true
     }
 
+    // MARK: - Pane Zoom
+
+    /// Currently zoomed pane ID, if any.
+    public var zoomedPaneId: PaneID? {
+        internalController.zoomedPaneId
+    }
+
+    /// Set the currently zoomed pane.
+    /// - Parameter paneId: Pane to zoom, or nil to clear zoom.
+    /// - Returns: true if the pane exists (or paneId is nil) and state was accepted.
+    @discardableResult
+    public func setZoomedPane(_ paneId: PaneID?) -> Bool {
+        let previous = internalController.zoomedPaneId
+        guard internalController.setZoomedPane(paneId) else { return false }
+        if previous != internalController.zoomedPaneId {
+            notifyGeometryChange()
+        }
+        return true
+    }
+
+    /// Toggle zoom for a pane.
+    /// - Parameter paneId: Pane to toggle.
+    /// - Returns: true if the operation was accepted.
+    @discardableResult
+    public func togglePaneZoom(_ paneId: PaneID) -> Bool {
+        let target: PaneID? = internalController.zoomedPaneId == paneId ? nil : paneId
+        return setZoomedPane(target)
+    }
+
     // MARK: - Focus Management
 
     /// Currently focused pane ID

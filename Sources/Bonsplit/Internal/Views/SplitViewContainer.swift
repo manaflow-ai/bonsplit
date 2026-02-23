@@ -37,16 +37,50 @@ struct SplitViewContainer<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private var splitNodeContent: some View {
-        SplitNodeView(
-            node: controller.rootNode,
-            contentBuilder: contentBuilder,
-            emptyPaneBuilder: emptyPaneBuilder,
-            appearance: appearance,
-            showSplitButtons: showSplitButtons,
-            contentViewLifecycle: contentViewLifecycle,
-            onGeometryChange: onGeometryChange,
-            enableAnimations: enableAnimations,
-            animationDuration: animationDuration
-        )
+        if let zoomedPaneId = controller.zoomedPaneId,
+           let zoomedPane = controller.rootNode.findPane(zoomedPaneId) {
+            // Keep the full split tree mounted so existing pane views can receive
+            // visibility updates (important for portal-hosted native surfaces),
+            // then overlay a fullscreen render of the zoomed pane.
+            ZStack {
+                SplitNodeView(
+                    node: controller.rootNode,
+                    contentBuilder: contentBuilder,
+                    emptyPaneBuilder: emptyPaneBuilder,
+                    appearance: appearance,
+                    excludedPaneID: zoomedPaneId,
+                    showSplitButtons: showSplitButtons,
+                    contentViewLifecycle: contentViewLifecycle,
+                    onGeometryChange: onGeometryChange,
+                    enableAnimations: enableAnimations,
+                    animationDuration: animationDuration
+                )
+                // Keep split content mounted for state propagation, but visually transparent.
+                // This preserves pane update callbacks needed by portal-hosted surfaces.
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
+                SinglePaneWrapper(
+                    pane: zoomedPane,
+                    contentBuilder: contentBuilder,
+                    emptyPaneBuilder: emptyPaneBuilder,
+                    showSplitButtons: showSplitButtons,
+                    contentViewLifecycle: contentViewLifecycle
+                )
+            }
+        } else {
+            SplitNodeView(
+                node: controller.rootNode,
+                contentBuilder: contentBuilder,
+                emptyPaneBuilder: emptyPaneBuilder,
+                appearance: appearance,
+                showSplitButtons: showSplitButtons,
+                contentViewLifecycle: contentViewLifecycle,
+                onGeometryChange: onGeometryChange,
+                enableAnimations: enableAnimations,
+                animationDuration: animationDuration
+            )
+        }
     }
 }
