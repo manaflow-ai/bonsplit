@@ -3,6 +3,14 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
+private class ThemedSplitView: NSSplitView {
+    var customDividerColor: NSColor?
+
+    override var dividerColor: NSColor {
+        customDividerColor ?? super.dividerColor
+    }
+}
+
 #if DEBUG
 private func debugPointString(_ point: NSPoint) -> String {
     let x = Int(point.x.rounded())
@@ -16,14 +24,6 @@ private func debugRectString(_ rect: NSRect) -> String {
     let w = Int(rect.size.width.rounded())
     let h = Int(rect.size.height.rounded())
     return "\(x):\(y)+\(w)x\(h)"
-}
-
-private class ThemedSplitView: NSSplitView {
-    var customDividerColor: NSColor?
-
-    override var dividerColor: NSColor {
-        customDividerColor ?? super.dividerColor
-    }
 }
 
 private final class DebugSplitView: ThemedSplitView {
