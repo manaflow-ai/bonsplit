@@ -11,6 +11,10 @@ final class SplitViewController {
     /// Currently focused pane ID
     var focusedPaneId: PaneID?
 
+    /// Optional pane currently shown in zoomed mode.
+    /// When set, view rendering bypasses split layout and shows only this pane.
+    var zoomedPaneId: PaneID?
+
     /// Tab currently being dragged (for visual feedback and hit-testing).
     /// This is @Observable so SwiftUI views react (e.g. allowsHitTesting).
     var draggingTab: TabItem?
@@ -66,6 +70,22 @@ final class SplitViewController {
         }
     }
 
+    @discardableResult
+    func setZoomedPane(_ paneId: PaneID?) -> Bool {
+        if let paneId {
+            guard rootNode.findPane(paneId) != nil else { return false }
+        }
+        zoomedPaneId = paneId
+        return true
+    }
+
+    private func clearZoomIfInvalid() {
+        guard let zoomedPaneId else { return }
+        if rootNode.findPane(zoomedPaneId) == nil {
+            self.zoomedPaneId = nil
+        }
+    }
+
     // MARK: - Focus Management
 
     /// Set focus to a specific pane
@@ -87,6 +107,7 @@ final class SplitViewController {
 
     /// Split the specified pane in the given orientation
     func splitPane(_ paneId: PaneID, orientation: SplitOrientation, with newTab: TabItem? = nil) {
+        zoomedPaneId = nil
         rootNode = splitNodeRecursively(
             node: rootNode,
             targetPaneId: paneId,
@@ -150,6 +171,7 @@ final class SplitViewController {
 
     /// Split a pane with a specific tab, optionally inserting the new pane first
     func splitPaneWithTab(_ paneId: PaneID, orientation: SplitOrientation, tab: TabItem, insertFirst: Bool) {
+        zoomedPaneId = nil
         rootNode = splitNodeWithTabRecursively(
             node: rootNode,
             targetPaneId: paneId,
@@ -225,6 +247,10 @@ final class SplitViewController {
         // Don't close the last pane
         guard rootNode.allPaneIds.count > 1 else { return }
 
+        if zoomedPaneId == paneId {
+            zoomedPaneId = nil
+        }
+
         let (newRoot, siblingPaneId) = closePaneRecursively(node: rootNode, targetPaneId: paneId)
 
         if let newRoot {
@@ -237,6 +263,7 @@ final class SplitViewController {
         } else if let firstPane = rootNode.allPaneIds.first {
             focusedPaneId = firstPane
         }
+        clearZoomIfInvalid()
     }
 
     private func closePaneRecursively(
@@ -317,6 +344,7 @@ final class SplitViewController {
         if sourcePane.tabs.isEmpty && rootNode.allPaneIds.count > 1 {
             closePane(sourcePaneId)
         }
+        clearZoomIfInvalid()
     }
 
     /// Close a tab in a specific pane
@@ -329,6 +357,7 @@ final class SplitViewController {
         if pane.tabs.isEmpty && rootNode.allPaneIds.count > 1 {
             closePane(paneId)
         }
+        clearZoomIfInvalid()
     }
 
     // MARK: - Keyboard Navigation

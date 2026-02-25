@@ -92,6 +92,12 @@ struct TabBarView: View {
         isFocused && controlKeyMonitor.isShortcutHintVisible
     }
 
+    private var isSplitZoomActive: Bool {
+        guard splitViewController.rootNode.allPaneIds.count > 1 else { return false }
+        guard let zoomedPaneId = splitViewController.zoomedPaneId else { return false }
+        return zoomedPaneId == pane.id
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Scrollable tabs with fade overlays
@@ -174,6 +180,10 @@ struct TabBarView: View {
             if showSplitButtons {
                 splitButtons
                     .saturation(tabBarSaturation)
+            }
+
+            if isSplitZoomActive {
+                splitZoomIndicator
             }
         }
         .frame(height: TabBarMetrics.barHeight)
@@ -472,6 +482,32 @@ struct TabBarView: View {
             .help(tooltips.splitDown)
         }
         .padding(.trailing, 8)
+    }
+
+    private var splitZoomIndicator: some View {
+        Button {
+            _ = controller.setZoomedPane(nil)
+        } label: {
+            HStack(spacing: 0) {
+                Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(.blue.opacity(0.95))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .stroke(.white.opacity(0.20), lineWidth: 0.8)
+                )
+        }
+        .buttonStyle(.plain)
+        .help("Exit Split Zoom")
+        .accessibilityLabel("Exit Split Zoom")
+        .padding(.trailing, showSplitButtons ? 2 : 8)
     }
 
     // MARK: - Fade Overlays

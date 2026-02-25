@@ -9,6 +9,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     let appearance: BonsplitConfiguration.Appearance
+    var excludedPaneID: PaneID? = nil
     var showSplitButtons: Bool = true
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
@@ -18,14 +19,18 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     var body: some View {
         switch node {
         case .pane(let paneState):
-            // Wrap in NSHostingController for proper layout constraints
-            SinglePaneWrapper(
-                pane: paneState,
-                contentBuilder: contentBuilder,
-                emptyPaneBuilder: emptyPaneBuilder,
-                showSplitButtons: showSplitButtons,
-                contentViewLifecycle: contentViewLifecycle
-            )
+            if paneState.id == excludedPaneID {
+                Color.clear
+            } else {
+                // Wrap in NSHostingController for proper layout constraints
+                SinglePaneWrapper(
+                    pane: paneState,
+                    contentBuilder: contentBuilder,
+                    emptyPaneBuilder: emptyPaneBuilder,
+                    showSplitButtons: showSplitButtons,
+                    contentViewLifecycle: contentViewLifecycle
+                )
+            }
 
         case .split(let splitState):
             SplitContainerView(
@@ -34,6 +39,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 appearance: appearance,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                excludedPaneID: excludedPaneID,
                 showSplitButtons: showSplitButtons,
                 contentViewLifecycle: contentViewLifecycle,
                 onGeometryChange: onGeometryChange,
