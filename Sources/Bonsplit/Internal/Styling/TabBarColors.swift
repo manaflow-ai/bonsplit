@@ -212,13 +212,25 @@ private extension NSColor {
         if hex.hasPrefix("#") {
             hex.removeFirst()
         }
-        guard hex.count == 6 else { return nil }
+        guard hex.count == 6 || hex.count == 8 else { return nil }
         guard hex.unicodeScalars.allSatisfy({ Self.bonsplitHexDigits.contains($0) }) else { return nil }
-        guard let rgb = UInt64(hex, radix: 16) else { return nil }
-        let red = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
-        let green = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
-        let blue = CGFloat(rgb & 0x0000FF) / 255.0
-        self.init(red: red, green: green, blue: blue, alpha: 1.0)
+        guard let rgba = UInt64(hex, radix: 16) else { return nil }
+        let red: CGFloat
+        let green: CGFloat
+        let blue: CGFloat
+        let alpha: CGFloat
+        if hex.count == 8 {
+            red = CGFloat((rgba & 0xFF000000) >> 24) / 255.0
+            green = CGFloat((rgba & 0x00FF0000) >> 16) / 255.0
+            blue = CGFloat((rgba & 0x0000FF00) >> 8) / 255.0
+            alpha = CGFloat(rgba & 0x000000FF) / 255.0
+        } else {
+            red = CGFloat((rgba & 0xFF0000) >> 16) / 255.0
+            green = CGFloat((rgba & 0x00FF00) >> 8) / 255.0
+            blue = CGFloat(rgba & 0x0000FF) / 255.0
+            alpha = 1.0
+        }
+        self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
 
     var isBonsplitLightColor: Bool {
