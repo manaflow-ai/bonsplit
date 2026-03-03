@@ -500,20 +500,21 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
-    func testTabControlShortcutHintPolicyCanDisableCommandHints() {
+    func testTabControlShortcutHintPolicyCanDisableHoldHints() {
         withShortcutHintDefaultsSuite { defaults in
             defaults.set(false, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
 
             XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults))
-            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults), .control)
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults))
         }
     }
 
-    func testTabControlShortcutHintPolicyDefaultsToShowingCommandHints() {
+    func testTabControlShortcutHintPolicyDefaultsToShowingHoldHints() {
         withShortcutHintDefaultsSuite { defaults in
             defaults.removeObject(forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
 
             XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults), .command)
+            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults), .control)
         }
     }
 

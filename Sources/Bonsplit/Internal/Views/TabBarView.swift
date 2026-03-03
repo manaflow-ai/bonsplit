@@ -598,9 +598,10 @@ enum TabControlShortcutHintPolicy {
         for modifierFlags: NSEvent.ModifierFlags,
         defaults: UserDefaults = .standard
     ) -> TabControlShortcutModifier? {
+        guard showHintsOnCommandHoldEnabled(defaults: defaults) else { return nil }
         let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
         if flags == [.control] { return .control }
-        if flags == [.command], showHintsOnCommandHoldEnabled(defaults: defaults) { return .command }
+        if flags == [.command] { return .command }
         return nil
     }
 
