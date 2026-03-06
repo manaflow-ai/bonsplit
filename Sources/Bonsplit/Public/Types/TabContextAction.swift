@@ -8,6 +8,8 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case closeToRight
     case closeOthers
     case move
+    case moveToLeftPane
+    case moveToRightPane
     case newTerminalToRight
     case newBrowserToRight
     case reload

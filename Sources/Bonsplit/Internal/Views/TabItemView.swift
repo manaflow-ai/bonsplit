@@ -342,6 +342,22 @@ struct TabItemView: View {
 
         contextButton("Move Tab…", action: .move)
 
+        if contextMenuState.isTerminal {
+            localizedContextButton(
+                "command.moveTabToLeftPane.title",
+                defaultValue: "Move to Left Pane",
+                action: .moveToLeftPane
+            )
+                .disabled(!contextMenuState.canMoveToLeftPane)
+
+            localizedContextButton(
+                "command.moveTabToRightPane.title",
+                defaultValue: "Move to Right Pane",
+                action: .moveToRightPane
+            )
+                .disabled(!contextMenuState.canMoveToRightPane)
+        }
+
         Divider()
 
         contextButton("New Terminal Tab to Right", action: .newTerminalToRight)
@@ -391,6 +407,18 @@ struct TabItemView: View {
                 onContextAction(action)
             }
         }
+    }
+
+    @ViewBuilder
+    private func localizedContextButton(
+        _ titleKey: String,
+        defaultValue: String,
+        action: TabContextAction
+    ) -> some View {
+        contextButton(
+            Bundle.module.localizedString(forKey: titleKey, value: defaultValue, table: nil),
+            action: action
+        )
     }
 
     // MARK: - Tab Background

@@ -384,6 +384,20 @@ final class SplitViewController {
         // No neighbor found = at edge, do nothing
     }
 
+    /// Find the closest pane in the requested direction from the given pane.
+    func adjacentPane(to paneId: PaneID, direction: NavigationDirection) -> PaneID? {
+        let allPaneBounds = rootNode.computePaneBounds()
+        guard let currentBounds = allPaneBounds.first(where: { $0.paneId == paneId })?.bounds else {
+            return nil
+        }
+        return findBestNeighbor(
+            from: currentBounds,
+            currentPaneId: paneId,
+            direction: direction,
+            allPaneBounds: allPaneBounds
+        )
+    }
+
     private func findBestNeighbor(from currentBounds: CGRect, currentPaneId: PaneID,
                                   direction: NavigationDirection, allPaneBounds: [PaneBounds]) -> PaneID? {
         let epsilon: CGFloat = 0.001

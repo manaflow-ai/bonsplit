@@ -36,10 +36,13 @@ struct TabContextMenuState {
     let isPinned: Bool
     let isUnread: Bool
     let isBrowser: Bool
+    let isTerminal: Bool
     let hasCustomTitle: Bool
     let canCloseToLeft: Bool
     let canCloseToRight: Bool
     let canCloseOthers: Bool
+    let canMoveToLeftPane: Bool
+    let canMoveToRightPane: Bool
     let isZoomed: Bool
     let hasSplits: Bool
     let shortcuts: [TabContextAction: KeyboardShortcut]
@@ -306,10 +309,13 @@ struct TabBarView: View {
             isPinned: tab.isPinned,
             isUnread: tab.showsNotificationBadge,
             isBrowser: tab.kind == "browser",
+            isTerminal: tab.kind == "terminal",
             hasCustomTitle: tab.hasCustomTitle,
             canCloseToLeft: canCloseToLeft,
             canCloseToRight: canCloseToRight,
             canCloseOthers: canCloseOthers,
+            canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
+            canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
             isZoomed: splitViewController.zoomedPaneId == pane.id,
             hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
             shortcuts: controller.contextMenuShortcuts

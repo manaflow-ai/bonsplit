@@ -572,6 +572,11 @@ public final class BonsplitController {
         }
     }
 
+    /// Find the closest pane in the requested direction from the given pane.
+    public func adjacentPane(to paneId: PaneID, direction: NavigationDirection) -> PaneID? {
+        internalController.adjacentPane(to: paneId, direction: direction)
+    }
+
     // MARK: - Split Zoom
 
     /// Currently zoomed pane ID, if any.
