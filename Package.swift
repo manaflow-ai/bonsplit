@@ -4,6 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "Bonsplit",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -17,7 +18,10 @@ let package = Package(
         .target(
             name: "Bonsplit",
             dependencies: [],
-            path: "Sources/Bonsplit"
+            path: "Sources/Bonsplit",
+            resources: [
+                .process("Resources")
+            ]
         ),
         .testTarget(
             name: "BonsplitTests",

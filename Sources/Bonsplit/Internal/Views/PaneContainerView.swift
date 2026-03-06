@@ -310,31 +310,36 @@ struct UnifiedPaneDropDelegate: DropDelegate {
               let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             return defaultZone
         }
-        guard shouldPreferAdjacentPaneMove(
+        guard let adjacentPaneMoveZone = adjacentPaneMoveZone(
             for: draggedTab,
             sourcePaneId: sourcePaneId,
             defaultZone: defaultZone
         ) else {
             return defaultZone
         }
-        return .center
+        return adjacentPaneMoveZone
     }
 
-    private func shouldPreferAdjacentPaneMove(
+    private func adjacentPaneMoveZone(
         for draggedTab: TabItem,
         sourcePaneId: PaneID,
         defaultZone: DropZone
-    ) -> Bool {
+    ) -> DropZone? {
         guard draggedTab.kind == "terminal",
               sourcePaneId != pane.id else {
-            return false
+            return nil
         }
-        guard defaultZone != .top, defaultZone != .bottom else {
-            return false
+        if defaultZone == .left,
+           bonsplitController.adjacentPane(to: sourcePaneId, direction: .right) == pane.id {
+            // Preserve the outer edge as a split affordance while treating the shared edge
+            // between adjacent panes as "drop into this pane".
+            return .center
         }
-        let leftNeighbor = bonsplitController.adjacentPane(to: sourcePaneId, direction: .left)
-        let rightNeighbor = bonsplitController.adjacentPane(to: sourcePaneId, direction: .right)
-        return leftNeighbor == pane.id || rightNeighbor == pane.id
+        if defaultZone == .right,
+           bonsplitController.adjacentPane(to: sourcePaneId, direction: .left) == pane.id {
+            return .center
+        }
+        return nil
     }
 
     func performDrop(info: DropInfo) -> Bool {

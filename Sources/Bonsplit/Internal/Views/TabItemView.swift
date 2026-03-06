@@ -343,10 +343,18 @@ struct TabItemView: View {
         contextButton("Move Tab…", action: .move)
 
         if contextMenuState.isTerminal {
-            localizedContextButton("command.moveTabToLeftPane.title", action: .moveToLeftPane)
+            localizedContextButton(
+                "command.moveTabToLeftPane.title",
+                defaultValue: "Move to Left Pane",
+                action: .moveToLeftPane
+            )
                 .disabled(!contextMenuState.canMoveToLeftPane)
 
-            localizedContextButton("command.moveTabToRightPane.title", action: .moveToRightPane)
+            localizedContextButton(
+                "command.moveTabToRightPane.title",
+                defaultValue: "Move to Right Pane",
+                action: .moveToRightPane
+            )
                 .disabled(!contextMenuState.canMoveToRightPane)
         }
 
@@ -402,21 +410,15 @@ struct TabItemView: View {
     }
 
     @ViewBuilder
-    private func localizedContextButton(_ titleKey: LocalizedStringKey, action: TabContextAction) -> some View {
-        if let shortcut = contextMenuState.shortcuts[action] {
-            Button {
-                onContextAction(action)
-            } label: {
-                Text(titleKey)
-            }
-            .keyboardShortcut(shortcut)
-        } else {
-            Button {
-                onContextAction(action)
-            } label: {
-                Text(titleKey)
-            }
-        }
+    private func localizedContextButton(
+        _ titleKey: String,
+        defaultValue: String,
+        action: TabContextAction
+    ) -> some View {
+        contextButton(
+            Bundle.module.localizedString(forKey: titleKey, value: defaultValue, table: nil),
+            action: action
+        )
     }
 
     // MARK: - Tab Background
