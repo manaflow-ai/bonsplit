@@ -1,14 +1,65 @@
 import XCTest
 @testable import Bonsplit
 import AppKit
+import SwiftUI
 
 final class BonsplitTests: XCTestCase {
+    @MainActor
+    private final class LayoutProbeView: NSView {
+        private(set) var sizeChangeCount = 0
+        private(set) var originChangeCount = 0
+
+        override func setFrameSize(_ newSize: NSSize) {
+            if frame.size != newSize {
+                sizeChangeCount += 1
+            }
+            super.setFrameSize(newSize)
+        }
+
+        override func setFrameOrigin(_ newOrigin: NSPoint) {
+            if frame.origin != newOrigin {
+                originChangeCount += 1
+            }
+            super.setFrameOrigin(newOrigin)
+        }
+    }
+
+    @MainActor
+    private struct LayoutProbeRepresentable: NSViewRepresentable {
+        let probeView: LayoutProbeView
+
+        func makeNSView(context: Context) -> LayoutProbeView {
+            probeView
+        }
+
+        func updateNSView(_ nsView: LayoutProbeView, context: Context) {}
+    }
+
+    @MainActor
+    private final class DropZoneModel: ObservableObject {
+        @Published var zone: DropZone?
+    }
+
+    @MainActor
+    private struct PaneDropInteractionHarness: View {
+        @ObservedObject var model: DropZoneModel
+        let probeView: LayoutProbeView
+
+        var body: some View {
+            PaneDropInteractionContainer(activeDropZone: model.zone) {
+                LayoutProbeRepresentable(probeView: probeView)
+            } dropLayer: { _ in
+                Color.clear
+            }
+        }
+    }
+
     private final class TabContextActionDelegateSpy: BonsplitDelegate {
         var action: TabContextAction?
         var tabId: TabID?
         var paneId: PaneID?
 
-        func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID) {
+        func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Bonsplit.Tab, inPane pane: PaneID) {
             self.action = action
             self.tabId = tab.id
             self.paneId = pane
@@ -346,7 +397,7 @@ final class BonsplitTests: XCTestCase {
         let controller = BonsplitController()
         _ = controller.createTab(title: "Base")
         let sourcePaneId = controller.focusedPaneId!
-        let customTab = Tab(title: "Custom", hasCustomTitle: true)
+        let customTab = Bonsplit.Tab(title: "Custom", hasCustomTitle: true)
 
         guard let newPaneId = controller.splitPane(sourcePaneId, orientation: .horizontal, withTab: customTab) else {
             return XCTFail("Expected splitPane to return new pane")
@@ -360,7 +411,7 @@ final class BonsplitTests: XCTestCase {
         let controller = BonsplitController()
         _ = controller.createTab(title: "Base")
         let sourcePaneId = controller.focusedPaneId!
-        let customTab = Tab(title: "Custom", hasCustomTitle: true)
+        let customTab = Bonsplit.Tab(title: "Custom", hasCustomTitle: true)
 
         guard let newPaneId = controller.splitPane(
             sourcePaneId,
@@ -609,6 +660,74 @@ final class BonsplitTests: XCTestCase {
         segments = TabBarStyling.separatorSegments(totalWidth: 100, gap: nil)
         XCTAssertEqual(segments.left, 100, accuracy: 0.0001)
         XCTAssertEqual(segments.right, 0, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testPaneDropOverlayDoesNotResizeHostedContentDuringHover() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 240),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let model = DropZoneModel()
+        let probeView = LayoutProbeView(frame: .zero)
+        let hostingView = NSHostingView(
+            rootView: PaneDropInteractionHarness(
+                model: model,
+                probeView: probeView
+            )
+        )
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        let initialFrame = probeView.frame
+        let initialSizeChanges = probeView.sizeChangeCount
+        let initialOriginChanges = probeView.originChangeCount
+
+        model.zone = .left
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(probeView.frame, initialFrame)
+        XCTAssertEqual(
+            probeView.sizeChangeCount,
+            initialSizeChanges,
+            "Drag-hover overlays must not resize the hosted pane content"
+        )
+        XCTAssertEqual(
+            probeView.originChangeCount,
+            initialOriginChanges,
+            "Drag-hover overlays must not move the hosted pane content"
+        )
+
+        model.zone = .bottom
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(probeView.frame, initialFrame)
+        XCTAssertEqual(
+            probeView.sizeChangeCount,
+            initialSizeChanges,
+            "Switching hover targets should keep the hosted pane geometry stable"
+        )
+        XCTAssertEqual(
+            probeView.originChangeCount,
+            initialOriginChanges,
+            "Switching hover targets should not reposition the hosted pane content"
+        )
     }
 
     private func withShortcutHintDefaultsSuite(_ body: (UserDefaults) -> Void) {

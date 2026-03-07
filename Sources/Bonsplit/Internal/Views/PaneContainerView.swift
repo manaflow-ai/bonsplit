@@ -48,6 +48,103 @@ enum PaneDropLifecycle {
     case hovering
 }
 
+private struct PaneDropPlaceholderOverlay: View {
+    let zone: DropZone?
+    let size: CGSize
+
+    private let placeholderColor = Color.accentColor.opacity(0.25)
+    private let borderColor = Color.accentColor
+    private let padding: CGFloat = 4
+
+    var body: some View {
+        let frame = overlayFrame(for: zone, in: size)
+
+        RoundedRectangle(cornerRadius: 8)
+            .fill(placeholderColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(borderColor, lineWidth: 2)
+            )
+            .frame(width: frame.width, height: frame.height)
+            .offset(x: frame.minX, y: frame.minY)
+            .opacity(zone != nil ? 1 : 0)
+            .animation(.spring(duration: 0.25, bounce: 0.15), value: zone)
+    }
+
+    private func overlayFrame(for zone: DropZone?, in size: CGSize) -> CGRect {
+        switch zone {
+        case .center, .none:
+            return CGRect(
+                x: padding,
+                y: padding,
+                width: size.width - padding * 2,
+                height: size.height - padding * 2
+            )
+        case .left:
+            return CGRect(
+                x: padding,
+                y: padding,
+                width: size.width / 2 - padding,
+                height: size.height - padding * 2
+            )
+        case .right:
+            return CGRect(
+                x: size.width / 2,
+                y: padding,
+                width: size.width / 2 - padding,
+                height: size.height - padding * 2
+            )
+        case .top:
+            return CGRect(
+                x: padding,
+                y: padding,
+                width: size.width - padding * 2,
+                height: size.height / 2 - padding
+            )
+        case .bottom:
+            return CGRect(
+                x: padding,
+                y: size.height / 2,
+                width: size.width - padding * 2,
+                height: size.height / 2 - padding
+            )
+        }
+    }
+}
+
+struct PaneDropInteractionContainer<Content: View, DropLayer: View>: View {
+    let activeDropZone: DropZone?
+    let content: Content
+    let dropLayer: (CGSize) -> DropLayer
+
+    init(
+        activeDropZone: DropZone?,
+        @ViewBuilder content: () -> Content,
+        @ViewBuilder dropLayer: @escaping (CGSize) -> DropLayer
+    ) {
+        self.activeDropZone = activeDropZone
+        self.content = content()
+        self.dropLayer = dropLayer
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+
+            content
+                .frame(width: size.width, height: size.height)
+                .overlay {
+                    dropLayer(size)
+                }
+                .overlay(alignment: .topLeading) {
+                    PaneDropPlaceholderOverlay(zone: activeDropZone, size: size)
+                        .allowsHitTesting(false)
+                }
+        }
+        .clipped()
+    }
+}
+
 /// Container for a single pane with its tab bar and content area
 struct PaneContainerView<Content: View, EmptyContent: View>: View {
     @Environment(BonsplitController.self) private var bonsplitController
@@ -121,23 +218,12 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private var contentAreaWithDropZones: some View {
-        GeometryReader { geometry in
-            let size = geometry.size
-
-            ZStack {
-                // Main content
-                contentArea
-
-                // Drop zones layer (above content, receives drops and taps)
-                dropZonesLayer(size: size)
-
-                // Visual placeholder (non-interactive)
-                dropPlaceholder(for: activeDropZone, in: size)
-                    .allowsHitTesting(false)
-            }
-            .frame(width: size.width, height: size.height)
+        PaneDropInteractionContainer(activeDropZone: activeDropZone) {
+            contentArea
+        } dropLayer: { size in
+            // Drop zones layer (above content, receives drops and taps)
+            dropZonesLayer(size: size)
         }
-        .clipped()
     }
 
     // MARK: - Content Area
@@ -227,42 +313,6 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                     dropLifecycle: $dropLifecycle
                 ))
         }
-    }
-
-    // MARK: - Drop Placeholder
-
-    @ViewBuilder
-    private func dropPlaceholder(for zone: DropZone?, in size: CGSize) -> some View {
-        let placeholderColor = Color.accentColor.opacity(0.25)
-        let borderColor = Color.accentColor
-        let padding: CGFloat = 4
-
-        // Calculate frame based on zone
-        let frame: CGRect = {
-            switch zone {
-            case .center, .none:
-                return CGRect(x: padding, y: padding, width: size.width - padding * 2, height: size.height - padding * 2)
-            case .left:
-                return CGRect(x: padding, y: padding, width: size.width / 2 - padding, height: size.height - padding * 2)
-            case .right:
-                return CGRect(x: size.width / 2, y: padding, width: size.width / 2 - padding, height: size.height - padding * 2)
-            case .top:
-                return CGRect(x: padding, y: padding, width: size.width - padding * 2, height: size.height / 2 - padding)
-            case .bottom:
-                return CGRect(x: padding, y: size.height / 2, width: size.width - padding * 2, height: size.height / 2 - padding)
-            }
-        }()
-
-        RoundedRectangle(cornerRadius: 8)
-            .fill(placeholderColor)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(borderColor, lineWidth: 2)
-            )
-            .frame(width: frame.width, height: frame.height)
-            .position(x: frame.midX, y: frame.midY)
-            .opacity(zone != nil ? 1 : 0)
-            .animation(.spring(duration: 0.25, bounce: 0.15), value: zone)
     }
 
     // MARK: - Empty Pane View
