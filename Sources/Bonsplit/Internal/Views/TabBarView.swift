@@ -57,7 +57,8 @@ struct TabContextMenuState {
 struct TabBarView: View {
     @Environment(BonsplitController.self) private var controller
     @Environment(SplitViewController.self) private var splitViewController
-    
+    @Environment(\.bonsplitZoomScale) private var zoomScale
+
     @Bindable var pane: PaneState
     let isFocused: Bool
     var showSplitButtons: Bool = true
@@ -137,7 +138,7 @@ struct TabBarView: View {
                         let trailing = max(0, containerGeo.size.width - contentWidth)
                         if trailing >= 1 {
                             Color.clear
-                                .frame(width: trailing, height: TabBarMetrics.tabHeight)
+                                .frame(width: trailing, height: TabBarMetrics.tabHeight(zoomScale))
                                 .contentShape(Rectangle())
                                 .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                                     targetIndex: pane.tabs.count,
@@ -169,7 +170,7 @@ struct TabBarView: View {
                         }
                     }
                 }
-                .frame(height: TabBarMetrics.barHeight)
+                .frame(height: TabBarMetrics.barHeight(zoomScale))
                 .overlay(fadeOverlays)
             }
 
@@ -179,7 +180,7 @@ struct TabBarView: View {
                     .saturation(tabBarSaturation)
             }
         }
-        .frame(height: TabBarMetrics.barHeight)
+        .frame(height: TabBarMetrics.barHeight(zoomScale))
         .coordinateSpace(name: "tabBar")
         .contentShape(Rectangle())
         .background(tabBarBackground)
@@ -410,7 +411,7 @@ struct TabBarView: View {
     private var dropZoneAfterTabs: some View {
         Rectangle()
             .fill(Color.clear)
-            .frame(width: 30, height: TabBarMetrics.tabHeight)
+            .frame(width: 30 * zoomScale, height: TabBarMetrics.tabHeight(zoomScale))
             .contentShape(Rectangle())
             .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                 targetIndex: pane.tabs.count,
@@ -434,7 +435,7 @@ struct TabBarView: View {
     private var dropIndicator: some View {
         Capsule()
             .fill(TabBarColors.dropIndicator(for: appearance))
-            .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
+            .frame(width: TabBarMetrics.dropIndicatorWidth(zoomScale), height: TabBarMetrics.dropIndicatorHeight(zoomScale))
             .offset(x: -1)
     }
 
@@ -443,12 +444,13 @@ struct TabBarView: View {
     @ViewBuilder
     private var splitButtons: some View {
         let tooltips = controller.configuration.appearance.splitButtonTooltips
-        HStack(spacing: 4) {
+        let splitIconSize: CGFloat = 12 * zoomScale
+        HStack(spacing: 4 * zoomScale) {
             Button {
                 controller.requestNewTab(kind: "terminal", inPane: pane.id)
             } label: {
                 Image(systemName: "terminal")
-                    .font(.system(size: 12))
+                    .font(.system(size: splitIconSize))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.newTerminal)
@@ -457,7 +459,7 @@ struct TabBarView: View {
                 controller.requestNewTab(kind: "browser", inPane: pane.id)
             } label: {
                 Image(systemName: "globe")
-                    .font(.system(size: 12))
+                    .font(.system(size: splitIconSize))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.newBrowser)
@@ -467,7 +469,7 @@ struct TabBarView: View {
                 controller.splitPane(pane.id, orientation: .horizontal)
             } label: {
                 Image(systemName: "square.split.2x1")
-                    .font(.system(size: 12))
+                    .font(.system(size: splitIconSize))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.splitRight)
@@ -477,19 +479,19 @@ struct TabBarView: View {
                 controller.splitPane(pane.id, orientation: .vertical)
             } label: {
                 Image(systemName: "square.split.1x2")
-                    .font(.system(size: 12))
+                    .font(.system(size: splitIconSize))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .help(tooltips.splitDown)
         }
-        .padding(.trailing, 8)
+        .padding(.trailing, 8 * zoomScale)
     }
 
     // MARK: - Fade Overlays
 
     @ViewBuilder
     private var fadeOverlays: some View {
-        let fadeWidth: CGFloat = 24
+        let fadeWidth: CGFloat = 24 * zoomScale
 
         HStack(spacing: 0) {
             // Left fade

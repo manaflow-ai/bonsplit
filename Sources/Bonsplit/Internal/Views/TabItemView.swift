@@ -51,6 +51,7 @@ struct TabItemView: View {
     let onZoomToggle: () -> Void
     let onContextAction: (TabContextAction) -> Void
 
+    @Environment(\.bonsplitZoomScale) private var zoomScale
     @State private var isHovered = false
     @State private var isCloseHovered = false
     @State private var isZoomHovered = false
@@ -67,8 +68,8 @@ struct TabItemView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Icon + title block uses the standard spacing, but keep the close affordance tight.
-            HStack(spacing: TabBarMetrics.contentSpacing) {
-                let iconSlotSize = TabBarMetrics.iconSize
+            HStack(spacing: TabBarMetrics.contentSpacing(zoomScale)) {
+                let iconSlotSize = TabBarMetrics.iconSize(zoomScale)
                 let iconTint = isSelected
                     ? TabBarColors.activeText(for: appearance)
                     : TabBarColors.inactiveText(for: appearance)
@@ -119,7 +120,7 @@ struct TabItemView: View {
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
                 Text(tab.title)
-                    .font(.system(size: TabBarMetrics.titleFontSize))
+                    .font(.system(size: TabBarMetrics.titleFontSize(zoomScale)))
                     .lineLimit(1)
                     .foregroundStyle(
                         isSelected
@@ -133,13 +134,13 @@ struct TabItemView: View {
                         onZoomToggle()
                     } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: max(8, TabBarMetrics.titleFontSize - 2), weight: .semibold))
+                            .font(.system(size: max(8 * zoomScale, TabBarMetrics.titleFontSize(zoomScale) - 2 * zoomScale), weight: .semibold))
                             .foregroundStyle(
                                 isZoomHovered
                                     ? TabBarColors.activeText(for: appearance)
                                     : TabBarColors.inactiveText(for: appearance)
                             )
-                            .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
+                            .frame(width: TabBarMetrics.closeButtonSize(zoomScale), height: TabBarMetrics.closeButtonSize(zoomScale))
                             .background(
                                 Circle()
                                     .fill(
@@ -163,13 +164,13 @@ struct TabItemView: View {
             // Close button / dirty indicator / shortcut hint share the same trailing slot.
             trailingAccessory
         }
-        .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
+        .padding(.horizontal, TabBarMetrics.tabHorizontalPadding(zoomScale))
         .offset(y: isSelected ? 0.5 : 0)
         .frame(
-            minWidth: TabBarMetrics.tabMinWidth,
-            maxWidth: TabBarMetrics.tabMaxWidth,
-            minHeight: TabBarMetrics.tabHeight,
-            maxHeight: TabBarMetrics.tabHeight
+            minWidth: TabBarMetrics.tabMinWidth(zoomScale),
+            maxWidth: TabBarMetrics.tabMaxWidth(zoomScale),
+            minHeight: TabBarMetrics.tabHeight(zoomScale),
+            maxHeight: TabBarMetrics.tabHeight(zoomScale)
         )
         .padding(.bottom, isSelected ? 1 : 0)
         .background(tabBackground.saturation(saturation))
@@ -201,9 +202,9 @@ struct TabItemView: View {
         // `terminal.fill` reads visually heavier than most symbols at the same point size.
         // Hardcode sizes to avoid cross-glyph layout shifts.
         if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
-            return max(10, TabBarMetrics.iconSize - 2.5)
+            return max(10 * zoomScale, TabBarMetrics.iconSize(zoomScale) - 2.5 * zoomScale)
         }
-        return TabBarMetrics.iconSize
+        return TabBarMetrics.iconSize(zoomScale)
     }
 
     private var shortcutHintLabel: String? {
@@ -217,16 +218,16 @@ struct TabItemView: View {
 
     private var shortcutHintSlotWidth: CGFloat {
         guard let label = shortcutHintLabel else {
-            return TabBarMetrics.closeButtonSize
+            return TabBarMetrics.closeButtonSize(zoomScale)
         }
         let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset))) + 2
-        return max(TabBarMetrics.closeButtonSize, shortcutHintWidth(for: label) + positiveDebugInset)
+        return max(TabBarMetrics.closeButtonSize(zoomScale), shortcutHintWidth(for: label) + positiveDebugInset)
     }
 
     private func shortcutHintWidth(for label: String) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: max(8, TabBarMetrics.titleFontSize - 2), weight: .semibold)
+        let font = NSFont.systemFont(ofSize: max(8 * zoomScale, TabBarMetrics.titleFontSize(zoomScale) - 2 * zoomScale), weight: .semibold)
         let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        return ceil(textWidth) + 8
+        return ceil(textWidth) + 8 * zoomScale
     }
 
     @ViewBuilder
@@ -234,7 +235,7 @@ struct TabItemView: View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
                 Text(shortcutHintLabel)
-                    .font(.system(size: max(8, TabBarMetrics.titleFontSize - 2), weight: .semibold, design: .rounded))
+                    .font(.system(size: max(8 * zoomScale, TabBarMetrics.titleFontSize(zoomScale) - 2 * zoomScale), weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -243,8 +244,8 @@ struct TabItemView: View {
                             ? TabBarColors.activeText(for: appearance)
                             : TabBarColors.inactiveText(for: appearance)
                     )
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
+                    .padding(.horizontal, 4 * zoomScale)
+                    .padding(.vertical, 1 * zoomScale)
                     .background(
                         Capsule(style: .continuous)
                             .fill(.regularMaterial)
@@ -266,7 +267,7 @@ struct TabItemView: View {
                 .opacity(showsShortcutHint ? 0 : 1)
                 .allowsHitTesting(!showsShortcutHint)
         }
-        .frame(width: shortcutHintSlotWidth, height: TabBarMetrics.closeButtonSize, alignment: .center)
+        .frame(width: shortcutHintSlotWidth, height: TabBarMetrics.closeButtonSize(zoomScale), alignment: .center)
         .animation(.easeInOut(duration: 0.14), value: showsShortcutHint)
     }
 
@@ -410,7 +411,7 @@ struct TabItemView: View {
             if isSelected {
                 Rectangle()
                     .fill(Color.accentColor)
-                    .frame(height: TabBarMetrics.activeIndicatorHeight)
+                    .frame(height: TabBarMetrics.activeIndicatorHeight(zoomScale))
             }
 
             // Right border separator
@@ -434,12 +435,12 @@ struct TabItemView: View {
                     if tab.showsNotificationBadge {
                         Circle()
                             .fill(TabBarColors.notificationBadge(for: appearance))
-                            .frame(width: TabBarMetrics.notificationBadgeSize, height: TabBarMetrics.notificationBadgeSize)
+                            .frame(width: TabBarMetrics.notificationBadgeSize(zoomScale), height: TabBarMetrics.notificationBadgeSize(zoomScale))
                     }
                     if tab.isDirty {
                         Circle()
                             .fill(TabBarColors.dirtyIndicator(for: appearance))
-                            .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
+                            .frame(width: TabBarMetrics.dirtyIndicatorSize(zoomScale), height: TabBarMetrics.dirtyIndicatorSize(zoomScale))
                             .saturation(saturation)
                     }
                 }
@@ -448,9 +449,9 @@ struct TabItemView: View {
             if tab.isPinned {
                 if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: TabBarMetrics.closeIconSize(zoomScale), weight: .semibold))
                         .foregroundStyle(TabBarColors.inactiveText(for: appearance))
-                        .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
+                        .frame(width: TabBarMetrics.closeButtonSize(zoomScale), height: TabBarMetrics.closeButtonSize(zoomScale))
                         .saturation(saturation)
                 }
             } else if isSelected || isHovered || isCloseHovered {
@@ -459,13 +460,13 @@ struct TabItemView: View {
                     onClose()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: TabBarMetrics.closeIconSize(zoomScale), weight: .semibold))
                         .foregroundStyle(
                             isCloseHovered
                                 ? TabBarColors.activeText(for: appearance)
                                 : TabBarColors.inactiveText(for: appearance)
                         )
-                        .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
+                        .frame(width: TabBarMetrics.closeButtonSize(zoomScale), height: TabBarMetrics.closeButtonSize(zoomScale))
                         .background(
                             Circle()
                                 .fill(
@@ -482,7 +483,7 @@ struct TabItemView: View {
                 .saturation(saturation)
             }
         }
-        .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
+        .frame(width: TabBarMetrics.closeButtonSize(zoomScale), height: TabBarMetrics.closeButtonSize(zoomScale))
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isHovered)
         .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isCloseHovered)
     }
