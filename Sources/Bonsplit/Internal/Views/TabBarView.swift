@@ -57,7 +57,8 @@ struct TabContextMenuState {
 struct TabBarView: View {
     @Environment(BonsplitController.self) private var controller
     @Environment(SplitViewController.self) private var splitViewController
-    
+    @Environment(\.bonsplitUIScale) private var uiScale
+
     @Bindable var pane: PaneState
     let isFocused: Bool
     var showSplitButtons: Bool = true
@@ -448,7 +449,7 @@ struct TabBarView: View {
                 controller.requestNewTab(kind: "terminal", inPane: pane.id)
             } label: {
                 Image(systemName: "terminal")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * uiScale))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.newTerminal)
@@ -457,7 +458,7 @@ struct TabBarView: View {
                 controller.requestNewTab(kind: "browser", inPane: pane.id)
             } label: {
                 Image(systemName: "globe")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * uiScale))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.newBrowser)
@@ -467,7 +468,7 @@ struct TabBarView: View {
                 controller.splitPane(pane.id, orientation: .horizontal)
             } label: {
                 Image(systemName: "square.split.2x1")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * uiScale))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.splitRight)
@@ -477,7 +478,7 @@ struct TabBarView: View {
                 controller.splitPane(pane.id, orientation: .vertical)
             } label: {
                 Image(systemName: "square.split.1x2")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * uiScale))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.splitDown)

@@ -63,6 +63,7 @@ struct TabItemView: View {
     @AppStorage(TabControlShortcutHintDebugSettings.xKey) private var controlShortcutHintXOffset = TabControlShortcutHintDebugSettings.defaultX
     @AppStorage(TabControlShortcutHintDebugSettings.yKey) private var controlShortcutHintYOffset = TabControlShortcutHintDebugSettings.defaultY
     @AppStorage(TabControlShortcutHintDebugSettings.alwaysShowKey) private var alwaysShowShortcutHints = TabControlShortcutHintDebugSettings.defaultAlwaysShow
+    @Environment(\.bonsplitUIScale) private var uiScale
 
     var body: some View {
         HStack(spacing: 0) {
@@ -91,7 +92,7 @@ struct TabItemView: View {
                                 .stroke(iconTint.opacity(0.25), lineWidth: 1)
                         } else {
                             Image(systemName: iconName)
-                                .font(.system(size: glyphSize(for: iconName)))
+                                .font(.system(size: glyphSize(for: iconName) * uiScale))
                                 .foregroundStyle(iconTint)
                         }
                     }
@@ -119,7 +120,7 @@ struct TabItemView: View {
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
                 Text(tab.title)
-                    .font(.system(size: TabBarMetrics.titleFontSize))
+                    .font(.system(size: TabBarMetrics.titleFontSize * uiScale))
                     .lineLimit(1)
                     .foregroundStyle(
                         isSelected
@@ -133,7 +134,7 @@ struct TabItemView: View {
                         onZoomToggle()
                     } label: {
                         Image(systemName: "arrow.up.left.and.arrow.down.right")
-                            .font(.system(size: max(8, TabBarMetrics.titleFontSize - 2), weight: .semibold))
+                            .font(.system(size: max(8, (TabBarMetrics.titleFontSize - 2) * uiScale), weight: .semibold))
                             .foregroundStyle(
                                 isZoomHovered
                                     ? TabBarColors.activeText(for: appearance)
@@ -234,7 +235,7 @@ struct TabItemView: View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
                 Text(shortcutHintLabel)
-                    .font(.system(size: max(8, TabBarMetrics.titleFontSize - 2), weight: .semibold, design: .rounded))
+                    .font(.system(size: max(8, (TabBarMetrics.titleFontSize - 2) * uiScale), weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
@@ -448,7 +449,7 @@ struct TabItemView: View {
             if tab.isPinned {
                 if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: TabBarMetrics.closeIconSize * uiScale, weight: .semibold))
                         .foregroundStyle(TabBarColors.inactiveText(for: appearance))
                         .frame(width: TabBarMetrics.closeButtonSize, height: TabBarMetrics.closeButtonSize)
                         .saturation(saturation)
@@ -459,7 +460,7 @@ struct TabItemView: View {
                     onClose()
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: TabBarMetrics.closeIconSize * uiScale, weight: .semibold))
                         .foregroundStyle(
                             isCloseHovered
                                 ? TabBarColors.activeText(for: appearance)
