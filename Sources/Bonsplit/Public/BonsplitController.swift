@@ -420,7 +420,8 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         withTab tab: Tab,
-        insertFirst: Bool
+        insertFirst: Bool,
+        animate: Bool = true
     ) -> PaneID? {
         guard configuration.allowSplits else { return nil }
 
@@ -450,7 +451,8 @@ public final class BonsplitController {
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             tab: internalTab,
-            insertFirst: insertFirst
+            insertFirst: insertFirst,
+            animate: animate
         )
 
         let newPaneId = focusedPaneId!
