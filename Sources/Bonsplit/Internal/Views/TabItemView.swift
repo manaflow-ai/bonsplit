@@ -323,10 +323,16 @@ struct TabItemView: View {
 
     @ViewBuilder
     private var contextMenuContent: some View {
-        contextButton("Rename Tab…", action: .rename)
+        contextButton(
+            String(localized: "command.renameTab.title", defaultValue: "Rename Tab…", bundle: .main),
+            action: .rename
+        )
 
         if contextMenuState.hasCustomTitle {
-            contextButton("Remove Custom Tab Name", action: .clearName)
+            contextButton(
+                String(localized: "command.clearTabName.title", defaultValue: "Clear Tab Name", bundle: .main),
+                action: .clearName
+            )
         }
 
         Divider()
@@ -360,9 +366,25 @@ struct TabItemView: View {
 
         Divider()
 
-        contextButton("New Terminal Tab to Right", action: .newTerminalToRight)
+        contextButton(
+            String(localized: "menu.view.splitRight", defaultValue: "Split Right", bundle: .main),
+            action: .splitRight
+        )
 
-        contextButton("New Browser Tab to Right", action: .newBrowserToRight)
+        contextButton(
+            String(localized: "menu.view.splitDown", defaultValue: "Split Down", bundle: .main),
+            action: .splitDown
+        )
+
+        contextButton(
+            String(localized: "menu.view.splitBrowserRight", defaultValue: "Split Browser Right", bundle: .main),
+            action: .splitBrowserRight
+        )
+
+        contextButton(
+            String(localized: "menu.view.splitBrowserDown", defaultValue: "Split Browser Down", bundle: .main),
+            action: .splitBrowserDown
+        )
 
         if contextMenuState.isBrowser {
             Divider()

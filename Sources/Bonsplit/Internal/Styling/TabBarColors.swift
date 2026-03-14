@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// Native macOS colors for the tab bar
-enum TabBarColors {
+public enum TabBarColors {
     private enum Constants {
         static let darkTextAlpha: CGFloat = 0.82
         static let darkSecondaryTextAlpha: CGFloat = 0.62
@@ -48,35 +48,35 @@ enum TabBarColors {
         return NSColor.white.withAlphaComponent(alpha)
     }
 
-    static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
     }
 
-    static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+    public static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
     }
 
     // MARK: - Tab Bar Background
 
-    static var barBackground: Color {
+    public static var barBackground: Color {
         Color(nsColor: .windowBackgroundColor)
     }
 
-    static func barBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func barBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .windowBackgroundColor))
     }
 
-    static var barMaterial: Material {
+    public static var barMaterial: Material {
         .bar
     }
 
     // MARK: - Tab States
 
-    static var activeTabBackground: Color {
+    public static var activeTabBackground: Color {
         Color(nsColor: .controlBackgroundColor)
     }
 
-    static func activeTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func activeTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         guard let custom = chromeBackgroundColor(for: appearance) else {
             return activeTabBackground
         }
@@ -86,11 +86,11 @@ enum TabBarColors {
         return Color(nsColor: adjusted)
     }
 
-    static var hoveredTabBackground: Color {
+    public static var hoveredTabBackground: Color {
         Color(nsColor: .controlBackgroundColor).opacity(0.5)
     }
 
-    static func hoveredTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func hoveredTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         guard let custom = chromeBackgroundColor(for: appearance) else {
             return hoveredTabBackground
         }
@@ -100,41 +100,41 @@ enum TabBarColors {
         return Color(nsColor: adjusted.withAlphaComponent(0.78))
     }
 
-    static var inactiveTabBackground: Color {
+    public static var inactiveTabBackground: Color {
         .clear
     }
 
     // MARK: - Text Colors
 
-    static var activeText: Color {
+    public static var activeText: Color {
         Color(nsColor: .labelColor)
     }
 
-    static func activeText(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func activeText(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: effectiveTextColor(for: appearance, secondary: false))
     }
 
-    static func nsColorActiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+    public static func nsColorActiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         effectiveTextColor(for: appearance, secondary: false)
     }
 
-    static var inactiveText: Color {
+    public static var inactiveText: Color {
         Color(nsColor: .secondaryLabelColor)
     }
 
-    static func inactiveText(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func inactiveText(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: effectiveTextColor(for: appearance, secondary: true))
     }
 
-    static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+    public static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         effectiveTextColor(for: appearance, secondary: true)
     }
 
-    static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
+    public static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
         Color(nsColor: nsColorSplitActionIcon(for: appearance, isPressed: isPressed))
     }
 
-    static func nsColorSplitActionIcon(
+    public static func nsColorSplitActionIcon(
         for appearance: BonsplitConfiguration.Appearance,
         isPressed: Bool
     ) -> NSColor {
@@ -143,15 +143,15 @@ enum TabBarColors {
 
     // MARK: - Borders & Indicators
 
-    static var separator: Color {
+    public static var separator: Color {
         Color(nsColor: .separatorColor)
     }
 
-    static func separator(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func separator(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: nsColorSeparator(for: appearance))
     }
 
-    static func nsColorSeparator(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+    public static func nsColorSeparator(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         if let explicit = chromeBorderColor(for: appearance) {
             return explicit
         }
@@ -166,40 +166,40 @@ enum TabBarColors {
         return tone.withAlphaComponent(alpha)
     }
 
-    static var dropIndicator: Color {
+    public static var dropIndicator: Color {
         Color.accentColor
     }
 
-    static func dropIndicator(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func dropIndicator(for appearance: BonsplitConfiguration.Appearance) -> Color {
         _ = appearance
         return dropIndicator
     }
 
-    static var focusRing: Color {
+    public static var focusRing: Color {
         Color.accentColor.opacity(0.5)
     }
 
-    static var dirtyIndicator: Color {
+    public static var dirtyIndicator: Color {
         Color(nsColor: .labelColor).opacity(0.6)
     }
 
-    static func dirtyIndicator(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func dirtyIndicator(for appearance: BonsplitConfiguration.Appearance) -> Color {
         guard chromeBackgroundColor(for: appearance) != nil else { return dirtyIndicator }
         return activeText(for: appearance).opacity(0.72)
     }
 
-    static var notificationBadge: Color {
+    public static var notificationBadge: Color {
         Color(nsColor: .systemBlue)
     }
 
-    static func notificationBadge(for appearance: BonsplitConfiguration.Appearance) -> Color {
+    public static func notificationBadge(for appearance: BonsplitConfiguration.Appearance) -> Color {
         _ = appearance
         return notificationBadge
     }
 
     // MARK: - Shadows
 
-    static var tabShadow: Color {
+    public static var tabShadow: Color {
         Color.black.opacity(0.08)
     }
 }

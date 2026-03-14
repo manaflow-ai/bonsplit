@@ -449,24 +449,27 @@ struct TabBarView: View {
     @ViewBuilder
     private var splitButtons: some View {
         let tooltips = controller.configuration.appearance.splitButtonTooltips
+        let showPaneNewTabButtons = controller.configuration.appearance.showPaneNewTabButtons
         HStack(spacing: 4) {
-            Button {
-                controller.requestNewTab(kind: "terminal", inPane: pane.id)
-            } label: {
-                Image(systemName: "terminal")
-                    .font(.system(size: 12))
-            }
-            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
-            .safeHelp(tooltips.newTerminal)
+            if showPaneNewTabButtons {
+                Button {
+                    controller.requestNewTab(kind: "terminal", inPane: pane.id)
+                } label: {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+                .safeHelp(tooltips.newTerminal)
 
-            Button {
-                controller.requestNewTab(kind: "browser", inPane: pane.id)
-            } label: {
-                Image(systemName: "globe")
-                    .font(.system(size: 12))
+                Button {
+                    controller.requestNewTab(kind: "browser", inPane: pane.id)
+                } label: {
+                    Image(systemName: "globe")
+                        .font(.system(size: 12))
+                }
+                .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+                .safeHelp(tooltips.newBrowser)
             }
-            .buttonStyle(SplitActionButtonStyle(appearance: appearance))
-            .safeHelp(tooltips.newBrowser)
 
             Button {
                 // 120fps animation handled by SplitAnimator

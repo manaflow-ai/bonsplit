@@ -12,6 +12,10 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case moveToRightPane
     case newTerminalToRight
     case newBrowserToRight
+    case splitRight
+    case splitDown
+    case splitBrowserRight
+    case splitBrowserDown
     case reload
     case duplicate
     case togglePin
