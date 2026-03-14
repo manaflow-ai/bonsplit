@@ -324,13 +324,13 @@ struct TabItemView: View {
     @ViewBuilder
     private var contextMenuContent: some View {
         contextButton(
-            String(localized: "command.renameTab.title", defaultValue: "Rename Tab…", bundle: .main),
+            String(localized: "command.renameTab.title", defaultValue: "Rename Tab…", bundle: .module),
             action: .rename
         )
 
         if contextMenuState.hasCustomTitle {
             contextButton(
-                String(localized: "command.clearTabName.title", defaultValue: "Clear Tab Name", bundle: .main),
+                String(localized: "command.clearTabName.title", defaultValue: "Clear Tab Name", bundle: .module),
                 action: .clearName
             )
         }
@@ -367,22 +367,22 @@ struct TabItemView: View {
         Divider()
 
         contextButton(
-            String(localized: "menu.view.splitRight", defaultValue: "Split Right", bundle: .main),
+            String(localized: "menu.view.splitRight", defaultValue: "Split Right", bundle: .module),
             action: .splitRight
         )
 
         contextButton(
-            String(localized: "menu.view.splitDown", defaultValue: "Split Down", bundle: .main),
+            String(localized: "menu.view.splitDown", defaultValue: "Split Down", bundle: .module),
             action: .splitDown
         )
 
         contextButton(
-            String(localized: "menu.view.splitBrowserRight", defaultValue: "Split Browser Right", bundle: .main),
+            String(localized: "menu.view.splitBrowserRight", defaultValue: "Split Browser Right", bundle: .module),
             action: .splitBrowserRight
         )
 
         contextButton(
-            String(localized: "menu.view.splitBrowserDown", defaultValue: "Split Browser Down", bundle: .main),
+            String(localized: "menu.view.splitBrowserDown", defaultValue: "Split Browser Down", bundle: .module),
             action: .splitBrowserDown
         )
 
