@@ -414,6 +414,7 @@ public final class BonsplitController {
     ///   - orientation: Direction to split (horizontal = side-by-side, vertical = stacked).
     ///   - tab: The tab to add to the new pane.
     ///   - insertFirst: If true, insert the new pane first (left/top). Otherwise insert second (right/bottom).
+    ///   - animate: If true (default), the new pane slides in with an entry animation. Pass false to skip animation (e.g. during session restore).
     /// - Returns: The new pane ID, or nil if vetoed by delegate.
     @discardableResult
     public func splitPane(
