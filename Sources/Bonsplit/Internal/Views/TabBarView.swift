@@ -12,6 +12,223 @@ private struct SelectedTabFramePreferenceKey: PreferenceKey {
     }
 }
 
+private struct TabDropFrame: Equatable {
+    let index: Int
+    let frame: CGRect
+}
+
+private struct TabDropFramesPreferenceKey: PreferenceKey {
+    static let defaultValue: [TabDropFrame] = []
+
+    static func reduce(value: inout [TabDropFrame], nextValue: () -> [TabDropFrame]) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+func tabBarLeadingTrafficLightInset(
+    trafficLightMaxX: CGFloat,
+    tabBarMinXInWindow: CGFloat,
+    trailingPadding: CGFloat = 14
+) -> CGFloat {
+    max(0, trafficLightMaxX + trailingPadding - tabBarMinXInWindow)
+}
+
+final class TabBarLeadingInsetPassthroughView: NSView {
+    var onInsetChange: ((CGFloat) -> Void)?
+
+    private weak var observedWindow: NSWindow?
+    private var observers: [NSObjectProtocol] = []
+    private var lastPublishedInset: CGFloat?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window !== observedWindow {
+            reinstallObservers(for: window)
+        }
+        publishInsetIfNeeded()
+    }
+
+    override func layout() {
+        super.layout()
+        publishInsetIfNeeded()
+    }
+
+    deinit {
+        removeObservers()
+    }
+
+    func publishInsetIfNeeded() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let window = self.window ?? self.observedWindow else { return }
+
+            let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+            let trafficLightMaxX = buttonTypes
+                .compactMap { window.standardWindowButton($0)?.frame.maxX }
+                .max() ?? 0
+            let frameInWindow = self.convert(self.bounds, to: nil)
+            let inset = tabBarLeadingTrafficLightInset(
+                trafficLightMaxX: trafficLightMaxX,
+                tabBarMinXInWindow: frameInWindow.minX
+            )
+            guard self.lastPublishedInset == nil || abs((self.lastPublishedInset ?? 0) - inset) > 0.5 else {
+                return
+            }
+            self.lastPublishedInset = inset
+            self.onInsetChange?(inset)
+        }
+    }
+
+    private func reinstallObservers(for window: NSWindow?) {
+        removeObservers()
+        observedWindow = window
+        guard let window else { return }
+
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [
+            NSWindow.didResizeNotification,
+            NSWindow.didEndLiveResizeNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification,
+        ]
+        observers = names.map { name in
+            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                self?.publishInsetIfNeeded()
+            }
+        }
+    }
+
+    private func removeObservers() {
+        let center = NotificationCenter.default
+        for observer in observers {
+            center.removeObserver(observer)
+        }
+        observers.removeAll()
+    }
+}
+
+private struct TabBarLeadingInsetReader: NSViewRepresentable {
+    @Binding var inset: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let view = TabBarLeadingInsetPassthroughView()
+        view.setFrameSize(.zero)
+        view.onInsetChange = { nextInset in
+            if abs(nextInset - inset) > 0.5 {
+                inset = nextInset
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? TabBarLeadingInsetPassthroughView else { return }
+        view.onInsetChange = { nextInset in
+            if abs(nextInset - inset) > 0.5 {
+                inset = nextInset
+            }
+        }
+        view.publishInsetIfNeeded()
+    }
+}
+
+private final class TabBarNativeDropDestinationView: NSView {
+    var isEnabled = false
+    var validateDrop: ((NSPasteboard) -> Bool)?
+    var updateDropTarget: ((CGPoint) -> Void)?
+    var clearDropState: (() -> Void)?
+    var performDrop: ((CGPoint, NSPasteboard) -> Bool)?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard isEnabled, bounds.contains(point) else { return nil }
+        return self
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        registerForDraggedTypes([NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        updateDrag(sender)
+    }
+
+    override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        updateDrag(sender)
+    }
+
+    override func draggingExited(_ sender: (any NSDraggingInfo)?) {
+        clearDropState?()
+    }
+
+    override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        isEnabled && (validateDrop?(sender.draggingPasteboard) ?? false)
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard isEnabled, (validateDrop?(sender.draggingPasteboard) ?? false) else {
+            clearDropState?()
+            return false
+        }
+
+        let point = convert(sender.draggingLocation, from: nil)
+        guard bounds.contains(point) else {
+            clearDropState?()
+            return false
+        }
+        return performDrop?(CGPoint(x: point.x, y: point.y), sender.draggingPasteboard) ?? false
+    }
+
+    private func updateDrag(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        guard isEnabled, (validateDrop?(sender.draggingPasteboard) ?? false) else {
+            clearDropState?()
+            return []
+        }
+
+        let point = convert(sender.draggingLocation, from: nil)
+        guard bounds.contains(point) else {
+            clearDropState?()
+            return []
+        }
+
+        updateDropTarget?(CGPoint(x: point.x, y: point.y))
+        return .move
+    }
+}
+
+private struct TabBarNativeDropBridge: NSViewRepresentable {
+    let isEnabled: Bool
+    let validateDrop: (NSPasteboard) -> Bool
+    let updateDropTarget: (CGPoint) -> Void
+    let clearDropState: () -> Void
+    let performDrop: (CGPoint, NSPasteboard) -> Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = TabBarNativeDropDestinationView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? TabBarNativeDropDestinationView else { return }
+        view.isEnabled = isEnabled
+        view.validateDrop = validateDrop
+        view.updateDropTarget = updateDropTarget
+        view.clearDropState = clearDropState
+        view.performDrop = performDrop
+        if !isEnabled {
+            clearDropState()
+        }
+    }
+}
+
 enum TabBarStyling {
     static func separatorSegments(
         totalWidth: CGFloat,
@@ -56,6 +273,11 @@ struct TabContextMenuState {
     }
 }
 
+private enum TabBarControlsVisibilityMode: String {
+    case always
+    case onHover
+}
+
 /// Tab bar view with scrollable tabs, drag/drop support, and split buttons
 struct TabBarView: View {
     @Environment(BonsplitController.self) private var controller
@@ -71,7 +293,14 @@ struct TabBarView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var selectedTabFrameInBar: CGRect?
+    @State private var tabDropFrames: [TabDropFrame] = []
+    @State private var isHoveringTabBar = false
+    @State private var leadingTrafficLightInset: CGFloat = 0
     @StateObject private var controlKeyMonitor = TabControlShortcutKeyMonitor()
+    @AppStorage("paneTabBarControlsVisibilityMode")
+    private var controlsVisibilityModeRawValue = TabBarControlsVisibilityMode.always.rawValue
+    @AppStorage("workspaceTitlebarVisible")
+    private var showWorkspaceTitlebar = true
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -98,6 +327,31 @@ struct TabBarView: View {
         isFocused && controlKeyMonitor.isShortcutHintVisible
     }
 
+    private var controlsVisibilityMode: TabBarControlsVisibilityMode {
+        TabBarControlsVisibilityMode(rawValue: controlsVisibilityModeRawValue) ?? .always
+    }
+
+    private var shouldShowSplitButtonsNow: Bool {
+        switch controlsVisibilityMode {
+        case .always:
+            return true
+        case .onHover:
+            return isHoveringTabBar
+        }
+    }
+
+    private var shouldUseTabBarDragRegion: Bool {
+        !showWorkspaceTitlebar
+    }
+
+    private var isTabDragActive: Bool {
+        splitViewController.draggingTab != nil || splitViewController.activeDragTab != nil
+    }
+
+    private var effectiveLeadingInset: CGFloat {
+        showWorkspaceTitlebar ? 0 : leadingTrafficLightInset
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Scrollable tabs with fade overlays
@@ -115,7 +369,8 @@ struct TabBarView: View {
                             // supports dropping after the last tab.
                             dropZoneAfterTabs
                         }
-                        .padding(.horizontal, TabBarMetrics.barPadding)
+                        .padding(.leading, TabBarMetrics.barPadding + effectiveLeadingInset)
+                        .padding(.trailing, TabBarMetrics.barPadding)
                         // Keep tab insert/remove/reorder instant without suppressing unrelated
                         // subtree animations (for example, shortcut-hint fades).
                         .animation(nil, value: pane.tabs.map(\.id))
@@ -139,17 +394,7 @@ struct TabBarView: View {
                     .overlay(alignment: .trailing) {
                         let trailing = max(0, containerGeo.size.width - contentWidth)
                         if trailing >= 1 {
-                            Color.clear
-                                .frame(width: trailing, height: TabBarMetrics.tabHeight)
-                                .contentShape(Rectangle())
-                                .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
-                                    targetIndex: pane.tabs.count,
-                                    pane: pane,
-                                    bonsplitController: controller,
-                                    controller: splitViewController,
-                                    dropTargetIndex: $dropTargetIndex,
-                                    dropLifecycle: $dropLifecycle
-                                ))
+                            trailingInteractionView(width: trailing)
                         }
                     }
                     .coordinateSpace(name: "tabScroll")
@@ -178,19 +423,22 @@ struct TabBarView: View {
 
             // Split buttons
             if showSplitButtons {
-                splitButtons
-                    .saturation(tabBarSaturation)
+                splitButtonsArea
             }
         }
         .frame(height: TabBarMetrics.barHeight)
         .coordinateSpace(name: "tabBar")
         .contentShape(Rectangle())
+        .accessibilityIdentifier("paneTabBar")
         .background(tabBarBackground)
         .background(
             TabBarHostWindowReader { window in
                 controlKeyMonitor.setHostWindow(window)
             }
             .frame(width: 0, height: 0)
+        )
+        .background(
+            TabBarLeadingInsetReader(inset: $leadingTrafficLightInset)
         )
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: splitViewController.draggingTab) { _, newValue in
@@ -212,8 +460,63 @@ struct TabBarView: View {
         .onPreferenceChange(SelectedTabFramePreferenceKey.self) { frame in
             selectedTabFrameInBar = frame
         }
+        .onPreferenceChange(TabDropFramesPreferenceKey.self) { frames in
+            tabDropFrames = frames.sorted { lhs, rhs in
+                if lhs.index == rhs.index {
+                    return lhs.frame.minX < rhs.frame.minX
+                }
+                return lhs.index < rhs.index
+            }
+        }
         .onDisappear {
             controlKeyMonitor.stop()
+        }
+        .onHover { hovering in
+            isHoveringTabBar = hovering
+        }
+        .overlay {
+            TabBarNativeDropBridge(
+                isEnabled: isTabDragActive,
+                validateDrop: { pasteboard in
+                    TabDropDelegate.validateDrop(pasteboard: pasteboard, controller: splitViewController)
+                },
+                updateDropTarget: { location in
+                    let targetIndex = TabDropDelegate.resolvedTargetIndex(
+                        for: location,
+                        frames: tabDropFrames,
+                        fallbackCount: pane.tabs.count
+                    )
+                    TabDropDelegate.updateDropState(
+                        targetIndex: targetIndex,
+                        pane: pane,
+                        controller: splitViewController,
+                        dropTargetIndex: $dropTargetIndex,
+                        dropLifecycle: $dropLifecycle
+                    )
+                },
+                clearDropState: {
+                    TabDropDelegate.clearDropState(
+                        dropTargetIndex: $dropTargetIndex,
+                        dropLifecycle: $dropLifecycle
+                    )
+                },
+                performDrop: { location, pasteboard in
+                    let targetIndex = TabDropDelegate.resolvedTargetIndex(
+                        for: location,
+                        frames: tabDropFrames,
+                        fallbackCount: pane.tabs.count
+                    )
+                    return TabDropDelegate.performDrop(
+                        targetIndex: targetIndex,
+                        pasteboard: pasteboard,
+                        pane: pane,
+                        bonsplitController: controller,
+                        controller: splitViewController,
+                        dropTargetIndex: $dropTargetIndex,
+                        dropLifecycle: $dropLifecycle
+                    )
+                }
+            )
         }
     }
 
@@ -264,11 +567,16 @@ struct TabBarView: View {
         )
         .background(
             GeometryReader { geometry in
+                let frame = geometry.frame(in: .named("tabBar"))
                 Color.clear.preference(
                     key: SelectedTabFramePreferenceKey.self,
                     value: pane.selectedTabId == tab.id
-                        ? geometry.frame(in: .named("tabBar"))
+                        ? frame
                         : nil
+                )
+                .preference(
+                    key: TabDropFramesPreferenceKey.self,
+                    value: [TabDropFrame(index: index, frame: frame)]
                 )
             }
         )
@@ -442,9 +750,49 @@ struct TabBarView: View {
             .fill(TabBarColors.dropIndicator(for: appearance))
             .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
             .offset(x: -1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("paneTabBar.dropIndicator")
+    }
+
+    @ViewBuilder
+    private func trailingInteractionView(width: CGFloat) -> some View {
+        if shouldUseTabBarDragRegion && !isTabDragActive {
+            TabBarWindowDragRegion()
+                .frame(width: width, height: TabBarMetrics.tabHeight)
+        } else {
+            Color.clear
+                .frame(width: width, height: TabBarMetrics.tabHeight)
+                .contentShape(Rectangle())
+                .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
+                    targetIndex: pane.tabs.count,
+                    pane: pane,
+                    bonsplitController: controller,
+                    controller: splitViewController,
+                    dropTargetIndex: $dropTargetIndex,
+                    dropLifecycle: $dropLifecycle
+                ))
+        }
     }
 
     // MARK: - Split Buttons
+
+    @ViewBuilder
+    private var splitButtonsArea: some View {
+        ZStack(alignment: .trailing) {
+            if !shouldShowSplitButtonsNow && shouldUseTabBarDragRegion && !isTabDragActive {
+                TabBarWindowDragRegion()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            splitButtons
+                .saturation(tabBarSaturation)
+                .opacity(shouldShowSplitButtonsNow ? 1 : 0)
+                .allowsHitTesting(shouldShowSplitButtonsNow)
+                .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: shouldShowSplitButtonsNow)
+        }
+        .contentShape(Rectangle())
+        .accessibilityIdentifier("paneTabBarControlsRegion")
+    }
 
     @ViewBuilder
     private var splitButtons: some View {
@@ -457,6 +805,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.newTerminal")
             .safeHelp(tooltips.newTerminal)
 
             Button {
@@ -466,6 +815,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.newBrowser")
             .safeHelp(tooltips.newBrowser)
 
             Button {
@@ -476,6 +826,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.splitRight")
             .safeHelp(tooltips.splitRight)
 
             Button {
@@ -486,6 +837,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.splitDown")
             .safeHelp(tooltips.splitDown)
         }
         .padding(.trailing, 8)
@@ -850,14 +1202,67 @@ enum TabDropLifecycle {
 // MARK: - Tab Drop Delegate
 
 struct TabDropDelegate: DropDelegate {
-    let targetIndex: Int
     let pane: PaneState
     let bonsplitController: BonsplitController
     let controller: SplitViewController
     @Binding var dropTargetIndex: Int?
     @Binding var dropLifecycle: TabDropLifecycle
+    let resolveTargetIndex: (CGPoint) -> Int
+
+    init(
+        targetIndex: Int,
+        pane: PaneState,
+        bonsplitController: BonsplitController,
+        controller: SplitViewController,
+        dropTargetIndex: Binding<Int?>,
+        dropLifecycle: Binding<TabDropLifecycle>
+    ) {
+        self.pane = pane
+        self.bonsplitController = bonsplitController
+        self.controller = controller
+        self._dropTargetIndex = dropTargetIndex
+        self._dropLifecycle = dropLifecycle
+        self.resolveTargetIndex = { _ in targetIndex }
+    }
+
+    init(
+        pane: PaneState,
+        bonsplitController: BonsplitController,
+        controller: SplitViewController,
+        dropTargetIndex: Binding<Int?>,
+        dropLifecycle: Binding<TabDropLifecycle>,
+        resolveTargetIndex: @escaping (CGPoint) -> Int
+    ) {
+        self.pane = pane
+        self.bonsplitController = bonsplitController
+        self.controller = controller
+        self._dropTargetIndex = dropTargetIndex
+        self._dropLifecycle = dropLifecycle
+        self.resolveTargetIndex = resolveTargetIndex
+    }
 
     func performDrop(info: DropInfo) -> Bool {
+        let targetIndex = resolveTargetIndex(info.location)
+        return Self.performDrop(
+            targetIndex: targetIndex,
+            pasteboard: NSPasteboard(name: .drag),
+            pane: pane,
+            bonsplitController: bonsplitController,
+            controller: controller,
+            dropTargetIndex: $dropTargetIndex,
+            dropLifecycle: $dropLifecycle
+        )
+    }
+
+    fileprivate static func performDrop(
+        targetIndex: Int,
+        pasteboard: NSPasteboard,
+        pane: PaneState,
+        bonsplitController: BonsplitController,
+        controller: SplitViewController,
+        dropTargetIndex: Binding<Int?>,
+        dropLifecycle: Binding<TabDropLifecycle>
+    ) -> Bool {
         #if DEBUG
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
@@ -869,7 +1274,15 @@ struct TabDropDelegate: DropDelegate {
         // callbacks off-main, and SplitViewController is @MainActor.
         if !Thread.isMainThread {
             return DispatchQueue.main.sync {
-                performDrop(info: info)
+                performDrop(
+                    targetIndex: targetIndex,
+                    pasteboard: pasteboard,
+                    pane: pane,
+                    bonsplitController: bonsplitController,
+                    controller: controller,
+                    dropTargetIndex: dropTargetIndex,
+                    dropLifecycle: dropLifecycle
+                )
             }
         }
 
@@ -877,7 +1290,7 @@ struct TabDropDelegate: DropDelegate {
         // may not have propagated yet when performDrop runs.
         guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
               let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
-            guard let transfer = decodeTransfer(from: info),
+            guard let transfer = decodeTransfer(from: pasteboard),
                   transfer.isFromCurrentProcess else {
                 return false
             }
@@ -888,8 +1301,7 @@ struct TabDropDelegate: DropDelegate {
             )
             let handled = bonsplitController.onExternalTabDrop?(request) ?? false
             if handled {
-                dropLifecycle = .idle
-                dropTargetIndex = nil
+                clearDropState(dropTargetIndex: dropTargetIndex, dropLifecycle: dropLifecycle)
             }
             return handled
         }
@@ -920,8 +1332,7 @@ struct TabDropDelegate: DropDelegate {
         // Clear visual state immediately to prevent lingering indicators.
         // Must happen synchronously before returning, not in async callback.
         // Setting dropLifecycle to idle prevents dropUpdated from re-setting dropTargetIndex.
-        dropLifecycle = .idle
-        dropTargetIndex = nil
+        clearDropState(dropTargetIndex: dropTargetIndex, dropLifecycle: dropLifecycle)
         controller.draggingTab = nil
         controller.dragSourcePaneId = nil
         controller.activeDragTab = nil
@@ -931,6 +1342,7 @@ struct TabDropDelegate: DropDelegate {
     }
 
     func dropEntered(info: DropInfo) {
+        let targetIndex = resolveTargetIndex(info.location)
         #if DEBUG
         NSLog("[Bonsplit Drag] dropEntered at index: \(targetIndex)")
         dlog(
@@ -939,26 +1351,26 @@ struct TabDropDelegate: DropDelegate {
             "hasActive=\(controller.activeDragTab != nil ? 1 : 0)"
         )
         #endif
-        dropLifecycle = .hovering
-        if shouldSuppressIndicatorForNoopSamePaneDrop() {
-            dropTargetIndex = nil
-        } else {
-            dropTargetIndex = targetIndex
-        }
+        Self.updateDropState(
+            targetIndex: targetIndex,
+            pane: pane,
+            controller: controller,
+            dropTargetIndex: $dropTargetIndex,
+            dropLifecycle: $dropLifecycle
+        )
     }
 
     func dropExited(info: DropInfo) {
+        let targetIndex = resolveTargetIndex(info.location)
         #if DEBUG
         NSLog("[Bonsplit Drag] dropExited from index: \(targetIndex)")
         dlog("tab.dropExited pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
         #endif
-        dropLifecycle = .idle
-        if dropTargetIndex == targetIndex {
-            dropTargetIndex = nil
-        }
+        Self.clearDropState(dropTargetIndex: $dropTargetIndex, dropLifecycle: $dropLifecycle)
     }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
+        let targetIndex = resolveTargetIndex(info.location)
         // Guard against dropUpdated firing after performDrop/dropExited
         // This is the key fix for the lingering indicator bug
         guard dropLifecycle == .hovering else {
@@ -967,14 +1379,13 @@ struct TabDropDelegate: DropDelegate {
 #endif
             return DropProposal(operation: .move)
         }
-        // Only update if this is the active target, and suppress same-pane no-op indicators.
-        if shouldSuppressIndicatorForNoopSamePaneDrop() {
-            if dropTargetIndex == targetIndex {
-                dropTargetIndex = nil
-            }
-        } else if dropTargetIndex != targetIndex {
-            dropTargetIndex = targetIndex
-        }
+        Self.updateDropState(
+            targetIndex: targetIndex,
+            pane: pane,
+            controller: controller,
+            dropTargetIndex: $dropTargetIndex,
+            dropLifecycle: $dropLifecycle
+        )
 #if DEBUG
         dlog(
             "tab.dropUpdated pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
@@ -985,41 +1396,62 @@ struct TabDropDelegate: DropDelegate {
     }
 
     func validateDrop(info: DropInfo) -> Bool {
-        // Reject drops on inactive workspaces whose views are kept alive in a ZStack.
-        guard controller.isInteractive else {
-#if DEBUG
-            dlog("tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) allowed=0 reason=inactive")
-#endif
-            return false
-        }
-        // The custom UTType alone is sufficient — only Bonsplit tab drags produce it.
-        // Do NOT gate on draggingTab != nil: @Observable changes from createItemProvider
-        // may not have propagated to the drop delegate yet, causing false rejections.
-        let hasType = info.hasItemsConforming(to: [.tabTransfer])
-        guard hasType else { return false }
+        Self.validateDrop(pasteboard: NSPasteboard(name: .drag), controller: controller)
+    }
 
-        // Local drags use in-memory state and are always same-process.
+    fileprivate static func validateDrop(
+        pasteboard: NSPasteboard,
+        controller: SplitViewController
+    ) -> Bool {
+        guard controller.isInteractive else { return false }
+
+        let type = NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)
+        guard pasteboard.availableType(from: [type]) != nil else { return false }
+
         if controller.activeDragTab != nil || controller.draggingTab != nil {
             return true
         }
 
-        // External drags (another Bonsplit controller) must include a payload from this process.
-        guard let transfer = decodeTransfer(from: info),
+        guard let transfer = decodeTransfer(from: pasteboard),
               transfer.isFromCurrentProcess else {
             return false
         }
-#if DEBUG
-        let hasDrag = controller.draggingTab != nil
-        let hasActive = controller.activeDragTab != nil
-        dlog(
-            "tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) " +
-            "allowed=\(hasType ? 1 : 0) hasDrag=\(hasDrag ? 1 : 0) hasActive=\(hasActive ? 1 : 0)"
-        )
-#endif
+
         return true
     }
 
-    private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {
+    fileprivate static func clearDropState(
+        dropTargetIndex: Binding<Int?>,
+        dropLifecycle: Binding<TabDropLifecycle>
+    ) {
+        dropLifecycle.wrappedValue = .idle
+        dropTargetIndex.wrappedValue = nil
+    }
+
+    fileprivate static func updateDropState(
+        targetIndex: Int,
+        pane: PaneState,
+        controller: SplitViewController,
+        dropTargetIndex: Binding<Int?>,
+        dropLifecycle: Binding<TabDropLifecycle>
+    ) {
+        dropLifecycle.wrappedValue = .hovering
+        if shouldSuppressIndicatorForNoopSamePaneDrop(
+            targetIndex: targetIndex,
+            pane: pane,
+            controller: controller
+        ) {
+            dropTargetIndex.wrappedValue = nil
+        } else if dropTargetIndex.wrappedValue != targetIndex {
+            dropTargetIndex.wrappedValue = targetIndex
+        }
+    }
+
+    fileprivate static func shouldSuppressIndicatorForNoopSamePaneDrop(
+        targetIndex: Int,
+        pane: PaneState,
+        controller: SplitViewController
+    ) -> Bool {
         guard let draggedTab = controller.draggingTab,
               controller.dragSourcePaneId == pane.id,
               let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else {
@@ -1030,7 +1462,7 @@ struct TabDropDelegate: DropDelegate {
         return targetIndex == sourceIndex || targetIndex == sourceIndex + 1
     }
 
-    private func decodeTransfer(from string: String) -> TabTransferData? {
+    private static func decodeTransfer(from string: String) -> TabTransferData? {
         guard let data = string.data(using: .utf8),
               let transfer = try? JSONDecoder().decode(TabTransferData.self, from: data) else {
             return nil
@@ -1038,8 +1470,7 @@ struct TabDropDelegate: DropDelegate {
         return transfer
     }
 
-    private func decodeTransfer(from info: DropInfo) -> TabTransferData? {
-        let pasteboard = NSPasteboard(name: .drag)
+    private static func decodeTransfer(from pasteboard: NSPasteboard) -> TabTransferData? {
         let type = NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)
         if let data = pasteboard.data(forType: type),
            let transfer = try? JSONDecoder().decode(TabTransferData.self, from: data) {
@@ -1049,5 +1480,21 @@ struct TabDropDelegate: DropDelegate {
             return decodeTransfer(from: raw)
         }
         return nil
+    }
+
+    fileprivate static func resolvedTargetIndex(
+        for location: CGPoint,
+        frames: [TabDropFrame],
+        fallbackCount: Int
+    ) -> Int {
+        guard !frames.isEmpty else { return fallbackCount }
+
+        for frame in frames {
+            if location.x < frame.frame.midX {
+                return frame.index
+            }
+        }
+
+        return fallbackCount
     }
 }

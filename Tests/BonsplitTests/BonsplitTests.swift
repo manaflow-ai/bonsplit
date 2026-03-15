@@ -4,6 +4,36 @@ import AppKit
 import SwiftUI
 
 final class BonsplitTests: XCTestCase {
+    func testTabBarLeadingTrafficLightInsetKeepsFullClearanceWhenTabBarStartsAtWindowEdge() {
+        XCTAssertEqual(
+            tabBarLeadingTrafficLightInset(
+                trafficLightMaxX: 64,
+                tabBarMinXInWindow: 0
+            ),
+            78
+        )
+    }
+
+    func testTabBarLeadingTrafficLightInsetDropsToZeroWhenTabBarStartsRightOfTrafficLights() {
+        XCTAssertEqual(
+            tabBarLeadingTrafficLightInset(
+                trafficLightMaxX: 64,
+                tabBarMinXInWindow: 220
+            ),
+            0
+        )
+    }
+
+    func testTabBarLeadingTrafficLightInsetKeepsOnlyRemainingOverlapClearance() {
+        XCTAssertEqual(
+            tabBarLeadingTrafficLightInset(
+                trafficLightMaxX: 64,
+                tabBarMinXInWindow: 40
+            ),
+            38
+        )
+    }
+
     @MainActor
     private final class LayoutProbeView: NSView {
         private(set) var sizeChangeCount = 0

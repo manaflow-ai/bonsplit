@@ -45,7 +45,9 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
 }
 
 /// Container NSView for a pane inside SinglePaneWrapper.
-class PaneDragContainerView: NSView {}
+class PaneDragContainerView: NSView {
+    override var mouseDownCanMoveWindow: Bool { false }
+}
 
 /// Wrapper that uses NSHostingController for proper AppKit layout constraints
 struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable {
@@ -66,7 +68,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             showSplitButtons: showSplitButtons,
             contentViewLifecycle: contentViewLifecycle
         )
-        let hostingController = NSHostingController(rootView: paneView)
+        let hostingController = BonsplitHostingController(rootView: paneView)
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
         let containerView = PaneDragContainerView()
@@ -110,6 +112,6 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     }
 
     class Coordinator {
-        var hostingController: NSHostingController<PaneContainerView<Content, EmptyContent>>?
+        var hostingController: BonsplitHostingController<PaneContainerView<Content, EmptyContent>>?
     }
 }

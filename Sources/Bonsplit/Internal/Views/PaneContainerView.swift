@@ -2,6 +2,142 @@ import SwiftUI
 import UniformTypeIdentifiers
 import AppKit
 
+private final class TabBarInteractionContainerView: NSView {
+    private var eventMonitor: Any?
+    private weak var monitoredWindow: NSWindow?
+    private var previousWindowMovableState: Bool?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func isAccessibilityElement() -> Bool { true }
+    override func accessibilityRole() -> NSAccessibility.Role? { .group }
+
+    deinit {
+        removeEventMonitor()
+        restoreWindowDraggingIfNeeded()
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        if window !== monitoredWindow {
+            removeEventMonitor()
+            monitoredWindow = window
+            installEventMonitor()
+        }
+
+        if window == nil {
+            restoreWindowDraggingIfNeeded()
+        }
+    }
+
+    private func installEventMonitor() {
+        guard eventMonitor == nil else { return }
+        eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+            self?.handleLocalMouseEvent(event) ?? event
+        }
+    }
+
+    private func removeEventMonitor() {
+        guard let eventMonitor else { return }
+        NSEvent.removeMonitor(eventMonitor)
+        self.eventMonitor = nil
+    }
+
+    private func handleLocalMouseEvent(_ event: NSEvent) -> NSEvent? {
+        guard let window = monitoredWindow else {
+            return event
+        }
+
+        if event.window !== window {
+            if event.type == .leftMouseUp {
+                restoreWindowDraggingIfNeeded()
+            }
+            return event
+        }
+
+        let point = convert(event.locationInWindow, from: nil)
+        switch event.type {
+        case .leftMouseDown:
+            if bounds.contains(point), !hitTestRoutesToWindowDragRegion(at: point) {
+                suppressWindowDraggingIfNeeded(window: window)
+            }
+        case .leftMouseDragged:
+            if previousWindowMovableState == nil, bounds.contains(point), !hitTestRoutesToWindowDragRegion(at: point) {
+                suppressWindowDraggingIfNeeded(window: window)
+            }
+        case .leftMouseUp:
+            restoreWindowDraggingIfNeeded()
+        default:
+            break
+        }
+
+        return event
+    }
+
+    private func hitTestRoutesToWindowDragRegion(at point: NSPoint) -> Bool {
+        guard let hitView = super.hitTest(point) else { return false }
+        var current: NSView? = hitView
+        while let view = current {
+            if view is TabBarWindowDragRegionView {
+                return true
+            }
+            current = view.superview
+        }
+        return false
+    }
+
+    private func suppressWindowDraggingIfNeeded(window: NSWindow) {
+        guard previousWindowMovableState == nil else { return }
+        previousWindowMovableState = window.isMovable
+        if window.isMovable {
+            window.isMovable = false
+        }
+    }
+
+    private func restoreWindowDraggingIfNeeded() {
+        guard let previousWindowMovableState else { return }
+        monitoredWindow?.isMovable = previousWindowMovableState
+        self.previousWindowMovableState = nil
+    }
+}
+
+private struct TabBarHostingWrapper<Content: View>: NSViewRepresentable {
+    let content: Content
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let containerView = TabBarInteractionContainerView()
+        containerView.setAccessibilityElement(true)
+        containerView.setAccessibilityIdentifier("paneTabBar")
+
+        let hostingView = BonsplitHostingView(rootView: content)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.setAccessibilityElement(false)
+        containerView.addSubview(hostingView)
+
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+        ])
+
+        context.coordinator.hostingView = hostingView
+        return containerView
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.hostingView?.rootView = content
+    }
+
+    final class Coordinator {
+        var hostingView: BonsplitHostingView<Content>?
+    }
+}
+
 /// Drop zone positions for creating splits
 public enum DropZone: Equatable {
     case center
@@ -174,10 +310,12 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             // Tab bar
-            TabBarView(
-                pane: pane,
-                isFocused: isFocused,
-                showSplitButtons: showSplitButtons
+            TabBarHostingWrapper(
+                content: TabBarView(
+                    pane: pane,
+                    isFocused: isFocused,
+                    showSplitButtons: showSplitButtons
+                )
             )
 
             // Content area with drop zones
