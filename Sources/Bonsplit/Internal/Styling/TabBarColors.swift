@@ -49,11 +49,18 @@ enum TabBarColors {
     }
 
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor))
+        let color = effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
+        // When the background has transparency (from Ghostty background-opacity), the terminal
+        // renderer already draws translucent backgrounds. Adding another translucent layer here
+        // causes alpha stacking that makes the result appear nearly opaque.
+        if color.alphaComponent < 0.999 { return Color.clear }
+        return Color(nsColor: color)
     }
 
     static func nsColorPaneBackground(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
+        let color = effectiveBackgroundColor(for: appearance, fallback: .textBackgroundColor)
+        if color.alphaComponent < 0.999 { return .clear }
+        return color
     }
 
     // MARK: - Tab Bar Background
