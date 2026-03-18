@@ -12,6 +12,113 @@ private struct SelectedTabFramePreferenceKey: PreferenceKey {
     }
 }
 
+func tabBarLeadingTrafficLightInset(
+    trafficLightMaxX: CGFloat,
+    tabBarMinXInWindow: CGFloat,
+    trailingPadding: CGFloat = 14
+) -> CGFloat {
+    max(0, trafficLightMaxX + trailingPadding - tabBarMinXInWindow)
+}
+
+final class TabBarLeadingInsetPassthroughView: NSView {
+    var onInsetChange: ((CGFloat) -> Void)?
+
+    private weak var observedWindow: NSWindow?
+    private var observers: [NSObjectProtocol] = []
+    private var lastPublishedInset: CGFloat?
+
+    override var mouseDownCanMoveWindow: Bool { false }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window !== observedWindow {
+            reinstallObservers(for: window)
+        }
+        publishInsetIfNeeded()
+    }
+
+    override func layout() {
+        super.layout()
+        publishInsetIfNeeded()
+    }
+
+    deinit {
+        removeObservers()
+    }
+
+    func publishInsetIfNeeded() {
+        guard let window = self.window ?? observedWindow else { return }
+
+        let buttonTypes: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+        let trafficLightMaxX = buttonTypes
+            .compactMap { window.standardWindowButton($0)?.frame.maxX }
+            .max() ?? 0
+        let frameInWindow = convert(bounds, to: nil)
+        let inset = tabBarLeadingTrafficLightInset(
+            trafficLightMaxX: trafficLightMaxX,
+            tabBarMinXInWindow: frameInWindow.minX
+        )
+        guard lastPublishedInset == nil || abs((lastPublishedInset ?? 0) - inset) > 0.5 else {
+            return
+        }
+        lastPublishedInset = inset
+        onInsetChange?(inset)
+    }
+
+    private func reinstallObservers(for window: NSWindow?) {
+        removeObservers()
+        observedWindow = window
+        guard let window else { return }
+
+        let center = NotificationCenter.default
+        let names: [Notification.Name] = [
+            NSWindow.didResizeNotification,
+            NSWindow.didEndLiveResizeNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didBecomeMainNotification,
+        ]
+        observers = names.map { name in
+            center.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                self?.publishInsetIfNeeded()
+            }
+        }
+    }
+
+    private func removeObservers() {
+        let center = NotificationCenter.default
+        for observer in observers {
+            center.removeObserver(observer)
+        }
+        observers.removeAll()
+    }
+}
+
+private struct TabBarLeadingInsetReader: NSViewRepresentable {
+    @Binding var inset: CGFloat
+
+    func makeNSView(context: Context) -> NSView {
+        let view = TabBarLeadingInsetPassthroughView()
+        view.setFrameSize(.zero)
+        view.onInsetChange = { nextInset in
+            if abs(nextInset - inset) > 0.5 {
+                inset = nextInset
+            }
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let view = nsView as? TabBarLeadingInsetPassthroughView else { return }
+        view.onInsetChange = { nextInset in
+            if abs(nextInset - inset) > 0.5 {
+                inset = nextInset
+            }
+        }
+        view.publishInsetIfNeeded()
+    }
+}
+
 enum TabBarStyling {
     static func separatorSegments(
         totalWidth: CGFloat,
@@ -71,7 +178,11 @@ struct TabBarView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var containerWidth: CGFloat = 0
     @State private var selectedTabFrameInBar: CGRect?
+    @State private var isHoveringTabBar = false
+    @State private var leadingTrafficLightInset: CGFloat = 78
     @StateObject private var controlKeyMonitor = TabControlShortcutKeyMonitor()
+    @AppStorage("workspacePresentationMode")
+    private var workspacePresentationMode = "standard"
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -98,6 +209,24 @@ struct TabBarView: View {
         isFocused && controlKeyMonitor.isShortcutHintVisible
     }
 
+    private var isMinimalMode: Bool {
+        workspacePresentationMode == "minimal"
+    }
+
+    private var shouldShowSplitButtonsNow: Bool {
+        !isMinimalMode || isHoveringTabBar
+    }
+
+    private var effectiveLeadingInset: CGFloat {
+        isMinimalMode ? leadingTrafficLightInset : 0
+    }
+
+    private func handleEmptyTabBarDoubleClick() -> Bool {
+        guard splitViewController.isInteractive, !isMinimalMode else { return false }
+        controller.requestNewTab(kind: "terminal", inPane: pane.id)
+        return true
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             // Scrollable tabs with fade overlays
@@ -115,7 +244,8 @@ struct TabBarView: View {
                             // supports dropping after the last tab.
                             dropZoneAfterTabs
                         }
-                        .padding(.horizontal, TabBarMetrics.barPadding)
+                        .padding(.leading, TabBarMetrics.barPadding + effectiveLeadingInset)
+                        .padding(.trailing, TabBarMetrics.barPadding)
                         // Keep tab insert/remove/reorder instant without suppressing unrelated
                         // subtree animations (for example, shortcut-hint fades).
                         .animation(nil, value: pane.tabs.map(\.id))
@@ -143,11 +273,7 @@ struct TabBarView: View {
                                 .frame(width: trailing, height: TabBarMetrics.tabHeight)
                                 .contentShape(Rectangle())
                                 .background(
-                                    EmptyTabBarDoubleClickMonitorView {
-                                        guard splitViewController.isInteractive else { return false }
-                                        controller.requestNewTab(kind: "terminal", inPane: pane.id)
-                                        return true
-                                    }
+                                    TabBarWindowDragRegion(onDoubleClick: handleEmptyTabBarDoubleClick)
                                 )
                                 .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                                     targetIndex: pane.tabs.count,
@@ -187,17 +313,24 @@ struct TabBarView: View {
             if showSplitButtons {
                 splitButtons
                     .saturation(tabBarSaturation)
+                    .opacity(shouldShowSplitButtonsNow ? 1 : 0)
+                    .allowsHitTesting(shouldShowSplitButtonsNow)
+                    .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: shouldShowSplitButtonsNow)
             }
         }
         .frame(height: TabBarMetrics.barHeight)
         .coordinateSpace(name: "tabBar")
         .contentShape(Rectangle())
+        .accessibilityIdentifier("paneTabBar")
         .background(tabBarBackground)
         .background(
             TabBarHostWindowReader { window in
                 controlKeyMonitor.setHostWindow(window)
             }
             .frame(width: 0, height: 0)
+        )
+        .background(
+            TabBarLeadingInsetReader(inset: $leadingTrafficLightInset)
         )
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: splitViewController.draggingTab) { _, newValue in
@@ -221,6 +354,9 @@ struct TabBarView: View {
         }
         .onDisappear {
             controlKeyMonitor.stop()
+        }
+        .onHover { hovering in
+            isHoveringTabBar = hovering
         }
     }
 
@@ -427,11 +563,7 @@ struct TabBarView: View {
             .frame(width: 30, height: TabBarMetrics.tabHeight)
             .contentShape(Rectangle())
             .background(
-                EmptyTabBarDoubleClickMonitorView {
-                    guard splitViewController.isInteractive else { return false }
-                    controller.requestNewTab(kind: "terminal", inPane: pane.id)
-                    return true
-                }
+                TabBarWindowDragRegion(onDoubleClick: handleEmptyTabBarDoubleClick)
             )
             .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
                 targetIndex: pane.tabs.count,
@@ -457,6 +589,8 @@ struct TabBarView: View {
             .fill(TabBarColors.dropIndicator(for: appearance))
             .frame(width: TabBarMetrics.dropIndicatorWidth, height: TabBarMetrics.dropIndicatorHeight)
             .offset(x: -1)
+            .accessibilityElement(children: .ignore)
+            .accessibilityIdentifier("paneTabBar.dropIndicator")
     }
 
     // MARK: - Split Buttons
@@ -472,6 +606,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.newTerminal")
             .safeHelp(tooltips.newTerminal)
 
             Button {
@@ -481,6 +616,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.newBrowser")
             .safeHelp(tooltips.newBrowser)
 
             Button {
@@ -491,6 +627,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.splitRight")
             .safeHelp(tooltips.splitRight)
 
             Button {
@@ -501,6 +638,7 @@ struct TabBarView: View {
                     .font(.system(size: 12))
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
+            .accessibilityIdentifier("paneTabBarControl.splitDown")
             .safeHelp(tooltips.splitDown)
         }
         .padding(.trailing, 8)
@@ -585,53 +723,6 @@ private struct SplitActionButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
-    }
-}
-
-private struct EmptyTabBarDoubleClickMonitorView: NSViewRepresentable {
-    let onDoubleClick: () -> Bool
-
-    final class Coordinator {
-        var onDoubleClick: (() -> Bool)?
-        weak var view: NSView?
-        var monitor: Any?
-
-        deinit {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-
-        context.coordinator.view = view
-        context.coordinator.onDoubleClick = onDoubleClick
-
-        let coordinator = context.coordinator
-        coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak coordinator] event in
-            guard event.clickCount >= 2 else { return event }
-            guard let coordinator, let view = coordinator.view, let window = view.window else { return event }
-            guard event.window === window else { return event }
-
-            let point = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(point) else { return event }
-
-            guard coordinator.onDoubleClick?() == true else { return event }
-            return nil
-        }
-
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.view = nsView
-        context.coordinator.onDoubleClick = onDoubleClick
     }
 }
 

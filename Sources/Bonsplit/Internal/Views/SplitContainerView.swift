@@ -356,14 +356,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
     // MARK: - Helpers
 
-    private func makeHostingController(for node: SplitNode) -> NSHostingController<AnyView> {
-        let hostingController = NSHostingController(rootView: AnyView(makeView(for: node)))
-        if #available(macOS 13.0, *) {
-            // NSSplitView owns pane geometry. Keep NSHostingController from publishing
-            // intrinsic-size constraints that force a minimum pane width.
-            hostingController.sizingOptions = []
-        }
-
+    private func makeHostingController(for node: SplitNode) -> BonsplitHostingController<AnyView> {
+        let hostingController = BonsplitHostingController(rootView: AnyView(makeView(for: node)))
         let hostedView = hostingController.view
         // NSSplitView lays out arranged subviews by setting frames. Leaving Auto Layout
         // enabled on these NSHostingViews can allow them to compress to 0 during
@@ -379,7 +373,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         return hostingController
     }
 
-    private func installHostingController(_ hostingController: NSHostingController<AnyView>, into container: NSView) {
+    private func installHostingController(_ hostingController: BonsplitHostingController<AnyView>, into container: NSView) {
         let hostedView = hostingController.view
         hostedView.frame = container.bounds
         hostedView.autoresizingMask = [.width, .height]
@@ -392,7 +386,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         in container: NSView,
         node: SplitNode,
         nodeTypeChanged: Bool,
-        controller: inout NSHostingController<AnyView>?
+        controller: inout BonsplitHostingController<AnyView>?
     ) {
         // Historically we recreated the NSHostingController when the child node type changed
         // (pane <-> split) to force a full detach/reattach of native AppKit subviews.
@@ -469,8 +463,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var firstNodeType: SplitNode.NodeType
         var secondNodeType: SplitNode.NodeType
         /// Retain hosting controllers so SwiftUI content stays alive
-        var firstHostingController: NSHostingController<AnyView>?
-        var secondHostingController: NSHostingController<AnyView>?
+        var firstHostingController: BonsplitHostingController<AnyView>?
+        var secondHostingController: BonsplitHostingController<AnyView>?
 
         init(
             splitState: SplitState,
