@@ -636,16 +636,16 @@ private struct EmptyTabBarDoubleClickMonitorView: NSViewRepresentable {
 }
 
 enum TabControlShortcutModifier: Equatable {
-    case control
-    case command
+    /// The modifier flags the user is holding.
+    case flags(NSEvent.ModifierFlags)
 
     var symbol: String {
+        TabControlShortcutHintPolicy.symbolString(for: resolvedFlags)
+    }
+
+    private var resolvedFlags: NSEvent.ModifierFlags {
         switch self {
-        case .control:
-            return "⌃"
-        case .command:
-            // Command-hold can reveal pane hints, but pane navigation itself is control-based.
-            return "⌃"
+        case .flags(let f): return f
         }
     }
 }
@@ -654,6 +654,12 @@ enum TabControlShortcutHintPolicy {
     static let intentionalHoldDelay: TimeInterval = 0.30
     static let showHintsOnCommandHoldKey = "shortcutHintShowOnCommandHold"
     static let defaultShowHintsOnCommandHold = true
+
+    // Keys shared with the host app's DigitShortcutModifierSettings.
+    private static let workspaceModifierKey = "digitShortcutWorkspaceModifierFlags"
+    private static let surfaceModifierKey = "digitShortcutSurfaceModifierFlags"
+    private static let defaultSurfaceFlags: NSEvent.ModifierFlags = [.control]
+    private static let defaultWorkspaceFlags: NSEvent.ModifierFlags = [.command]
 
     static func showHintsOnCommandHoldEnabled(defaults: UserDefaults = .standard) -> Bool {
         guard defaults.object(forKey: showHintsOnCommandHoldKey) != nil else {
@@ -668,8 +674,12 @@ enum TabControlShortcutHintPolicy {
     ) -> TabControlShortcutModifier? {
         guard showHintsOnCommandHoldEnabled(defaults: defaults) else { return nil }
         let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
-        if flags == [.control] { return .control }
-        if flags == [.command] { return .command }
+        let surfaceFlags = resolvedSurfaceFlags(defaults: defaults)
+        let workspaceFlags = resolvedWorkspaceFlags(defaults: defaults)
+        // Surface modifier triggers pane-tab hints; workspace modifier also
+        // triggers them so the user sees all digit hints at once.
+        if flags == surfaceFlags { return .flags(surfaceFlags) }
+        if flags == workspaceFlags { return .flags(workspaceFlags) }
         return nil
     }
 
@@ -702,6 +712,34 @@ enum TabControlShortcutHintPolicy {
                 keyWindowNumber: keyWindowNumber
             )
     }
+
+    // MARK: - Helpers
+
+    /// The symbol for the configured surface modifier (shown on pane-tab hint pills).
+    static func surfaceModifierSymbol(defaults: UserDefaults = .standard) -> String {
+        symbolString(for: resolvedSurfaceFlags(defaults: defaults))
+    }
+
+    static func symbolString(for flags: NSEvent.ModifierFlags) -> String {
+        var parts: [String] = []
+        if flags.contains(.control) { parts.append("⌃") }
+        if flags.contains(.option) { parts.append("⌥") }
+        if flags.contains(.shift) { parts.append("⇧") }
+        if flags.contains(.command) { parts.append("⌘") }
+        return parts.joined()
+    }
+
+    private static func resolvedSurfaceFlags(defaults: UserDefaults) -> NSEvent.ModifierFlags {
+        let raw = defaults.integer(forKey: surfaceModifierKey)
+        guard raw != 0 else { return defaultSurfaceFlags }
+        return NSEvent.ModifierFlags(rawValue: UInt(raw)).intersection(.deviceIndependentFlagsMask)
+    }
+
+    private static func resolvedWorkspaceFlags(defaults: UserDefaults) -> NSEvent.ModifierFlags {
+        let raw = defaults.integer(forKey: workspaceModifierKey)
+        guard raw != 0 else { return defaultWorkspaceFlags }
+        return NSEvent.ModifierFlags(rawValue: UInt(raw)).intersection(.deviceIndependentFlagsMask)
+    }
 }
 
 private struct TabBarHostWindowReader: NSViewRepresentable {
@@ -725,7 +763,7 @@ private struct TabBarHostWindowReader: NSViewRepresentable {
 @MainActor
 private final class TabControlShortcutKeyMonitor: ObservableObject {
     @Published private(set) var isShortcutHintVisible = false
-    @Published private(set) var shortcutModifierSymbol = "⌃"
+    @Published private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.surfaceModifierSymbol()
 
     private weak var hostWindow: NSWindow?
     private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
@@ -842,7 +880,7 @@ private final class TabControlShortcutKeyMonitor: ObservableObject {
         }
 
         if isShortcutHintVisible {
-            shortcutModifierSymbol = modifier.symbol
+            shortcutModifierSymbol = TabControlShortcutHintPolicy.surfaceModifierSymbol()
             return
         }
 
@@ -867,8 +905,8 @@ private final class TabControlShortcutKeyMonitor: ObservableObject {
                 eventWindowNumber: nil,
                 keyWindowNumber: NSApp.keyWindow?.windowNumber
             ) else { return }
-            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(for: NSEvent.modifierFlags) else { return }
-            self.shortcutModifierSymbol = currentModifier.symbol
+            guard TabControlShortcutHintPolicy.hintModifier(for: NSEvent.modifierFlags) != nil else { return }
+            self.shortcutModifierSymbol = TabControlShortcutHintPolicy.surfaceModifierSymbol()
             withAnimation(.easeInOut(duration: 0.14)) {
                 self.isShortcutHintVisible = true
             }
