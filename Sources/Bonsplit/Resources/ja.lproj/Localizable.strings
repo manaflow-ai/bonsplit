@@ -1,2 +1,21 @@
+/* Tab context menu */
+"tab.contextMenu.rename" = "タブ名を変更…";
+"tab.contextMenu.removeCustomName" = "カスタムタブ名を削除";
+"tab.contextMenu.closeToLeft" = "左側のタブを閉じる";
+"tab.contextMenu.closeToRight" = "右側のタブを閉じる";
+"tab.contextMenu.closeOthers" = "他のタブを閉じる";
+"tab.contextMenu.move" = "タブを移動…";
+"tab.contextMenu.newTerminalToRight" = "右にターミナルタブを追加";
+"tab.contextMenu.newBrowserToRight" = "右にブラウザタブを追加";
+"tab.contextMenu.reload" = "タブを再読み込み";
+"tab.contextMenu.duplicate" = "タブを複製";
+"tab.contextMenu.zoomPane" = "ペインをズーム";
+"tab.contextMenu.exitZoom" = "ズームを解除";
+"tab.contextMenu.pinTab" = "タブを固定";
+"tab.contextMenu.unpinTab" = "タブの固定を解除";
+"tab.contextMenu.markAsRead" = "タブを既読にする";
+"tab.contextMenu.markAsUnread" = "タブを未読にする";
+
+/* Move to pane */
 "command.moveTabToLeftPane.title" = "左のペインへ移動";
 "command.moveTabToRightPane.title" = "右のペインへ移動";

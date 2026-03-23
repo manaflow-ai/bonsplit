@@ -323,24 +323,24 @@ struct TabItemView: View {
 
     @ViewBuilder
     private var contextMenuContent: some View {
-        contextButton("Rename Tab…", action: .rename)
+        localizedContextButton("tab.contextMenu.rename", defaultValue: "Rename Tab…", action: .rename)
 
         if contextMenuState.hasCustomTitle {
-            contextButton("Remove Custom Tab Name", action: .clearName)
+            localizedContextButton("tab.contextMenu.removeCustomName", defaultValue: "Remove Custom Tab Name", action: .clearName)
         }
 
         Divider()
 
-        contextButton("Close Tabs to Left", action: .closeToLeft)
+        localizedContextButton("tab.contextMenu.closeToLeft", defaultValue: "Close Tabs to Left", action: .closeToLeft)
             .disabled(!contextMenuState.canCloseToLeft)
 
-        contextButton("Close Tabs to Right", action: .closeToRight)
+        localizedContextButton("tab.contextMenu.closeToRight", defaultValue: "Close Tabs to Right", action: .closeToRight)
             .disabled(!contextMenuState.canCloseToRight)
 
-        contextButton("Close Other Tabs", action: .closeOthers)
+        localizedContextButton("tab.contextMenu.closeOthers", defaultValue: "Close Other Tabs", action: .closeOthers)
             .disabled(!contextMenuState.canCloseOthers)
 
-        contextButton("Move Tab…", action: .move)
+        localizedContextButton("tab.contextMenu.move", defaultValue: "Move Tab…", action: .move)
 
         if contextMenuState.isTerminal {
             localizedContextButton(
@@ -360,37 +360,39 @@ struct TabItemView: View {
 
         Divider()
 
-        contextButton("New Terminal Tab to Right", action: .newTerminalToRight)
+        localizedContextButton("tab.contextMenu.newTerminalToRight", defaultValue: "New Terminal Tab to Right", action: .newTerminalToRight)
 
-        contextButton("New Browser Tab to Right", action: .newBrowserToRight)
+        localizedContextButton("tab.contextMenu.newBrowserToRight", defaultValue: "New Browser Tab to Right", action: .newBrowserToRight)
 
         if contextMenuState.isBrowser {
             Divider()
 
-            contextButton("Reload Tab", action: .reload)
+            localizedContextButton("tab.contextMenu.reload", defaultValue: "Reload Tab", action: .reload)
 
-            contextButton("Duplicate Tab", action: .duplicate)
+            localizedContextButton("tab.contextMenu.duplicate", defaultValue: "Duplicate Tab", action: .duplicate)
         }
 
         Divider()
 
         if contextMenuState.hasSplits {
-            contextButton(
-                contextMenuState.isZoomed ? "Exit Zoom" : "Zoom Pane",
+            localizedContextButton(
+                contextMenuState.isZoomed ? "tab.contextMenu.exitZoom" : "tab.contextMenu.zoomPane",
+                defaultValue: contextMenuState.isZoomed ? "Exit Zoom" : "Zoom Pane",
                 action: .toggleZoom
             )
         }
 
-        contextButton(
-            contextMenuState.isPinned ? "Unpin Tab" : "Pin Tab",
+        localizedContextButton(
+            contextMenuState.isPinned ? "tab.contextMenu.unpinTab" : "tab.contextMenu.pinTab",
+            defaultValue: contextMenuState.isPinned ? "Unpin Tab" : "Pin Tab",
             action: .togglePin
         )
 
         if contextMenuState.isUnread {
-            contextButton("Mark Tab as Read", action: .markAsRead)
+            localizedContextButton("tab.contextMenu.markAsRead", defaultValue: "Mark Tab as Read", action: .markAsRead)
                 .disabled(!contextMenuState.canMarkAsRead)
         } else {
-            contextButton("Mark Tab as Unread", action: .markAsUnread)
+            localizedContextButton("tab.contextMenu.markAsUnread", defaultValue: "Mark Tab as Unread", action: .markAsUnread)
                 .disabled(!contextMenuState.canMarkAsUnread)
         }
     }
