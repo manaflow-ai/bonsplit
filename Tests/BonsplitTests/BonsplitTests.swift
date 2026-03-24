@@ -76,6 +76,14 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    private func preferredTabTitleTestFontFamily() throws -> String {
+        let candidates = ["Helvetica", "Avenir", "Menlo", "Courier", "Times New Roman"]
+        if let family = candidates.first(where: { NSFontManager.shared.availableFontFamilies.contains($0) }) {
+            return family
+        }
+        throw XCTSkip("No stable tab title test font family available on this machine")
+    }
+
     @MainActor
     func testControllerCreation() {
         let controller = BonsplitController()
@@ -200,6 +208,53 @@ final class BonsplitTests: XCTestCase {
         let controller = BonsplitController(configuration: config)
 
         XCTAssertEqual(controller.configuration.appearance.splitButtonTooltips, customTooltips)
+    }
+
+    @MainActor
+    func testAppearanceDefaultsLeaveTabTitleTypographyUnchanged() {
+        let appearance = BonsplitConfiguration.Appearance()
+
+        XCTAssertNil(appearance.tabTitleFontFamily)
+        XCTAssertEqual(appearance.tabTitleFontScale, 1.0, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testDefaultTabTitleTypographyResolvesToSystemFont() {
+        let resolved = TabBarTypography.resolvedTitleNSFont(for: .init())
+        let expected = NSFont.systemFont(ofSize: TabBarMetrics.titleFontSize)
+
+        XCTAssertEqual(resolved.fontName, expected.fontName)
+        XCTAssertEqual(resolved.familyName, expected.familyName)
+        XCTAssertEqual(resolved.pointSize, expected.pointSize, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testAppearanceStoresTabTitleTypographyOverrides() {
+        let appearance = BonsplitConfiguration.Appearance(
+            tabTitleFontFamily: "Helvetica",
+            tabTitleFontScale: 1.25
+        )
+
+        XCTAssertEqual(appearance.tabTitleFontFamily, "Helvetica")
+        XCTAssertEqual(appearance.tabTitleFontScale, 1.25, accuracy: 0.0001)
+    }
+
+    @MainActor
+    func testTitleFontScaleChangesResolvedPointSize() {
+        let baseFont = TabBarTypography.resolvedTitleNSFont(for: .init())
+        let scaledFont = TabBarTypography.resolvedTitleNSFont(for: .init(tabTitleFontScale: 1.5))
+
+        XCTAssertEqual(scaledFont.pointSize, baseFont.pointSize * 1.5, accuracy: 0.001)
+    }
+
+    @MainActor
+    func testTitleFontFamilyUsesRequestedFamilyWhenAvailable() throws {
+        let requestedFamily = try preferredTabTitleTestFontFamily()
+        let font = TabBarTypography.resolvedTitleNSFont(
+            for: .init(tabTitleFontFamily: requestedFamily)
+        )
+
+        XCTAssertEqual(font.familyName, requestedFamily)
     }
 
     func testChromeBackgroundHexOverrideParsesForPaneBackground() {
