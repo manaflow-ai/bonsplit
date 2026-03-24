@@ -248,6 +248,18 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTitleFontScaleFallsBackToDefaultForNonFiniteValues() {
+        let expected = NSFont.systemFont(ofSize: TabBarMetrics.titleFontSize)
+        let infinityFont = TabBarTypography.resolvedTitleNSFont(for: .init(tabTitleFontScale: .infinity))
+        let negativeInfinityFont = TabBarTypography.resolvedTitleNSFont(for: .init(tabTitleFontScale: -.infinity))
+        let nanFont = TabBarTypography.resolvedTitleNSFont(for: .init(tabTitleFontScale: .nan))
+
+        XCTAssertEqual(infinityFont.pointSize, expected.pointSize, accuracy: 0.001)
+        XCTAssertEqual(negativeInfinityFont.pointSize, expected.pointSize, accuracy: 0.001)
+        XCTAssertEqual(nanFont.pointSize, expected.pointSize, accuracy: 0.001)
+    }
+
+    @MainActor
     func testTitleFontFamilyUsesRequestedFamilyWhenAvailable() throws {
         let requestedFamily = try preferredTabTitleTestFontFamily()
         let font = TabBarTypography.resolvedTitleNSFont(

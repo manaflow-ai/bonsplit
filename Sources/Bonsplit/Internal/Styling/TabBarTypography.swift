@@ -7,7 +7,9 @@ enum TabBarTypography {
     }
 
     static func resolvedTitleNSFont(for appearance: BonsplitConfiguration.Appearance) -> NSFont {
-        let scaledSize = max(0.5, appearance.tabTitleFontScale) * TabBarMetrics.titleFontSize
+        let rawScale = appearance.tabTitleFontScale
+        let sanitizedScale = rawScale.isFinite ? max(0.5, rawScale) : 1.0
+        let scaledSize = sanitizedScale * TabBarMetrics.titleFontSize
         return resolvedFont(
             family: appearance.tabTitleFontFamily,
             size: scaledSize,
@@ -44,12 +46,6 @@ enum TabBarTypography {
             return font.fontName
         }
 
-        let systemDescriptor = NSFont.systemFont(ofSize: size, weight: weight).fontDescriptor
-        let familyDescriptor = systemDescriptor.withFamily(family)
-        if let font = NSFont(descriptor: familyDescriptor, size: size),
-           fontMatchesRequestedFamily(font, family: family) {
-            return font.fontName
-        }
         if let font = NSFont(name: family, size: size),
            fontMatchesRequestedFamily(font, family: family) || font.fontName.caseInsensitiveCompare(family) == .orderedSame {
             return font.fontName

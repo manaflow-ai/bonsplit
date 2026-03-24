@@ -190,7 +190,7 @@ extension BonsplitConfiguration {
         public var tabTitleFontFamily: String?
 
         /// Multiplier applied to pane tab title size.
-        /// `1.0` preserves the current size.
+        /// `1.0` preserves the current size. Values below `0.5` are clamped to `0.5`.
         public var tabTitleFontScale: CGFloat
 
         // MARK: - Presets
