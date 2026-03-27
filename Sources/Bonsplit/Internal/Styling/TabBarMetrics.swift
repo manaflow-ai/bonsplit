@@ -4,33 +4,33 @@ import Foundation
 enum TabBarMetrics {
     // MARK: - Tab Bar
 
-    static let barHeight: CGFloat = 30
+    static func barHeight(_ scale: CGFloat) -> CGFloat { 30 * scale }
     static let barPadding: CGFloat = 0
 
     // MARK: - Individual Tabs
 
-    static let tabHeight: CGFloat = 30
-    static let tabMinWidth: CGFloat = 48
-    static let tabMaxWidth: CGFloat = 220
+    static func tabHeight(_ scale: CGFloat) -> CGFloat { 30 * scale }
+    static func tabMinWidth(_ scale: CGFloat) -> CGFloat { 48 * scale }
+    static func tabMaxWidth(_ scale: CGFloat) -> CGFloat { 220 * scale }
     static let tabCornerRadius: CGFloat = 0
-    static let tabHorizontalPadding: CGFloat = 6
+    static func tabHorizontalPadding(_ scale: CGFloat) -> CGFloat { 6 * scale }
     static let tabSpacing: CGFloat = 0
-    static let activeIndicatorHeight: CGFloat = 2
+    static func activeIndicatorHeight(_ scale: CGFloat) -> CGFloat { 2 * scale }
 
     // MARK: - Tab Content
 
-    static let iconSize: CGFloat = 14
-    static let titleFontSize: CGFloat = 11
-    static let closeButtonSize: CGFloat = 16
-    static let closeIconSize: CGFloat = 9
-    static let dirtyIndicatorSize: CGFloat = 8
-    static let notificationBadgeSize: CGFloat = 6
-    static let contentSpacing: CGFloat = 6
+    static func iconSize(_ scale: CGFloat) -> CGFloat { 14 * scale }
+    static func titleFontSize(_ scale: CGFloat) -> CGFloat { 11 * scale }
+    static func closeButtonSize(_ scale: CGFloat) -> CGFloat { 16 * scale }
+    static func closeIconSize(_ scale: CGFloat) -> CGFloat { 9 * scale }
+    static func dirtyIndicatorSize(_ scale: CGFloat) -> CGFloat { 8 * scale }
+    static func notificationBadgeSize(_ scale: CGFloat) -> CGFloat { 6 * scale }
+    static func contentSpacing(_ scale: CGFloat) -> CGFloat { 6 * scale }
 
     // MARK: - Drop Indicator
 
-    static let dropIndicatorWidth: CGFloat = 2
-    static let dropIndicatorHeight: CGFloat = 20
+    static func dropIndicatorWidth(_ scale: CGFloat) -> CGFloat { 2 * scale }
+    static func dropIndicatorHeight(_ scale: CGFloat) -> CGFloat { 20 * scale }
 
     // MARK: - Split View
 
