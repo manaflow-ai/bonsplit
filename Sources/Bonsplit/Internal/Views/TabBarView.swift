@@ -80,12 +80,12 @@ struct TabBarView: View {
     }
 
     private var canScrollRight: Bool {
-        // contentWidth includes the 30pt drop zone after tabs. Only show
-        // the fade when actual tab content exceeds the visible area.
-        // Use a generous buffer to avoid false positives from rounding.
-        let tabsOnlyWidth = contentWidth - 30
-        guard tabsOnlyWidth > containerWidth + 4 else { return false }
-        return scrollOffset < tabsOnlyWidth - containerWidth
+        // contentWidth includes the drop zone (30pt) and trailing padding
+        // for floating buttons. Only show the fade for actual tab overflow.
+        let overhead = 30 + splitButtonsWidth
+        let tabsWidth = contentWidth - overhead
+        guard tabsWidth > containerWidth + 4 else { return false }
+        return scrollOffset < tabsWidth - containerWidth
     }
 
     /// Whether this tab bar should show full saturation (focused or drag source)
@@ -106,99 +106,104 @@ struct TabBarView: View {
     }
 
 
-    var body: some View {
-        HStack(spacing: 0) {
-            if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
-                TabBarDragZoneView { return false }
-                    .frame(width: appearance.tabBarLeadingInset)
-            }
-            // Scrollable tabs with fade overlays
-            GeometryReader { containerGeo in
-                ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: TabBarMetrics.tabSpacing) {
-                            ForEach(Array(pane.tabs.enumerated()), id: \.element.id) { index, tab in
-                                tabItem(for: tab, at: index)
-                                    .id(tab.id)
-                            }
+    /// Width of the floating split buttons area (used for scroll view trailing padding).
+    @State private var splitButtonsWidth: CGFloat = 0
 
-                            // Unified drop zone after the last tab. This is at least a small hit
-                            // target (so the user can always drop "after the last tab") and it
-                            // supports dropping after the last tab.
-                            dropZoneAfterTabs
+    var body: some View {
+        // Full-width scroll view with split buttons floating on top.
+        GeometryReader { containerGeo in
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: TabBarMetrics.tabSpacing) {
+                        if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
+                            TabBarDragZoneView { return false }
+                                .frame(width: appearance.tabBarLeadingInset)
                         }
-                        .padding(.horizontal, TabBarMetrics.barPadding)
-                        // Keep tab insert/remove/reorder instant without suppressing unrelated
-                        // subtree animations (for example, shortcut-hint fades).
-                        .animation(nil, value: pane.tabs.map(\.id))
-                        .background(
-                            GeometryReader { contentGeo in
-                                Color.clear
-                                    .onChange(of: contentGeo.frame(in: .named("tabScroll"))) { _, newFrame in
-                                        scrollOffset = -newFrame.minX
-                                        contentWidth = newFrame.width
-                                    }
-                                    .onAppear {
-                                        let frame = contentGeo.frame(in: .named("tabScroll"))
-                                        scrollOffset = -frame.minX
-                                        contentWidth = frame.width
-                                    }
-                            }
-                        )
-                    }
-                    // When the tab strip is shorter than the visible area, allow dropping in the
-                    // empty trailing space without forcing tabs to stretch.
-                    .overlay(alignment: .trailing) {
-                        let trailing = max(0, containerGeo.size.width - contentWidth)
-                        if trailing >= 1 {
-                            TabBarDragZoneView {
-                                guard splitViewController.isInteractive else { return false }
-                                controller.requestNewTab(kind: "terminal", inPane: pane.id)
-                                return true
-                            }
-                            .frame(width: trailing, height: TabBarMetrics.tabHeight)
-                            .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
-                                targetIndex: pane.tabs.count,
-                                pane: pane,
-                                bonsplitController: controller,
-                                controller: splitViewController,
-                                dropTargetIndex: $dropTargetIndex,
-                                dropLifecycle: $dropLifecycle
-                            ))
+                        ForEach(Array(pane.tabs.enumerated()), id: \.element.id) { index, tab in
+                            tabItem(for: tab, at: index)
+                                .id(tab.id)
                         }
+
+                        // Unified drop zone after the last tab.
+                        dropZoneAfterTabs
                     }
-                    .coordinateSpace(name: "tabScroll")
-                    .onAppear {
-                        containerWidth = containerGeo.size.width
-                        if let tabId = pane.selectedTabId {
+                    .padding(.horizontal, TabBarMetrics.barPadding)
+                    // Reserve space so tabs don't scroll behind the floating buttons.
+                    .padding(.trailing, splitButtonsWidth)
+                    .animation(nil, value: pane.tabs.map(\.id))
+                    .background(
+                        GeometryReader { contentGeo in
+                            Color.clear
+                                .onChange(of: contentGeo.frame(in: .named("tabScroll"))) { _, newFrame in
+                                    scrollOffset = -newFrame.minX
+                                    contentWidth = newFrame.width
+                                }
+                                .onAppear {
+                                    let frame = contentGeo.frame(in: .named("tabScroll"))
+                                    scrollOffset = -frame.minX
+                                    contentWidth = frame.width
+                                }
+                        }
+                    )
+                }
+                // When the tab strip is shorter than the visible area, allow dropping in the
+                // empty trailing space without forcing tabs to stretch.
+                .overlay(alignment: .trailing) {
+                    let trailing = max(0, containerGeo.size.width - contentWidth)
+                    if trailing >= 1 {
+                        TabBarDragZoneView {
+                            guard splitViewController.isInteractive else { return false }
+                            controller.requestNewTab(kind: "terminal", inPane: pane.id)
+                            return true
+                        }
+                        .frame(width: trailing, height: TabBarMetrics.tabHeight)
+                        .onDrop(of: [.tabTransfer], delegate: TabDropDelegate(
+                            targetIndex: pane.tabs.count,
+                            pane: pane,
+                            bonsplitController: controller,
+                            controller: splitViewController,
+                            dropTargetIndex: $dropTargetIndex,
+                            dropLifecycle: $dropLifecycle
+                        ))
+                    }
+                }
+                .coordinateSpace(name: "tabScroll")
+                .onAppear {
+                    containerWidth = containerGeo.size.width
+                    if let tabId = pane.selectedTabId {
+                        proxy.scrollTo(tabId, anchor: .center)
+                    }
+                }
+                .onChange(of: containerGeo.size.width) { _, newWidth in
+                    containerWidth = newWidth
+                }
+                .onChange(of: pane.selectedTabId) { _, newTabId in
+                    if let tabId = newTabId {
+                        withTransaction(Transaction(animation: nil)) {
                             proxy.scrollTo(tabId, anchor: .center)
                         }
                     }
-                    .onChange(of: containerGeo.size.width) { _, newWidth in
-                        containerWidth = newWidth
-                    }
-                    .onChange(of: pane.selectedTabId) { _, newTabId in
-                        if let tabId = newTabId {
-                            // Keep tab selection changes instant; scrolling to the focused tab should
-                            // not animate (avoids feeling like tabs "linger" during drag/drop).
-                            withTransaction(Transaction(animation: nil)) {
-                                proxy.scrollTo(tabId, anchor: .center)
-                            }
-                        }
-                    }
                 }
-                .frame(height: TabBarMetrics.barHeight)
-                .overlay(fadeOverlays)
             }
-
-            // Split buttons
-            if showSplitButtons {
-                let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                splitButtons
-                    .saturation(tabBarSaturation)
-                    .opacity(shouldShow ? 1 : 0)
-                    .allowsHitTesting(shouldShow)
-                    .animation(.easeInOut(duration: 0.14), value: shouldShow)
+            .frame(height: TabBarMetrics.barHeight)
+            .overlay(fadeOverlays)
+            // Floating split buttons on the trailing edge
+            .overlay(alignment: .trailing) {
+                if showSplitButtons {
+                    let shouldShow = presentationMode != "minimal" || isHoveringTabBar
+                    splitButtons
+                        .saturation(tabBarSaturation)
+                        .opacity(shouldShow ? 1 : 0)
+                        .allowsHitTesting(shouldShow)
+                        .animation(.easeInOut(duration: 0.14), value: shouldShow)
+                        .background(tabBarBackground.opacity(shouldShow ? 1 : 0))
+                        .background(
+                            GeometryReader { geo in
+                                Color.clear.onAppear { splitButtonsWidth = geo.size.width }
+                                    .onChange(of: geo.size.width) { _, w in splitButtonsWidth = w }
+                            }
+                        )
+                }
             }
         }
         .frame(height: TabBarMetrics.barHeight)
