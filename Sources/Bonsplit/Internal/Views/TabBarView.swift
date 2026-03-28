@@ -66,6 +66,7 @@ struct TabBarView: View {
     var showSplitButtons: Bool = true
 
     @AppStorage("workspacePresentationMode") private var presentationMode = "standard"
+    @AppStorage("debugSplitButtonBgStyle") private var splitButtonBgStyle = 0
     @State private var isHoveringTabBar = false
     @State private var dropTargetIndex: Int?
     @State private var dropLifecycle: TabDropLifecycle = .idle
@@ -187,15 +188,11 @@ struct TabBarView: View {
             }
             .frame(height: TabBarMetrics.barHeight)
             .overlay(fadeOverlays)
-            // Floating split buttons on the trailing edge, over the right fade
+            // Floating split buttons on the trailing edge
             .overlay(alignment: .trailing) {
                 if showSplitButtons {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                    splitButtons
-                        .saturation(tabBarSaturation)
-                        .opacity(shouldShow ? 1 : 0)
-                        .allowsHitTesting(shouldShow)
-                        .animation(.easeInOut(duration: 0.14), value: shouldShow)
+                    splitButtonsWithBackground(shouldShow: shouldShow)
                         .background(
                             GeometryReader { geo in
                                 Color.clear.onAppear { splitButtonsWidth = geo.size.width }
@@ -521,6 +518,73 @@ struct TabBarView: View {
         .padding(.trailing, 8)
     }
 
+    // MARK: - Split Button Background (debug: `defaults write ... debugSplitButtonBgStyle N`)
+
+    @ViewBuilder
+    private func splitButtonsWithBackground(shouldShow: Bool) -> some View {
+        let bg = TabBarColors.barBackground(for: appearance)
+
+        switch splitButtonBgStyle {
+        case 1:
+            // Style 1: Solid barFill (full opacity)
+            splitButtons
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, 1)
+                .background(bg)
+                .saturation(tabBarSaturation)
+                .opacity(shouldShow ? 1 : 0)
+                .allowsHitTesting(shouldShow)
+                .animation(.easeInOut(duration: 0.14), value: shouldShow)
+
+        case 2:
+            // Style 2: Left fade gradient + solid barFill
+            HStack(spacing: 0) {
+                LinearGradient(colors: [bg.opacity(0), bg], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 24)
+                splitButtons.background(bg)
+            }
+            .frame(maxHeight: .infinity)
+            .padding(.bottom, 1)
+            .saturation(tabBarSaturation)
+            .opacity(shouldShow ? 1 : 0)
+            .allowsHitTesting(shouldShow)
+            .animation(.easeInOut(duration: 0.14), value: shouldShow)
+
+        case 3:
+            // Style 3: ultraThinMaterial
+            splitButtons
+                .frame(maxHeight: .infinity)
+                .padding(.bottom, 1)
+                .background(.ultraThinMaterial)
+                .saturation(tabBarSaturation)
+                .opacity(shouldShow ? 1 : 0)
+                .allowsHitTesting(shouldShow)
+                .animation(.easeInOut(duration: 0.14), value: shouldShow)
+
+        case 4:
+            // Style 4: windowBackgroundColor + fade
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, Color(nsColor: .windowBackgroundColor)], startPoint: .leading, endPoint: .trailing)
+                    .frame(width: 24)
+                splitButtons.background(Color(nsColor: .windowBackgroundColor))
+            }
+            .frame(maxHeight: .infinity)
+            .padding(.bottom, 1)
+            .saturation(tabBarSaturation)
+            .opacity(shouldShow ? 1 : 0)
+            .allowsHitTesting(shouldShow)
+            .animation(.easeInOut(duration: 0.14), value: shouldShow)
+
+        default:
+            // Style 0: No background (transparent)
+            splitButtons
+                .saturation(tabBarSaturation)
+                .opacity(shouldShow ? 1 : 0)
+                .allowsHitTesting(shouldShow)
+                .animation(.easeInOut(duration: 0.14), value: shouldShow)
+        }
+    }
+
     // MARK: - Fade Overlays
 
     @ViewBuilder
@@ -543,10 +607,7 @@ struct TabBarView: View {
 
             Spacer()
 
-            // Right fade: always visible when split buttons are shown to
-            // provide an opaque backdrop, otherwise only on scroll overflow.
-            let rightFadeWidth: CGFloat = showSplitButtons ? splitButtonsWidth + fadeWidth : fadeWidth
-            let showRightFade = showSplitButtons || canScrollRight
+            // Right fade
             LinearGradient(
                 colors: [
                     TabBarColors.barBackground(for: appearance).opacity(0),
@@ -555,8 +616,8 @@ struct TabBarView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: rightFadeWidth)
-            .opacity(showRightFade ? 1 : 0)
+            .frame(width: fadeWidth)
+            .opacity(canScrollRight ? 1 : 0)
             .allowsHitTesting(false)
         }
     }
