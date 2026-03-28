@@ -522,6 +522,8 @@ struct TabBarView: View {
     @ViewBuilder
     private var fadeOverlays: some View {
         let fadeWidth: CGFloat = 24
+        // In minimal mode, fades only appear on hover (matching split buttons).
+        let fadesActive = presentationMode != "minimal" || isHoveringTabBar
 
         HStack(spacing: 0) {
             // Left fade mask: transparent → opaque
@@ -530,7 +532,7 @@ struct TabBarView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: canScrollLeft ? fadeWidth : 0)
+            .frame(width: canScrollLeft && fadesActive ? fadeWidth : 0)
 
             Rectangle().fill(Color.black)
 
@@ -540,7 +542,7 @@ struct TabBarView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: canScrollRight ? fadeWidth : 0)
+            .frame(width: canScrollRight && fadesActive ? fadeWidth : 0)
         }
     }
 
