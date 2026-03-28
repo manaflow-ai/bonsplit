@@ -193,6 +193,7 @@ struct TabBarView: View {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                     splitButtons
                         .frame(maxHeight: .infinity)
+                        .padding(.bottom, 1)
                         .saturation(tabBarSaturation)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
