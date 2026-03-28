@@ -66,6 +66,7 @@ struct TabBarView: View {
     var showSplitButtons: Bool = true
 
     @AppStorage("workspacePresentationMode") private var presentationMode = "standard"
+    @AppStorage("debugFadeColorStyle") private var fadeColorStyle = 0
     @State private var isHoveringTabBar = false
     @State private var dropTargetIndex: Int?
     @State private var dropLifecycle: TabDropLifecycle = .idle
@@ -518,10 +519,24 @@ struct TabBarView: View {
     @ViewBuilder
     private var fadeOverlays: some View {
         let fadeWidth: CGFloat = 24
-        // Must match tabBarBackground's barFill exactly (including focus opacity).
-        let fadeFill = isFocused
-            ? TabBarColors.barBackground(for: appearance)
-            : TabBarColors.barBackground(for: appearance).opacity(0.95)
+        let fadeFill: Color = {
+            switch fadeColorStyle {
+            case 1: // barBackground (raw, no focus opacity)
+                return TabBarColors.barBackground(for: appearance)
+            case 2: // windowBackgroundColor
+                return Color(nsColor: .windowBackgroundColor)
+            case 3: // controlBackgroundColor
+                return Color(nsColor: .controlBackgroundColor)
+            case 4: // textBackgroundColor
+                return Color(nsColor: .textBackgroundColor)
+            case 5: // underPageBackgroundColor
+                return Color(nsColor: .underPageBackgroundColor)
+            default: // 0: barFill with focus opacity (matches tabBarBackground)
+                return isFocused
+                    ? TabBarColors.barBackground(for: appearance)
+                    : TabBarColors.barBackground(for: appearance).opacity(0.95)
+            }
+        }()
 
         HStack(spacing: 0) {
             // Left fade
