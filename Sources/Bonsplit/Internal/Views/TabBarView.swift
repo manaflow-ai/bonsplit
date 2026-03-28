@@ -518,14 +518,15 @@ struct TabBarView: View {
     @ViewBuilder
     private var fadeOverlays: some View {
         let fadeWidth: CGFloat = 24
+        // Must match tabBarBackground's barFill exactly (including focus opacity).
+        let fadeFill = isFocused
+            ? TabBarColors.barBackground(for: appearance)
+            : TabBarColors.barBackground(for: appearance).opacity(0.95)
 
         HStack(spacing: 0) {
             // Left fade
             LinearGradient(
-                colors: [
-                    TabBarColors.barBackground(for: appearance),
-                    TabBarColors.barBackground(for: appearance).opacity(0),
-                ],
+                colors: [fadeFill, fadeFill.opacity(0)],
                 startPoint: .leading,
                 endPoint: .trailing
             )
@@ -537,10 +538,7 @@ struct TabBarView: View {
 
             // Right fade
             LinearGradient(
-                colors: [
-                    TabBarColors.barBackground(for: appearance).opacity(0),
-                    TabBarColors.barBackground(for: appearance),
-                ],
+                colors: [fadeFill.opacity(0), fadeFill],
                 startPoint: .leading,
                 endPoint: .trailing
             )
