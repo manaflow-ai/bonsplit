@@ -194,14 +194,24 @@ struct TabBarView: View {
                     let barFill = isFocused
                         ? TabBarColors.barBackground(for: appearance)
                         : TabBarColors.barBackground(for: appearance).opacity(0.95)
-                    splitButtons
-                        .frame(maxHeight: .infinity)
-                        .padding(.bottom, 1)
-                        .saturation(tabBarSaturation)
-                        .background(.thickMaterial)
-                        .opacity(shouldShow ? 1 : 0)
-                        .allowsHitTesting(shouldShow)
-                        .animation(.easeInOut(duration: 0.14), value: shouldShow)
+                    HStack(spacing: 0) {
+                        // Left fade from transparent → barFill
+                        LinearGradient(
+                            colors: [barFill.opacity(0), barFill],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: 24)
+                        // Solid background behind buttons
+                        splitButtons
+                            .background(barFill)
+                    }
+                    .frame(maxHeight: .infinity)
+                    .padding(.bottom, 1)
+                    .saturation(tabBarSaturation)
+                    .opacity(shouldShow ? 1 : 0)
+                    .allowsHitTesting(shouldShow)
+                    .animation(.easeInOut(duration: 0.14), value: shouldShow)
                         .background(
                             GeometryReader { geo in
                                 Color.clear.onAppear { splitButtonsWidth = geo.size.width }
