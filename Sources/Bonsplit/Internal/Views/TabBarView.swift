@@ -191,11 +191,14 @@ struct TabBarView: View {
             .overlay(alignment: .trailing) {
                 if showSplitButtons {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
+                    let barFill = isFocused
+                        ? TabBarColors.barBackground(for: appearance)
+                        : TabBarColors.barBackground(for: appearance).opacity(0.95)
                     splitButtons
                         .frame(maxHeight: .infinity)
-                        .saturation(tabBarSaturation)
-                        .background(.ultraThinMaterial)
                         .padding(.bottom, 1)
+                        .saturation(tabBarSaturation)
+                        .background(barFill)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
                         .animation(.easeInOut(duration: 0.14), value: shouldShow)
