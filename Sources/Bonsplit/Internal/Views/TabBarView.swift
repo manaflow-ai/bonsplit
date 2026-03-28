@@ -181,7 +181,7 @@ struct TabBarView: View {
                     }
                 }
                 .frame(height: TabBarMetrics.barHeight)
-                .overlay(fadeOverlays)
+                .mask(fadeOverlays)
             }
 
             // Split buttons as a sibling in the HStack. The scroll view
@@ -516,50 +516,31 @@ struct TabBarView: View {
 
     // MARK: - Fade Overlays
 
+    /// Mask that fades scroll content at the edges instead of overlaying
+    /// a colored gradient. The mask uses black (visible) → clear (hidden),
+    /// so the tab bar background shows through naturally with no compositing.
     @ViewBuilder
     private var fadeOverlays: some View {
         let fadeWidth: CGFloat = 24
-        let fadeFill: Color = {
-            switch fadeColorStyle {
-            case 1: // barBackground (raw, no focus opacity)
-                return TabBarColors.barBackground(for: appearance)
-            case 2: // windowBackgroundColor
-                return Color(nsColor: .windowBackgroundColor)
-            case 3: // controlBackgroundColor
-                return Color(nsColor: .controlBackgroundColor)
-            case 4: // textBackgroundColor
-                return Color(nsColor: .textBackgroundColor)
-            case 5: // underPageBackgroundColor
-                return Color(nsColor: .underPageBackgroundColor)
-            default: // 0: barFill with focus opacity (matches tabBarBackground)
-                return isFocused
-                    ? TabBarColors.barBackground(for: appearance)
-                    : TabBarColors.barBackground(for: appearance).opacity(0.95)
-            }
-        }()
 
         HStack(spacing: 0) {
-            // Left fade
+            // Left fade mask: transparent → opaque
             LinearGradient(
-                colors: [fadeFill, fadeFill.opacity(0)],
+                colors: [.clear, .black],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: fadeWidth)
-            .opacity(canScrollLeft ? 1 : 0)
-            .allowsHitTesting(false)
+            .frame(width: canScrollLeft ? fadeWidth : 0)
 
-            Spacer()
+            Rectangle().fill(Color.black)
 
-            // Right fade
+            // Right fade mask: opaque → transparent
             LinearGradient(
-                colors: [fadeFill.opacity(0), fadeFill],
+                colors: [.black, .clear],
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: fadeWidth)
-            .opacity(canScrollRight ? 1 : 0)
-            .allowsHitTesting(false)
+            .frame(width: canScrollRight ? fadeWidth : 0)
         }
     }
 
