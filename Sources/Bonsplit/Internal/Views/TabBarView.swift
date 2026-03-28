@@ -80,7 +80,10 @@ struct TabBarView: View {
     }
 
     private var canScrollRight: Bool {
-        contentWidth > containerWidth && scrollOffset < contentWidth - containerWidth - 1
+        // Subtract the trailing drop zone (30pt) and buffer so the fade
+        // only shows when actual tabs overflow the visible scroll area.
+        let overflow = contentWidth - containerWidth - 32
+        return overflow > 0 && scrollOffset < overflow
     }
 
     /// Whether this tab bar should show full saturation (focused or drag source)
@@ -586,17 +589,10 @@ struct TabBarView: View {
 
 private struct SplitActionButtonStyle: ButtonStyle {
     let appearance: BonsplitConfiguration.Appearance
-    @State private var isHovered = false
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
-            .frame(width: 24, height: 24)
-            .background(
-                RoundedRectangle(cornerRadius: 5, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered || configuration.isPressed ? 0.6 : 0))
-            )
-            .onHover { isHovered = $0 }
     }
 }
 
