@@ -198,7 +198,7 @@ struct TabBarView: View {
                         .frame(maxHeight: .infinity)
                         .padding(.bottom, 1)
                         .saturation(tabBarSaturation)
-                        .background(.regularMaterial)
+                        .background(.thickMaterial)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
                         .animation(.easeInOut(duration: 0.14), value: shouldShow)
