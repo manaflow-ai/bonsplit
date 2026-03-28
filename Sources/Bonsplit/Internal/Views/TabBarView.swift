@@ -80,10 +80,12 @@ struct TabBarView: View {
     }
 
     private var canScrollRight: Bool {
-        // Subtract the trailing drop zone (30pt) and buffer so the fade
-        // only shows when actual tabs overflow the visible scroll area.
-        let overflow = contentWidth - containerWidth - 32
-        return overflow > 0 && scrollOffset < overflow
+        // contentWidth includes the 30pt drop zone after tabs. Only show
+        // the fade when actual tab content exceeds the visible area.
+        // Use a generous buffer to avoid false positives from rounding.
+        let tabsOnlyWidth = contentWidth - 30
+        guard tabsOnlyWidth > containerWidth + 4 else { return false }
+        return scrollOffset < tabsOnlyWidth - containerWidth
     }
 
     /// Whether this tab bar should show full saturation (focused or drag source)
