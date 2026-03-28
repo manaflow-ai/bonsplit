@@ -518,6 +518,7 @@ struct TabBarView: View {
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.splitDown)
         }
+        .frame(maxHeight: .infinity)
         .padding(.leading, 6)
         .padding(.trailing, 8)
     }
