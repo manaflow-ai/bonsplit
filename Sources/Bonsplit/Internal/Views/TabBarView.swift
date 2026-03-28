@@ -193,12 +193,12 @@ struct TabBarView: View {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                     splitButtons
                         .frame(maxHeight: .infinity)
-                        .padding(.bottom, 1)
                         .saturation(tabBarSaturation)
+                        .background(.ultraThinMaterial)
+                        .padding(.bottom, 1)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
                         .animation(.easeInOut(duration: 0.14), value: shouldShow)
-                        .background(.ultraThinMaterial.opacity(shouldShow ? 1 : 0))
                         .background(
                             GeometryReader { geo in
                                 Color.clear.onAppear { splitButtonsWidth = geo.size.width }
