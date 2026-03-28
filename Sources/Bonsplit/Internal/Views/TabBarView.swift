@@ -187,31 +187,15 @@ struct TabBarView: View {
             }
             .frame(height: TabBarMetrics.barHeight)
             .overlay(fadeOverlays)
-            // Floating split buttons on the trailing edge
+            // Floating split buttons on the trailing edge, over the right fade
             .overlay(alignment: .trailing) {
                 if showSplitButtons {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                    let barFill = isFocused
-                        ? TabBarColors.barBackground(for: appearance)
-                        : TabBarColors.barBackground(for: appearance).opacity(0.95)
-                    HStack(spacing: 0) {
-                        // Left fade from transparent → barFill
-                        LinearGradient(
-                            colors: [barFill.opacity(0), barFill],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: 24)
-                        // Solid background behind buttons
-                        splitButtons
-                            .background(barFill)
-                    }
-                    .frame(maxHeight: .infinity)
-                    .padding(.bottom, 1)
-                    .saturation(tabBarSaturation)
-                    .opacity(shouldShow ? 1 : 0)
-                    .allowsHitTesting(shouldShow)
-                    .animation(.easeInOut(duration: 0.14), value: shouldShow)
+                    splitButtons
+                        .saturation(tabBarSaturation)
+                        .opacity(shouldShow ? 1 : 0)
+                        .allowsHitTesting(shouldShow)
+                        .animation(.easeInOut(duration: 0.14), value: shouldShow)
                         .background(
                             GeometryReader { geo in
                                 Color.clear.onAppear { splitButtonsWidth = geo.size.width }
@@ -559,7 +543,10 @@ struct TabBarView: View {
 
             Spacer()
 
-            // Right fade
+            // Right fade: always visible when split buttons are shown to
+            // provide an opaque backdrop, otherwise only on scroll overflow.
+            let rightFadeWidth: CGFloat = showSplitButtons ? splitButtonsWidth + fadeWidth : fadeWidth
+            let showRightFade = showSplitButtons || canScrollRight
             LinearGradient(
                 colors: [
                     TabBarColors.barBackground(for: appearance).opacity(0),
@@ -568,8 +555,8 @@ struct TabBarView: View {
                 startPoint: .leading,
                 endPoint: .trailing
             )
-            .frame(width: fadeWidth)
-            .opacity(canScrollRight ? 1 : 0)
+            .frame(width: rightFadeWidth)
+            .opacity(showRightFade ? 1 : 0)
             .allowsHitTesting(false)
         }
     }
