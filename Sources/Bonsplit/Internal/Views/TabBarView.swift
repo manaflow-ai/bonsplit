@@ -192,6 +192,7 @@ struct TabBarView: View {
                 if showSplitButtons {
                     let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                     splitButtons
+                        .frame(maxHeight: .infinity)
                         .saturation(tabBarSaturation)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
@@ -518,7 +519,6 @@ struct TabBarView: View {
             .buttonStyle(SplitActionButtonStyle(appearance: appearance))
             .safeHelp(tooltips.splitDown)
         }
-        .frame(maxHeight: .infinity)
         .padding(.leading, 6)
         .padding(.trailing, 8)
     }
