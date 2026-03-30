@@ -187,13 +187,22 @@ struct TabBarView: View {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                         ZStack(alignment: .trailing) {
-                            // Fade mask: hides tab content behind buttons
+                            // Blur + fade behind buttons
                             HStack(spacing: 0) {
-                                LinearGradient(colors: [.clear, TabBarColors.barBackground(for: appearance)], startPoint: .leading, endPoint: .trailing)
+                                LinearGradient(colors: [.clear, .white], startPoint: .leading, endPoint: .trailing)
                                     .frame(width: 24)
-                                Rectangle().fill(TabBarColors.barBackground(for: appearance))
+                                Color.white
                                     .frame(width: 90)
                             }
+                            .background(.ultraThinMaterial)
+                            .mask(
+                                HStack(spacing: 0) {
+                                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                                        .frame(width: 24)
+                                    Rectangle().fill(Color.black)
+                                        .frame(width: 90)
+                                }
+                            )
                             // Buttons on top
                             splitButtons
                                 .saturation(tabBarSaturation)
