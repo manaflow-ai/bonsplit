@@ -125,6 +125,7 @@ struct TabBarView: View {
                             dropZoneAfterTabs
                         }
                         .padding(.horizontal, TabBarMetrics.barPadding)
+                        .padding(.trailing, showSplitButtons ? 114 : 0)
                         .animation(nil, value: pane.tabs.map(\.id))
                         .background(
                             GeometryReader { contentGeo in
@@ -186,7 +187,7 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                        let bg = TabBarColors.barBackground(for: appearance)
+                        let bg = TabBarColors.paneBackground(for: appearance)
                         ZStack(alignment: .trailing) {
                             // Blur + theme tint backdrop with fade edge
                             ZStack {
