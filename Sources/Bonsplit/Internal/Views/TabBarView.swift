@@ -182,16 +182,15 @@ struct TabBarView: View {
                 }
                 .frame(height: TabBarMetrics.barHeight)
                 .mask(fadeOverlays)
-            }
-
-            // Split buttons as a sibling in the HStack. The scroll view
-            // naturally clips at its trailing edge, so no content bleeds
-            // behind the buttons. Single .background() on the outer HStack
-            // provides the color for both areas with no compositing mismatch.
-            if showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar) {
-                splitButtons
-                    .saturation(tabBarSaturation)
-                    .transition(.opacity.animation(.easeInOut(duration: 0.14)))
+                // Split buttons as overlay: doesn't affect scroll view
+                // layout, so no jump when buttons appear/disappear on hover.
+                .overlay(alignment: .trailing) {
+                    if showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar) {
+                        splitButtons
+                            .saturation(tabBarSaturation)
+                            .transition(.opacity.animation(.easeInOut(duration: 0.14)))
+                    }
+                }
             }
         }
         .frame(height: TabBarMetrics.barHeight)
@@ -519,27 +518,14 @@ struct TabBarView: View {
     @ViewBuilder
     private var fadeOverlays: some View {
         let fadeWidth: CGFloat = 24
-        // In minimal mode, fades only appear on hover (matching split buttons).
-        let fadesActive = presentationMode != "minimal" || isHoveringTabBar
-
         HStack(spacing: 0) {
-            // Left fade mask: transparent → opaque
-            LinearGradient(
-                colors: [.clear, .black],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: canScrollLeft && fadesActive ? fadeWidth : 0)
+            LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
+                .frame(width: canScrollLeft ? fadeWidth : 0)
 
             Rectangle().fill(Color.black)
 
-            // Right fade mask: opaque → transparent
-            LinearGradient(
-                colors: [.black, .clear],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .frame(width: canScrollRight && fadesActive ? fadeWidth : 0)
+            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                .frame(width: canScrollRight ? fadeWidth : 0)
         }
     }
 
