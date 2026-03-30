@@ -187,24 +187,7 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                        // Pre-composite: produce the flat opaque color that
-                        // matches what .background(barFill) looks like over the
-                        // window background. Avoids double-compositing mismatch.
-                        let bg: Color = {
-                            let chrome = TabBarColors.nsColorPaneBackground(for: appearance)
-                            let winBg = NSColor.windowBackgroundColor
-                            guard let fg = chrome.usingColorSpace(.sRGB),
-                                  let bk = winBg.usingColorSpace(.sRGB) else {
-                                return Color(nsColor: chrome.withAlphaComponent(1.0))
-                            }
-                            let a = isFocused ? fg.alphaComponent : fg.alphaComponent * 0.95
-                            return Color(nsColor: NSColor(
-                                sRGBRed: fg.redComponent * a + bk.redComponent * (1 - a),
-                                green: fg.greenComponent * a + bk.greenComponent * (1 - a),
-                                blue: fg.blueComponent * a + bk.blueComponent * (1 - a),
-                                alpha: 1.0
-                            ))
-                        }()
+                        let bg = Color(nsColor: Self.precompositedPaneBackground(for: appearance, focused: isFocused))
                         ZStack(alignment: .trailing) {
                             // Backdrop: fade gradient then solid
                             HStack(spacing: 0) {
@@ -541,6 +524,27 @@ struct TabBarView: View {
         .padding(.trailing, 8)
     }
 
+
+    /// Pre-composite the pane background over the window background to produce
+    /// a flat opaque color that matches what .background(barFill) looks like
+    /// after compositing. Avoids double-compositing mismatch on overlays.
+    private static func precompositedPaneBackground(
+        for appearance: BonsplitConfiguration.Appearance,
+        focused: Bool
+    ) -> NSColor {
+        let chrome = TabBarColors.nsColorPaneBackground(for: appearance)
+        let winBg = NSColor.windowBackgroundColor
+        guard let fg = chrome.usingColorSpace(.sRGB),
+              let bk = winBg.usingColorSpace(.sRGB) else {
+            return chrome.withAlphaComponent(1.0)
+        }
+        let a: CGFloat = focused ? fg.alphaComponent : fg.alphaComponent * 0.95
+        let oneMinusA = 1.0 - a
+        let r = fg.redComponent * a + bk.redComponent * oneMinusA
+        let g = fg.greenComponent * a + bk.greenComponent * oneMinusA
+        let b = fg.blueComponent * a + bk.blueComponent * oneMinusA
+        return NSColor(red: r, green: g, blue: b, alpha: 1.0)
+    }
 
     // MARK: - Fade Overlays
 
