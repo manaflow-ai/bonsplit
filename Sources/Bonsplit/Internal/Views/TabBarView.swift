@@ -188,13 +188,10 @@ struct TabBarView: View {
             // naturally clips at its trailing edge, so no content bleeds
             // behind the buttons. Single .background() on the outer HStack
             // provides the color for both areas with no compositing mismatch.
-            if showSplitButtons {
-                let shouldShow = presentationMode != "minimal" || isHoveringTabBar
+            if showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar) {
                 splitButtons
                     .saturation(tabBarSaturation)
-                    .opacity(shouldShow ? 1 : 0)
-                    .allowsHitTesting(shouldShow)
-                    .animation(.easeInOut(duration: 0.14), value: shouldShow)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.14)))
             }
         }
         .frame(height: TabBarMetrics.barHeight)
