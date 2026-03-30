@@ -188,10 +188,15 @@ struct TabBarView: View {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                         let bg = TabBarColors.paneBackground(for: appearance)
+                        let bg = TabBarColors.paneBackground(for: appearance)
                         ZStack(alignment: .trailing) {
-                            // Test: solid red to verify coverage
-                            Color.red
-                                .frame(width: 114)
+                            // Backdrop: fade gradient then solid
+                            HStack(spacing: 0) {
+                                LinearGradient(colors: [bg.opacity(0), bg], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: 24)
+                                Rectangle().fill(bg)
+                            }
+                            .frame(width: 114)
                             // Buttons on top
                             splitButtons
                                 .saturation(tabBarSaturation)
