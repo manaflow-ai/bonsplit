@@ -185,17 +185,16 @@ struct TabBarView: View {
                 // Extra mask: fade content behind the buttons area on hover.
                 .mask {
                     let showButtonFade = showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar)
+                    let clearWidth: CGFloat = showButtonFade ? 90 : 0
+                    let fadeWidth: CGFloat = showButtonFade ? 24 : 0
                     HStack(spacing: 0) {
                         Rectangle().fill(Color.black)
-                        if showButtonFade {
-                            LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                                .frame(width: 24)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.14)))
-                            Color.clear
-                                .frame(width: 90)
-                                .transition(.opacity.animation(.easeInOut(duration: 0.14)))
-                        }
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: fadeWidth)
+                        Color.clear
+                            .frame(width: clearWidth)
                     }
+                    .animation(.easeInOut(duration: 0.14), value: showButtonFade)
                 }
                 // Split buttons as overlay: doesn't affect scroll view
                 // layout, so no jump when buttons appear/disappear on hover.
