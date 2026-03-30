@@ -191,7 +191,7 @@ struct TabBarView: View {
                             // Blur + theme tint backdrop with fade edge
                             ZStack {
                                 Rectangle().fill(.ultraThinMaterial)
-                                Rectangle().fill(bg.opacity(0.85))
+                                Rectangle().fill(bg.opacity(0.2))
                             }
                             .frame(width: 114)
                             .mask(
@@ -205,6 +205,7 @@ struct TabBarView: View {
                             splitButtons
                                 .saturation(tabBarSaturation)
                         }
+                        .padding(.bottom, 1)
                         .opacity(shouldShow ? 1 : 0)
                         .allowsHitTesting(shouldShow)
                         .animation(.easeInOut(duration: 0.14), value: shouldShow)
