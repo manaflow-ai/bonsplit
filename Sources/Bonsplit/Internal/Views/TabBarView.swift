@@ -192,7 +192,7 @@ struct TabBarView: View {
                                 .frame(width: 24)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.14)))
                             Color.clear
-                                .frame(width: 120)
+                                .frame(width: 90)
                                 .transition(.opacity.animation(.easeInOut(duration: 0.14)))
                         }
                     }
