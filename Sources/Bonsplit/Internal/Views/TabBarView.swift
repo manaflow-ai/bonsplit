@@ -187,7 +187,7 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                        let bg = Color(nsColor: Self.precompositedPaneBackground(for: appearance, focused: isFocused))
+                        let bg = Color(nsColor: Self.buttonBackdropColor(for: appearance, focused: isFocused, style: fadeColorStyle))
                         ZStack(alignment: .trailing) {
                             // Backdrop: fade gradient then solid
                             HStack(spacing: 0) {
@@ -524,6 +524,39 @@ struct TabBarView: View {
         .padding(.trailing, 8)
     }
 
+
+    private static func buttonBackdropColor(
+        for appearance: BonsplitConfiguration.Appearance,
+        focused: Bool,
+        style: Int
+    ) -> NSColor {
+        switch style {
+        case 1: // raw paneBackground forced opaque
+            return TabBarColors.nsColorPaneBackground(for: appearance).withAlphaComponent(1.0)
+        case 2: // barBackground (tab bar chrome)
+            let c = NSColor(TabBarColors.barBackground(for: appearance))
+            return (c.usingColorSpace(.sRGB) ?? c).withAlphaComponent(1.0)
+        case 3: // windowBackgroundColor
+            return NSColor.windowBackgroundColor.withAlphaComponent(1.0)
+        case 4: // controlBackgroundColor
+            return NSColor.controlBackgroundColor.withAlphaComponent(1.0)
+        case 5: // pre-composited barBackground over windowBg
+            let chrome = NSColor(TabBarColors.barBackground(for: appearance))
+            let winBg = NSColor.windowBackgroundColor
+            guard let fg = chrome.usingColorSpace(.sRGB),
+                  let bk = winBg.usingColorSpace(.sRGB) else {
+                return chrome.withAlphaComponent(1.0)
+            }
+            let a: CGFloat = focused ? fg.alphaComponent : fg.alphaComponent * 0.95
+            let oneMinusA = 1.0 - a
+            let r = fg.redComponent * a + bk.redComponent * oneMinusA
+            let g = fg.greenComponent * a + bk.greenComponent * oneMinusA
+            let b = fg.blueComponent * a + bk.blueComponent * oneMinusA
+            return NSColor(red: r, green: g, blue: b, alpha: 1.0)
+        default: // 0: pre-composited paneBackground over windowBg
+            return precompositedPaneBackground(for: appearance, focused: focused)
+        }
+    }
 
     /// Pre-composite the pane background over the window background to produce
     /// a flat opaque color that matches what .background(barFill) looks like
