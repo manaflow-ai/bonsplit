@@ -186,23 +186,15 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
+                        let bg = TabBarColors.barBackground(for: appearance)
                         ZStack(alignment: .trailing) {
-                            // Blur + fade behind buttons
+                            // Theme-colored backdrop with fade edge
                             HStack(spacing: 0) {
-                                LinearGradient(colors: [.clear, .white], startPoint: .leading, endPoint: .trailing)
+                                LinearGradient(colors: [bg.opacity(0), bg], startPoint: .leading, endPoint: .trailing)
                                     .frame(width: 24)
-                                Color.white
-                                    .frame(width: 90)
+                                Rectangle().fill(bg)
                             }
-                            .background(.ultraThinMaterial)
-                            .mask(
-                                HStack(spacing: 0) {
-                                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
-                                        .frame(width: 24)
-                                    Rectangle().fill(Color.black)
-                                        .frame(width: 90)
-                                }
-                            )
+                            .frame(width: 114)
                             // Buttons on top
                             splitButtons
                                 .saturation(tabBarSaturation)
