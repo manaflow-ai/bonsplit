@@ -189,18 +189,9 @@ struct TabBarView: View {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
                         let bg = TabBarColors.paneBackground(for: appearance)
                         ZStack(alignment: .trailing) {
-                            // Blur + theme tint backdrop with fade edge
-                            ZStack {
-                                Rectangle().fill(bg)  // fully opaque to verify color
-                            }
-                            .frame(width: 114)
-                            .mask(
-                                HStack(spacing: 0) {
-                                    LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing)
-                                        .frame(width: 24)
-                                    Color.black
-                                }
-                            )
+                            // Test: solid red to verify coverage
+                            Color.red
+                                .frame(width: 114)
                             // Buttons on top
                             splitButtons
                                 .saturation(tabBarSaturation)
