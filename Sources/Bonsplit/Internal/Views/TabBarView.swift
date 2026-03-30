@@ -187,8 +187,7 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                        let bg = TabBarColors.paneBackground(for: appearance)
-                        let bg = TabBarColors.paneBackground(for: appearance)
+                        let bg = Color(nsColor: TabBarColors.nsColorPaneBackground(for: appearance).withAlphaComponent(1.0))
                         ZStack(alignment: .trailing) {
                             // Backdrop: fade gradient then solid
                             HStack(spacing: 0) {
