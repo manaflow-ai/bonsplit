@@ -182,27 +182,25 @@ struct TabBarView: View {
                 }
                 .frame(height: TabBarMetrics.barHeight)
                 .mask(fadeOverlays)
-                // Extra mask: fade content behind the buttons area on hover.
-                .mask {
-                    let showButtonFade = showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar)
-                    let clearWidth: CGFloat = showButtonFade ? 90 : 0
-                    let fadeWidth: CGFloat = showButtonFade ? 24 : 0
-                    HStack(spacing: 0) {
-                        Rectangle().fill(Color.black)
-                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                            .frame(width: fadeWidth)
-                        Color.clear
-                            .frame(width: clearWidth)
-                    }
-                    .animation(.easeInOut(duration: 0.14), value: showButtonFade)
-                }
-                // Split buttons as overlay: doesn't affect scroll view
-                // layout, so no jump when buttons appear/disappear on hover.
+                // Split buttons + fade mask behind them, all fading in/out together.
                 .overlay(alignment: .trailing) {
-                    if showSplitButtons && (presentationMode != "minimal" || isHoveringTabBar) {
-                        splitButtons
-                            .saturation(tabBarSaturation)
-                            .transition(.opacity.animation(.easeInOut(duration: 0.14)))
+                    if showSplitButtons {
+                        let shouldShow = presentationMode != "minimal" || isHoveringTabBar
+                        ZStack(alignment: .trailing) {
+                            // Fade mask: hides tab content behind buttons
+                            HStack(spacing: 0) {
+                                LinearGradient(colors: [.clear, TabBarColors.barBackground(for: appearance)], startPoint: .leading, endPoint: .trailing)
+                                    .frame(width: 24)
+                                Rectangle().fill(TabBarColors.barBackground(for: appearance))
+                                    .frame(width: 90)
+                            }
+                            // Buttons on top
+                            splitButtons
+                                .saturation(tabBarSaturation)
+                        }
+                        .opacity(shouldShow ? 1 : 0)
+                        .allowsHitTesting(shouldShow)
+                        .animation(.easeInOut(duration: 0.14), value: shouldShow)
                     }
                 }
             }
