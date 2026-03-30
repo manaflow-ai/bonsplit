@@ -187,7 +187,24 @@ struct TabBarView: View {
                 .overlay(alignment: .trailing) {
                     if showSplitButtons {
                         let shouldShow = presentationMode != "minimal" || isHoveringTabBar
-                        let bg = Color(nsColor: TabBarColors.nsColorPaneBackground(for: appearance).withAlphaComponent(1.0))
+                        // Pre-composite: produce the flat opaque color that
+                        // matches what .background(barFill) looks like over the
+                        // window background. Avoids double-compositing mismatch.
+                        let bg: Color = {
+                            let chrome = TabBarColors.nsColorPaneBackground(for: appearance)
+                            let winBg = NSColor.windowBackgroundColor
+                            guard let fg = chrome.usingColorSpace(.sRGB),
+                                  let bk = winBg.usingColorSpace(.sRGB) else {
+                                return Color(nsColor: chrome.withAlphaComponent(1.0))
+                            }
+                            let a = isFocused ? fg.alphaComponent : fg.alphaComponent * 0.95
+                            return Color(nsColor: NSColor(
+                                sRGBRed: fg.redComponent * a + bk.redComponent * (1 - a),
+                                green: fg.greenComponent * a + bk.greenComponent * (1 - a),
+                                blue: fg.blueComponent * a + bk.blueComponent * (1 - a),
+                                alpha: 1.0
+                            ))
+                        }()
                         ZStack(alignment: .trailing) {
                             // Backdrop: fade gradient then solid
                             HStack(spacing: 0) {
