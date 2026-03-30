@@ -191,7 +191,7 @@ struct TabBarView: View {
                         ZStack(alignment: .trailing) {
                             // Blur + theme tint backdrop with fade edge
                             ZStack {
-                                Rectangle().fill(bg.opacity(0.97))
+                                Rectangle().fill(bg)  // fully opaque to verify color
                             }
                             .frame(width: 114)
                             .mask(
