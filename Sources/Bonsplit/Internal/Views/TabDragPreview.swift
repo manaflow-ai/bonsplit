@@ -4,17 +4,18 @@ import SwiftUI
 struct TabDragPreview: View {
     let tab: TabItem
     let appearance: BonsplitConfiguration.Appearance
+    @Environment(\.bonsplitUIScale) private var uiScale
 
     var body: some View {
         HStack(spacing: TabBarMetrics.contentSpacing) {
             if let iconName = tab.icon {
                 Image(systemName: iconName)
-                    .font(.system(size: TabBarMetrics.iconSize))
+                    .font(.system(size: TabBarMetrics.iconSize * uiScale))
                     .foregroundStyle(TabBarColors.activeText(for: appearance))
             }
 
             Text(tab.title)
-                .font(.system(size: TabBarMetrics.titleFontSize))
+                .font(.system(size: TabBarMetrics.titleFontSize * uiScale))
                 .lineLimit(1)
                 .foregroundStyle(TabBarColors.activeText(for: appearance))
         }
