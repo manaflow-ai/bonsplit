@@ -191,6 +191,14 @@ extension BonsplitConfiguration {
         /// Optional color overrides for tab/pane chrome.
         public var chromeColors: ChromeColors
 
+        /// Optional font family for pane tab titles.
+        /// When unset, Bonsplit uses the system UI font.
+        public var tabTitleFontFamily: String?
+
+        /// Multiplier applied to pane tab title size.
+        /// `1.0` preserves the current size. Values below `0.5` are clamped to `0.5`.
+        public var tabTitleFontScale: CGFloat
+
         // MARK: - Presets
 
         public static let `default` = Appearance()
@@ -223,7 +231,9 @@ extension BonsplitConfiguration {
             splitButtonTooltips: SplitButtonTooltips = .default,
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
-            chromeColors: ChromeColors = .init()
+            chromeColors: ChromeColors = .init(),
+            tabTitleFontFamily: String? = nil,
+            tabTitleFontScale: CGFloat = 1.0
         ) {
             self.tabBarHeight = tabBarHeight
             self.tabMinWidth = tabMinWidth
@@ -238,6 +248,8 @@ extension BonsplitConfiguration {
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
             self.chromeColors = chromeColors
+            self.tabTitleFontFamily = tabTitleFontFamily
+            self.tabTitleFontScale = tabTitleFontScale
         }
     }
 }

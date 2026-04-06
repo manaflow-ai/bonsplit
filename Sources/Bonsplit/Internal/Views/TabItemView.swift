@@ -119,7 +119,7 @@ struct TabItemView: View {
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
                 Text(tab.title)
-                    .font(.system(size: TabBarMetrics.titleFontSize))
+                    .font(TabBarTypography.titleFont(for: appearance))
                     .lineLimit(1)
                     .foregroundStyle(
                         isSelected
