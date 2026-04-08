@@ -305,16 +305,16 @@ struct TabBarView: View {
                 controller.requestTabContextAction(action, for: TabID(id: tab.id), inPane: pane.id)
             }
         )
-        .background(
-            GeometryReader { geometry in
-                Color.clear.preference(
-                    key: SelectedTabFramePreferenceKey.self,
-                    value: pane.selectedTabId == tab.id
-                        ? geometry.frame(in: .named("tabBar"))
-                        : nil
-                )
+        .background {
+            if pane.selectedTabId == tab.id {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: SelectedTabFramePreferenceKey.self,
+                        value: geometry.frame(in: .named("tabBar"))
+                    )
+                }
             }
-        )
+        }
         .onDrag {
             createItemProvider(for: tab)
         } preview: {
