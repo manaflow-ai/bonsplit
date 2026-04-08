@@ -181,6 +181,9 @@ struct TabItemView: View {
             guard !tab.isPinned else { return }
             onClose()
         }))
+        .onTapGesture(count: 2) {
+            onZoomToggle()
+        }
         .onTapGesture {
             onSelect()
         }
