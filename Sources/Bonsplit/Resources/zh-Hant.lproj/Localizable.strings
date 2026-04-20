@@ -1,0 +1,21 @@
+/* Tab context menu */
+"tab.contextMenu.rename" = "重新命名標籤頁…";
+"tab.contextMenu.removeCustomName" = "移除自訂標籤頁名稱";
+"tab.contextMenu.closeToLeft" = "關閉左側標籤頁";
+"tab.contextMenu.closeToRight" = "關閉右側標籤頁";
+"tab.contextMenu.closeOthers" = "關閉其他標籤頁";
+"tab.contextMenu.move" = "移動標籤頁…";
+"tab.contextMenu.newTerminalToRight" = "在右側新增終端標籤頁";
+"tab.contextMenu.newBrowserToRight" = "在右側新增瀏覽器標籤頁";
+"tab.contextMenu.reload" = "重新載入標籤頁";
+"tab.contextMenu.duplicate" = "複製標籤頁";
+"tab.contextMenu.zoomPane" = "縮放面板";
+"tab.contextMenu.exitZoom" = "退出縮放";
+"tab.contextMenu.pinTab" = "固定標籤頁";
+"tab.contextMenu.unpinTab" = "取消固定標籤頁";
+"tab.contextMenu.markAsRead" = "標記標籤頁為已讀";
+"tab.contextMenu.markAsUnread" = "標記標籤頁為未讀";
+
+/* Move to pane */
+"command.moveTabToLeftPane.title" = "移動到左側面板";
+"command.moveTabToRightPane.title" = "移動到右側面板";

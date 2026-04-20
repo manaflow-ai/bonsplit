@@ -1,2 +1,21 @@
+/* Tab context menu */
+"tab.contextMenu.rename" = "Rename Tab…";
+"tab.contextMenu.removeCustomName" = "Remove Custom Tab Name";
+"tab.contextMenu.closeToLeft" = "Close Tabs to Left";
+"tab.contextMenu.closeToRight" = "Close Tabs to Right";
+"tab.contextMenu.closeOthers" = "Close Other Tabs";
+"tab.contextMenu.move" = "Move Tab…";
+"tab.contextMenu.newTerminalToRight" = "New Terminal Tab to Right";
+"tab.contextMenu.newBrowserToRight" = "New Browser Tab to Right";
+"tab.contextMenu.reload" = "Reload Tab";
+"tab.contextMenu.duplicate" = "Duplicate Tab";
+"tab.contextMenu.zoomPane" = "Zoom Pane";
+"tab.contextMenu.exitZoom" = "Exit Zoom";
+"tab.contextMenu.pinTab" = "Pin Tab";
+"tab.contextMenu.unpinTab" = "Unpin Tab";
+"tab.contextMenu.markAsRead" = "Mark Tab as Read";
+"tab.contextMenu.markAsUnread" = "Mark Tab as Unread";
+
+/* Move to pane */
 "command.moveTabToLeftPane.title" = "Move to Left Pane";
 "command.moveTabToRightPane.title" = "Move to Right Pane";
