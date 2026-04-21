@@ -130,6 +130,17 @@ struct TabItemView: View {
                     updateGlobeFallback()
                 }
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
+                // In leading-close mode the favicon slot doubles as the
+                // close-button slot (Safari 15+/Finder/Xcode style): the
+                // favicon fades out and × overlays on hover/select so there's
+                // no layout shift. Both modifiers are no-ops in trailing mode
+                // (`showsLeadingCloseOverlay` is always false there).
+                .opacity(showsLeadingCloseOverlay ? 0 : 1)
+                .overlay(alignment: .center) {
+                    if showsLeadingCloseOverlay {
+                        leadingCloseOverlayButton
+                    }
+                }
 
                 Text(tab.title)
                     .font(.system(size: appearance.tabTitleFontSize))
@@ -171,10 +182,16 @@ struct TabItemView: View {
                 }
             }
 
-            Spacer(minLength: 0)
-
-            // Close button / dirty indicator / shortcut hint share the same trailing slot.
-            trailingAccessory
+            // In leading-close mode the close × is rendered as an overlay over
+            // the favicon. The trailing slot is dropped when nothing else needs
+            // to render there (no dirty/notification dot, no pin glyph, no
+            // shortcut-hint pill) so the tab doesn't show a phantom
+            // close-button-sized gap on the right edge. When any of those
+            // affordances are active the slot is kept so they remain visible.
+            if rendersTrailingAccessorySlot {
+                Spacer(minLength: 0)
+                closeAccessory
+            }
         }
         .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
         .frame(
@@ -229,6 +246,60 @@ struct TabItemView: View {
         allowsShortcutHints && (showsControlShortcutHint || alwaysShowShortcutHints) && shortcutHintLabel != nil
     }
 
+    /// In leading-close mode, the close × renders as an overlay on top of the
+    /// favicon slot (and the favicon fades out underneath) whenever the user
+    /// hovers the tab or the tab is selected. Matches Safari 15+ / Xcode: no
+    /// layout shift because the close button occupies the same slot the
+    /// favicon already owns.
+    private var showsLeadingCloseOverlay: Bool {
+        appearance.closeButtonPosition == .leading
+            && !tab.isPinned
+            && (isSelected || isHovered || isCloseHovered)
+    }
+
+    /// Whether the trailing accessory slot is rendered. In trailing-close mode
+    /// it is always present so the close × can fade in/out without layout
+    /// shift. In leading-close mode it is rendered only when there is content
+    /// to show (dirty / notification dot, pin glyph, or shortcut-hint pill);
+    /// otherwise the slot is dropped so the tab does not gain a phantom
+    /// close-button-sized gap on the right edge.
+    private var rendersTrailingAccessorySlot: Bool {
+        if appearance.closeButtonPosition == .trailing { return true }
+        if showsShortcutHint { return true }
+        if tab.isPinned { return true }
+        if tab.isDirty || tab.showsNotificationBadge { return true }
+        return false
+    }
+
+    @ViewBuilder
+    private var leadingCloseOverlayButton: some View {
+        Button {
+            onClose()
+        } label: {
+            Image(systemName: "xmark")
+                .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                .foregroundStyle(
+                    isCloseHovered
+                        ? TabBarColors.activeText(for: appearance)
+                        : TabBarColors.inactiveText(for: appearance)
+                )
+                .frame(width: TabBarMetrics.iconSize, height: TabBarMetrics.iconSize)
+                .background(
+                    Circle()
+                        .fill(
+                            isCloseHovered
+                                ? TabBarColors.hoveredTabBackground(for: appearance)
+                                : .clear
+                        )
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isCloseHovered = hovering
+        }
+        .saturation(saturation)
+    }
+
     private var shortcutHintSlotWidth: CGFloat {
         guard let label = shortcutHintLabel else {
             return accessorySlotSize
@@ -257,7 +328,7 @@ struct TabItemView: View {
     }
 
     @ViewBuilder
-    private var trailingAccessory: some View {
+    private var closeAccessory: some View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
                 Text(shortcutHintLabel)
@@ -402,8 +473,10 @@ struct TabItemView: View {
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .saturation(saturation)
                 }
-            } else if isSelected || isHovered || isCloseHovered {
-                // Close button (always visible on active tab, shown on hover for others)
+            } else if appearance.closeButtonPosition == .trailing && (isSelected || isHovered || isCloseHovered) {
+                // Close button (always visible on active tab, shown on hover for others).
+                // Only rendered here in trailing-close mode — leading mode puts
+                // the close × over the favicon slot instead (see body).
                 Button {
                     onClose()
                 } label: {

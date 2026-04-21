@@ -336,6 +336,16 @@ extension BonsplitConfiguration {
         ]
     }
 
+    /// Controls which edge of a tab renders the close (×) affordance.
+    public enum CloseButtonPosition: String, Sendable, Codable, CaseIterable {
+        /// Render the close button at the leading edge of the tab content.
+        /// Matches the macOS Safari/Finder tab convention.
+        case leading
+
+        /// Render the close button at the trailing edge of the tab content.
+        case trailing
+    }
+
     public struct SplitButtonTooltips: Sendable, Equatable {
         public var newTerminal: String
         public var newBrowser: String
@@ -523,6 +533,9 @@ extension BonsplitConfiguration {
         /// that would create visibly different translucent layers.
         public var usesSharedBackdrop: Bool
 
+        /// Edge of the tab where the close (×) affordance renders.
+        public var closeButtonPosition: CloseButtonPosition
+
         // MARK: - Presets
 
         public static let `default` = Appearance()
@@ -562,7 +575,8 @@ extension BonsplitConfiguration {
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
             chromeColors: ChromeColors = .init(),
-            usesSharedBackdrop: Bool = false
+            usesSharedBackdrop: Bool = false,
+            closeButtonPosition: CloseButtonPosition = .trailing
         ) {
             self.tabBarHeight = tabBarHeight
             self.tabMinWidth = tabMinWidth
@@ -582,6 +596,7 @@ extension BonsplitConfiguration {
             self.enableAnimations = enableAnimations
             self.chromeColors = chromeColors
             self.usesSharedBackdrop = usesSharedBackdrop
+            self.closeButtonPosition = closeButtonPosition
         }
 
         private static func uniqueSplitButtons(_ buttons: [SplitActionButton]) -> [SplitActionButton] {
