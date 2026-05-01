@@ -471,6 +471,12 @@ extension BonsplitConfiguration {
         /// Extra leading inset for the tab bar (e.g. for traffic light buttons when sidebar is collapsed)
         public var tabBarLeadingInset: CGFloat
 
+        public var minimalModeWorkspaceBadgeTitle: String?
+        public var minimalModeWorkspaceBadgeAccessibilityLabel: String?
+        public var minimalModeWorkspaceBadgeMaxWidth: CGFloat
+        public var minimalModeWorkspaceBadgeBackgroundHex: String?
+        public var minimalModeWorkspaceBadgeForegroundHex: String?
+
         /// Tooltip text for the tab bar's right-side action buttons
         public var splitButtonTooltips: SplitButtonTooltips
 
@@ -527,6 +533,11 @@ extension BonsplitConfiguration {
             splitButtonBackdropStyle: SplitButtonBackdropStyle? = nil,
             splitButtonBackdropEffect: SplitButtonBackdropEffect? = nil,
             tabBarLeadingInset: CGFloat = 0,
+            minimalModeWorkspaceBadgeTitle: String? = nil,
+            minimalModeWorkspaceBadgeAccessibilityLabel: String? = nil,
+            minimalModeWorkspaceBadgeMaxWidth: CGFloat = 190,
+            minimalModeWorkspaceBadgeBackgroundHex: String? = nil,
+            minimalModeWorkspaceBadgeForegroundHex: String? = nil,
             splitButtonTooltips: SplitButtonTooltips = .default,
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
@@ -546,6 +557,11 @@ extension BonsplitConfiguration {
             self.splitButtonBackdropStyle = splitButtonBackdropStyle
             self.splitButtonBackdropEffect = splitButtonBackdropEffect
             self.tabBarLeadingInset = tabBarLeadingInset
+            self.minimalModeWorkspaceBadgeTitle = minimalModeWorkspaceBadgeTitle
+            self.minimalModeWorkspaceBadgeAccessibilityLabel = minimalModeWorkspaceBadgeAccessibilityLabel
+            self.minimalModeWorkspaceBadgeMaxWidth = max(0, minimalModeWorkspaceBadgeMaxWidth)
+            self.minimalModeWorkspaceBadgeBackgroundHex = minimalModeWorkspaceBadgeBackgroundHex
+            self.minimalModeWorkspaceBadgeForegroundHex = minimalModeWorkspaceBadgeForegroundHex
             self.splitButtonTooltips = splitButtonTooltips
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
