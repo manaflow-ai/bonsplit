@@ -47,6 +47,7 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
             },
             appearance: controller.configuration.appearance,
             showSplitButtons: controller.configuration.allowSplits && controller.configuration.appearance.showSplitButtons,
+            tabBarVisibility: controller.configuration.tabBarVisibility,
             contentViewLifecycle: controller.configuration.contentViewLifecycle,
             onGeometryChange: { [weak controller] isDragging in
                 controller?.notifyGeometryChange(isDragging: isDragging)

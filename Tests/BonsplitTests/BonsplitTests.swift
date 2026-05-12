@@ -1454,6 +1454,21 @@ final class BonsplitTests: XCTestCase {
         XCTAssertNil(spy.requestedPaneId)
     }
 
+    @MainActor
+    func testTabBarVisibilityDefaultsToAlways() throws {
+        XCTAssertEqual(BonsplitConfiguration().tabBarVisibility, .always)
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .always)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 1, visibility: .always)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 2, visibility: .always)))
+    }
+
+    @MainActor
+    func testMultipleTabsVisibilityHidesPaneBarUntilThereAreMultipleTabs() throws {
+        XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .multipleTabs)))
+        XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 1, visibility: .multipleTabs)))
+        XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 2, visibility: .multipleTabs)))
+    }
+
     func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {
         XCTAssertEqual(
             TabItemStyling.iconSaturation(hasRasterIcon: true, tabSaturation: 0.0),
@@ -2617,6 +2632,44 @@ final class BonsplitTests: XCTestCase {
     private func waitForDescendant<T: NSView>(
         ofType type: T.Type,
         in root: NSView,
+        timeout: TimeInterval = 1.0,
+        where predicate: (T) -> Bool = { _ in true }
+    ) -> T? {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            root.layoutSubtreeIfNeeded()
+            if let match = firstDescendant(
+                ofType: type,
+                in: root,
+                where: predicate
+            ) {
+                return match
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        } while Date() < deadline
+        return firstDescendant(ofType: type, in: root, where: predicate)
+    }
+
+    private func firstDescendant<T: NSView>(
+        ofType type: T.Type,
+        in root: NSView,
+        where predicate: (T) -> Bool
+    ) -> T? {
+        if let match = root as? T, predicate(match) {
+            return match
+        }
+        for subview in root.subviews {
+            if let match = firstDescendant(ofType: type, in: subview, where: predicate) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    @MainActor
+    private func waitForDescendant<T: NSView>(
+        ofType type: T.Type,
+        in root: NSView,
         containingWindowPoint point: NSPoint,
         timeout: TimeInterval = 1.0,
         where predicate: (T) -> Bool = { _ in true }
@@ -3298,6 +3351,64 @@ final class BonsplitTests: XCTestCase {
         contentView.layoutSubtreeIfNeeded()
 
         return extract(hostingView)
+    }
+
+    @MainActor
+    private func renderedPaneContainerHasTabBar(
+        tabCount: Int,
+        visibility: TabBarVisibility
+    ) -> Bool? {
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(tabBarVisibility: visibility)
+        )
+        guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
+
+        let tabs = (0..<tabCount).map { index in
+            TabItem(title: "Tab \(index + 1)", icon: nil)
+        }
+        pane.tabs = tabs
+        pane.selectedTabId = tabs.first?.id
+
+        let size = NSSize(width: 320, height: 180)
+        let hostingView = NSHostingView(
+            rootView: PaneContainerView(
+                pane: pane,
+                controller: controller.internalController,
+                contentBuilder: { _, _ in Color.clear },
+                emptyPaneBuilder: { _ in Color.clear },
+                showSplitButtons: false,
+                tabBarVisibility: visibility
+            )
+            .environment(controller)
+            .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else { return nil }
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        return waitForDescendant(
+            ofType: TabBarDragZoneView.DragNSView.self,
+            in: hostingView,
+            timeout: 0.1
+        ) != nil
     }
 
     @MainActor

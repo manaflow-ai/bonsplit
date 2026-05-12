@@ -10,6 +10,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     let appearance: BonsplitConfiguration.Appearance
     var showSplitButtons: Bool = true
+    var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
     var enableAnimations: Bool = true
@@ -24,6 +25,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
+                tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle
             )
 
@@ -35,6 +37,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,
+                tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle,
                 onGeometryChange: onGeometryChange,
                 enableAnimations: enableAnimations,
@@ -94,6 +97,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
+    var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
 
     func makeNSView(context: Context) -> NSView {
@@ -103,6 +107,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
             showSplitButtons: showSplitButtons,
+            tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle
         )
         let hostingController = NonDraggableHostingController(rootView: paneView)
@@ -143,6 +148,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
             showSplitButtons: showSplitButtons,
+            tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle
         )
         context.coordinator.hostingController?.rootView = paneView
