@@ -598,6 +598,56 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabBarSelectedChromeFrameFollowsCurrentSelection() {
+        let firstTabId = UUID()
+        let secondTabId = UUID()
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            splitButtonCount: 0,
+            splitButtonLaneVisible: false,
+            reservesSplitButtonLane: false
+        )
+        let frames = [
+            firstTabId: CGRect(x: 12, y: 0, width: 120, height: 28),
+            secondTabId: CGRect(x: 144, y: 0, width: 96, height: 28),
+        ]
+        let totalWidth: CGFloat = 300
+
+        let firstSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: firstTabId,
+            tabFrames: frames
+        )
+        let secondSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: secondTabId,
+            tabFrames: frames
+        )
+        let firstIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: firstSelectedFrame,
+            totalWidth: totalWidth
+        )
+        let secondIndicatorFrame = layout.selectedIndicatorFrame(
+            selectedTabFrame: secondSelectedFrame,
+            totalWidth: totalWidth
+        )
+
+        XCTAssertEqual(firstIndicatorFrame?.minX, frames[firstTabId]?.minX)
+        XCTAssertEqual(
+            secondIndicatorFrame?.minX,
+            frames[secondTabId]?.minX,
+            "Selected tab chrome must be derived from the current selected tab id, not a cached frame from a previous selection."
+        )
+        let nilSelectedFrame = TabBarStyling.selectedTabFrame(
+            selectedTabId: nil,
+            tabFrames: frames
+        )
+        XCTAssertNil(
+            layout.selectedIndicatorFrame(
+                selectedTabFrame: nilSelectedFrame,
+                totalWidth: totalWidth
+            )
+        )
+    }
+
     func testTabBarLayoutIgnoresMeasuredSplitButtonLaneWidthWithoutButtons() {
         let layout = TabBarLayout(
             tabBarHeight: 28,

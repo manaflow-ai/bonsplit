@@ -9,6 +9,13 @@ extension View {
     func tabControlShortcutHintVisibilityAnimation<Value: Equatable>(value: Value) -> some View {
         animation(TabControlShortcutHintAnimation.visibility, value: value)
     }
+
+    func tabBarButtonAnimationsDisabled() -> some View {
+        transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
+    }
 }
 
 private enum TabControlShortcutHintDebugSettings {
@@ -164,10 +171,13 @@ struct TabItemView: View {
                     }
                     .buttonStyle(.plain)
                     .onHover { hovering in
-                        isZoomHovered = hovering
+                        withTransaction(Transaction(animation: nil)) {
+                            isZoomHovered = hovering
+                        }
                     }
                     .saturation(saturation)
                     .accessibilityLabel("Exit zoom")
+                    .tabBarButtonAnimationsDisabled()
                 }
             }
 
@@ -201,8 +211,9 @@ struct TabItemView: View {
             onSelect()
         }
         .onHover { hovering in
-            // Keep icon rendering stable while hovering; only accessory/background elements animate.
-            isHovered = hovering
+            withTransaction(Transaction(animation: nil)) {
+                isHovered = hovering
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tab.title)
@@ -426,14 +437,15 @@ struct TabItemView: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { hovering in
-                    isCloseHovered = hovering
+                    withTransaction(Transaction(animation: nil)) {
+                        isCloseHovered = hovering
+                    }
                 }
                 .saturation(saturation)
             }
         }
         .frame(width: accessorySlotSize, height: accessorySlotSize)
-        .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isHovered)
-        .animation(.easeInOut(duration: TabBarMetrics.hoverDuration), value: isCloseHovered)
+        .tabBarButtonAnimationsDisabled()
     }
 }
 
