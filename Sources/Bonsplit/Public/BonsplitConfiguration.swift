@@ -336,6 +336,27 @@ extension BonsplitConfiguration {
         ]
     }
 
+    /// Controls which edge of a tab renders the close (×) affordance.
+    ///
+    /// Edges are locale-aware: `.leading` and `.trailing` follow SwiftUI's
+    /// `LayoutDirection` environment, so a `.leading` close button renders on
+    /// the visual left in left-to-right locales (en, ja, ko, …) and on the
+    /// visual right in right-to-left locales (ar, he, …). The position is
+    /// inherited from standard `HStack` ordering rather than hard-coded sides.
+    /// With `.leading`, the close × shares the favicon slot via overlay
+    /// (Safari 15+/Finder/Xcode style) rather than occupying a separate slot,
+    /// so toggling the value does not change tab content width.
+    public enum CloseButtonPosition: String, Sendable, Codable, CaseIterable {
+        /// Render the close button at the leading edge of the tab content
+        /// (visual left in LTR, visual right in RTL). Matches the macOS
+        /// Safari/Finder tab convention.
+        case leading
+
+        /// Render the close button at the trailing edge of the tab content
+        /// (visual right in LTR, visual left in RTL).
+        case trailing
+    }
+
     public struct SplitButtonTooltips: Sendable, Equatable {
         public var newTerminal: String
         public var newBrowser: String
@@ -523,6 +544,9 @@ extension BonsplitConfiguration {
         /// that would create visibly different translucent layers.
         public var usesSharedBackdrop: Bool
 
+        /// Edge of the tab where the close (×) affordance renders.
+        public var closeButtonPosition: CloseButtonPosition
+
         // MARK: - Presets
 
         public static let `default` = Appearance()
@@ -562,7 +586,8 @@ extension BonsplitConfiguration {
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
             chromeColors: ChromeColors = .init(),
-            usesSharedBackdrop: Bool = false
+            usesSharedBackdrop: Bool = false,
+            closeButtonPosition: CloseButtonPosition = .trailing
         ) {
             self.tabBarHeight = tabBarHeight
             self.tabMinWidth = tabMinWidth
@@ -582,6 +607,7 @@ extension BonsplitConfiguration {
             self.enableAnimations = enableAnimations
             self.chromeColors = chromeColors
             self.usesSharedBackdrop = usesSharedBackdrop
+            self.closeButtonPosition = closeButtonPosition
         }
 
         private static func uniqueSplitButtons(_ buttons: [SplitActionButton]) -> [SplitActionButton] {

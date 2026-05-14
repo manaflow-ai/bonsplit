@@ -3582,4 +3582,28 @@ final class BonsplitTests: XCTestCase {
         }
         return event
     }
+
+    func testCloseButtonPositionDefaultsToTrailing() {
+        let appearance = BonsplitConfiguration.Appearance()
+        XCTAssertEqual(appearance.closeButtonPosition, .trailing)
+    }
+
+    func testCloseButtonPositionRoundTripsThroughInit() {
+        let leading = BonsplitConfiguration.Appearance(closeButtonPosition: .leading)
+        XCTAssertEqual(leading.closeButtonPosition, .leading)
+
+        let trailing = BonsplitConfiguration.Appearance(closeButtonPosition: .trailing)
+        XCTAssertEqual(trailing.closeButtonPosition, .trailing)
+    }
+
+    func testCloseButtonPositionEnumIsCodable() throws {
+        for position in BonsplitConfiguration.CloseButtonPosition.allCases {
+            let encoded = try JSONEncoder().encode(position)
+            let decoded = try JSONDecoder().decode(
+                BonsplitConfiguration.CloseButtonPosition.self,
+                from: encoded
+            )
+            XCTAssertEqual(decoded, position)
+        }
+    }
 }
