@@ -283,7 +283,14 @@ struct TabItemView: View {
                         ? TabBarColors.activeText(for: appearance)
                         : TabBarColors.inactiveText(for: appearance)
                 )
-                .frame(width: TabBarMetrics.iconSize, height: TabBarMetrics.iconSize)
+                // Match the trailing-close hit area so the affordance scales
+                // with `tabTitleFontSize` (via `accessorySlotSize`). Falls back
+                // to at least the favicon slot width so the hover circle never
+                // shrinks below the icon it overlays.
+                .frame(
+                    width: max(TabBarMetrics.iconSize, accessorySlotSize),
+                    height: max(TabBarMetrics.iconSize, accessorySlotSize)
+                )
                 .background(
                     Circle()
                         .fill(
@@ -446,6 +453,14 @@ struct TabItemView: View {
     // MARK: - Close Button / Dirty Indicator
 
     @ViewBuilder
+    // Hover-transition semantics in leading-close mode for an unpinned + dirty
+    // tab: the trailing slot is kept (`rendersTrailingAccessorySlot` returns
+    // true for `tab.isDirty`), so the dirty dot renders while idle. On hover or
+    // selection the dirty branch above goes false and the trailing-close branch
+    // below is guarded by `closeButtonPosition == .trailing`, so the slot
+    // becomes empty space while × overlays the favicon. This is intentional —
+    // it mirrors Safari's transition from dirty dot to close × without
+    // re-flowing tab content width.
     private var closeOrDirtyIndicator: some View {
         ZStack {
             // Dirty indicator (shown when dirty and not hovering, hidden for selected tab)
