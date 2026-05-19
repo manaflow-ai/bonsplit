@@ -1179,9 +1179,9 @@ struct TabBarView: View {
                 }
                 inlineRenamingTabId = tab.id
             },
-            onInlineRenameCommit: { title in
+            onInlineRenameCommit: { title, initialTitle in
                 inlineRenamingTabId = nil
-                controller.requestInlineTabRename(title, for: TabID(id: tab.id), inPane: pane.id)
+                controller.requestInlineTabRename(title, initialTitle: initialTitle, for: TabID(id: tab.id), inPane: pane.id)
             },
             onInlineRenameCancel: {
                 inlineRenamingTabId = nil

@@ -203,7 +203,13 @@ public final class BonsplitController {
     /// Request the delegate to commit a tab title from inline editing.
     public func requestInlineTabRename(_ title: String, for tabId: TabID, inPane pane: PaneID) {
         guard let tab = tab(tabId) else { return }
-        delegate?.splitTabBar(self, didCommitInlineRename: title, for: tab, inPane: pane)
+        requestInlineTabRename(title, initialTitle: tab.title, for: tabId, inPane: pane)
+    }
+
+    /// Request the delegate to commit a tab title from inline editing.
+    public func requestInlineTabRename(_ title: String, initialTitle: String, for tabId: TabID, inPane pane: PaneID) {
+        guard let tab = tab(tabId) else { return }
+        delegate?.splitTabBar(self, didCommitInlineRename: title, initialTitle: initialTitle, for: tab, inPane: pane)
     }
 
     /// Request the delegate to move a tab to a host-provided destination.

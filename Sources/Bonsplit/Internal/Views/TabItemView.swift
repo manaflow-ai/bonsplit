@@ -179,7 +179,7 @@ private struct InlineTabRenameField: NSViewRepresentable {
             fieldEditor.insertionPointColor = parent.textColor
             fieldEditor.selectedTextAttributes = [
                 .foregroundColor: NSColor.clear,
-                .backgroundColor: NSColor.clear,
+                .backgroundColor: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.42),
             ]
         }
 
@@ -314,7 +314,7 @@ struct TabItemView: View {
     let onClose: () -> Void
     let onZoomToggle: () -> Void
     let onInlineRenameRequest: () -> Void
-    let onInlineRenameCommit: (String) -> Void
+    let onInlineRenameCommit: (String, String) -> Void
     let onInlineRenameCancel: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
@@ -328,6 +328,7 @@ struct TabItemView: View {
     @State private var lastLoadingStoppedAt: Date?
     @State private var renderedFaviconData: Data?
     @State private var renderedFaviconImage: NSImage?
+    @State private var inlineRenameInitialTitle: String?
     @State private var inlineRenameDraftTitle: String?
     @AppStorage(TabControlShortcutHintDebugSettings.xKey) private var controlShortcutHintXOffset = TabControlShortcutHintDebugSettings.defaultX
     @AppStorage(TabControlShortcutHintDebugSettings.yKey) private var controlShortcutHintYOffset = TabControlShortcutHintDebugSettings.defaultY
@@ -392,16 +393,19 @@ struct TabItemView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .overlay(alignment: .leading) {
                             InlineTabRenameField(
-                                initialTitle: inlineRenameDraftTitle ?? tab.title,
+                                initialTitle: inlineRenameInitialTitle ?? tab.title,
                                 fontSize: appearance.tabTitleFontSize,
                                 textColor: titleTextNSColor,
                                 height: titleLineHeight,
                                 onTextChange: { inlineRenameDraftTitle = $0 },
                                 onCommit: { title in
+                                    let initialTitle = inlineRenameInitialTitle ?? tab.title
+                                    inlineRenameInitialTitle = nil
                                     inlineRenameDraftTitle = nil
-                                    onInlineRenameCommit(title)
+                                    onInlineRenameCommit(title, initialTitle)
                                 },
                                 onCancel: {
+                                    inlineRenameInitialTitle = nil
                                     inlineRenameDraftTitle = nil
                                     onInlineRenameCancel()
                                 }
@@ -409,9 +413,11 @@ struct TabItemView: View {
                             .frame(minWidth: 44, maxWidth: .infinity, minHeight: titleLineHeight, maxHeight: titleLineHeight)
                         }
                         .onAppear {
+                            inlineRenameInitialTitle = tab.title
                             inlineRenameDraftTitle = tab.title
                         }
                         .onDisappear {
+                            inlineRenameInitialTitle = nil
                             inlineRenameDraftTitle = nil
                         }
                         .layoutPriority(1)
@@ -540,7 +546,7 @@ struct TabItemView: View {
 
     private var displayedTitle: String {
         if isInlineRenaming {
-            return inlineRenameDraftTitle ?? tab.title
+            return inlineRenameDraftTitle ?? inlineRenameInitialTitle ?? tab.title
         }
         return tab.title
     }

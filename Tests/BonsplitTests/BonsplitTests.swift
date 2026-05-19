@@ -82,6 +82,7 @@ final class BonsplitTests: XCTestCase {
         var paneId: PaneID?
         var moveDestinationId: String?
         var inlineRenameTitle: String?
+        var inlineRenameInitialTitle: String?
 
         func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Bonsplit.Tab, inPane pane: PaneID) {
             self.action = action
@@ -97,6 +98,13 @@ final class BonsplitTests: XCTestCase {
 
         func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, for tab: Bonsplit.Tab, inPane pane: PaneID) {
             inlineRenameTitle = title
+            tabId = tab.id
+            paneId = pane
+        }
+
+        func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, initialTitle: String, for tab: Bonsplit.Tab, inPane pane: PaneID) {
+            inlineRenameTitle = title
+            inlineRenameInitialTitle = initialTitle
             tabId = tab.id
             paneId = pane
         }
@@ -1377,6 +1385,23 @@ final class BonsplitTests: XCTestCase {
         controller.requestInlineTabRename("Inline Title", for: tabId, inPane: pane)
 
         XCTAssertEqual(spy.inlineRenameTitle, "Inline Title")
+        XCTAssertEqual(spy.inlineRenameInitialTitle, "Test")
+        XCTAssertEqual(spy.tabId, tabId)
+        XCTAssertEqual(spy.paneId, pane)
+    }
+
+    @MainActor
+    func testRequestInlineTabRenameForwardsInitialTitleToDelegate() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Live Title", kind: "terminal")!
+        let spy = TabContextActionDelegateSpy()
+        controller.delegate = spy
+
+        controller.requestInlineTabRename("Initial Title", initialTitle: "Initial Title", for: tabId, inPane: pane)
+
+        XCTAssertEqual(spy.inlineRenameTitle, "Initial Title")
+        XCTAssertEqual(spy.inlineRenameInitialTitle, "Initial Title")
         XCTAssertEqual(spy.tabId, tabId)
         XCTAssertEqual(spy.paneId, pane)
     }
