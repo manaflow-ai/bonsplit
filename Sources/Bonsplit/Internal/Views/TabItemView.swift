@@ -62,6 +62,7 @@ private struct InlineTabRenameField: NSViewRepresentable {
     let fontSize: CGFloat
     let textColor: NSColor
     let height: CGFloat
+    let showsNativeText: Bool
     let onTextChange: (String) -> Void
     let onCommit: (String) -> Void
     let onCancel: () -> Void
@@ -184,13 +185,24 @@ private struct InlineTabRenameField: NSViewRepresentable {
 
         func configureFieldEditor(for field: NSTextField) {
             guard let fieldEditor = field.currentEditor() as? NSTextView else { return }
+            let textColor = parent.showsNativeText ? parent.textColor : .clear
             fieldEditor.textContainerInset = .zero
             fieldEditor.textContainer?.lineFragmentPadding = 0
             fieldEditor.font = field.font
-            fieldEditor.textColor = .clear
+            fieldEditor.textColor = textColor
             fieldEditor.insertionPointColor = parent.textColor
             fieldEditor.selectedTextAttributes = [
-                .foregroundColor: NSColor.clear,
+                .foregroundColor: textColor,
+                .backgroundColor: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.42),
+            ]
+        }
+
+        func showNativeTextImmediately(for field: NSTextField) {
+            guard let fieldEditor = field.currentEditor() as? NSTextView else { return }
+            field.textColor = parent.textColor
+            fieldEditor.textColor = parent.textColor
+            fieldEditor.selectedTextAttributes = [
+                .foregroundColor: parent.textColor,
                 .backgroundColor: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.42),
             ]
         }
@@ -217,7 +229,7 @@ private struct InlineTabRenameField: NSViewRepresentable {
         func controlTextDidChange(_ obj: Notification) {
             guard let field = obj.object as? NSTextField else { return }
             parent.onTextChange(field.stringValue)
-            configureFieldEditor(for: field)
+            showNativeTextImmediately(for: field)
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -275,7 +287,7 @@ private struct InlineTabRenameField: NSViewRepresentable {
         field.drawsBackground = false
         field.focusRingType = .none
         field.font = .systemFont(ofSize: fontSize)
-        field.textColor = .clear
+        field.textColor = showsNativeText ? textColor : .clear
         field.lineBreakMode = .byTruncatingTail
         field.cell?.usesSingleLineMode = true
         field.cell?.wraps = false
@@ -299,7 +311,7 @@ private struct InlineTabRenameField: NSViewRepresentable {
         context.coordinator.parent = self
         let field = host.field
         field.font = .systemFont(ofSize: fontSize)
-        field.textColor = .clear
+        field.textColor = showsNativeText ? textColor : .clear
         host.contentHeight = height
         context.coordinator.configureFieldEditor(for: field)
         if field.currentEditor() == nil, field.stringValue != initialTitle {
@@ -342,6 +354,7 @@ struct TabItemView: View {
     @State private var renderedFaviconImage: NSImage?
     @State private var inlineRenameInitialTitle: String?
     @State private var inlineRenameDraftTitle: String?
+    @State private var inlineRenameShowsNativeText = false
     @AppStorage(TabControlShortcutHintDebugSettings.xKey) private var controlShortcutHintXOffset = TabControlShortcutHintDebugSettings.defaultX
     @AppStorage(TabControlShortcutHintDebugSettings.yKey) private var controlShortcutHintYOffset = TabControlShortcutHintDebugSettings.defaultY
     @AppStorage(TabControlShortcutHintDebugSettings.alwaysShowKey) private var alwaysShowShortcutHints = TabControlShortcutHintDebugSettings.defaultAlwaysShow
@@ -409,16 +422,22 @@ struct TabItemView: View {
                                 fontSize: appearance.tabTitleFontSize,
                                 textColor: titleTextNSColor,
                                 height: titleLineHeight,
-                                onTextChange: { inlineRenameDraftTitle = $0 },
+                                showsNativeText: inlineRenameShowsNativeText,
+                                onTextChange: {
+                                    inlineRenameDraftTitle = $0
+                                    inlineRenameShowsNativeText = true
+                                },
                                 onCommit: { title in
                                     let initialTitle = inlineRenameInitialTitle ?? tab.title
                                     inlineRenameInitialTitle = nil
                                     inlineRenameDraftTitle = nil
+                                    inlineRenameShowsNativeText = false
                                     onInlineRenameCommit(title, initialTitle)
                                 },
                                 onCancel: {
                                     inlineRenameInitialTitle = nil
                                     inlineRenameDraftTitle = nil
+                                    inlineRenameShowsNativeText = false
                                     onInlineRenameCancel()
                                 }
                             )
@@ -427,10 +446,12 @@ struct TabItemView: View {
                         .onAppear {
                             inlineRenameInitialTitle = tab.title
                             inlineRenameDraftTitle = tab.title
+                            inlineRenameShowsNativeText = false
                         }
                         .onDisappear {
                             inlineRenameInitialTitle = nil
                             inlineRenameDraftTitle = nil
+                            inlineRenameShowsNativeText = false
                         }
                         .layoutPriority(1)
                 } else {
@@ -588,6 +609,7 @@ struct TabItemView: View {
             .font(.system(size: appearance.tabTitleFontSize))
             .lineLimit(1)
             .foregroundStyle(titleTextColor)
+            .opacity(isInlineRenaming && inlineRenameShowsNativeText ? 0 : 1)
             .saturation(saturation)
     }
 
