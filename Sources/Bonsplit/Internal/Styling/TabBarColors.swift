@@ -168,11 +168,7 @@ enum TabBarColors {
             return activeTabBackground
         }
         if appearance.usesSharedBackdrop {
-            let semanticBackground = semanticTabBarBackgroundColor(for: appearance) ?? custom
-            let overlayColor = semanticBackground.isBonsplitLightColor
-                ? NSColor.black.withAlphaComponent(0.06)
-                : NSColor.white.withAlphaComponent(0.08)
-            return Color(nsColor: overlayColor)
+            return .clear
         }
         let adjusted = custom.isBonsplitLightColor
             ? custom.bonsplitDarken(by: 0.065)
