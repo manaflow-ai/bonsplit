@@ -611,6 +611,7 @@ struct TabItemView: View {
             .foregroundStyle(titleTextColor)
             .opacity(isInlineRenaming && inlineRenameShowsNativeText ? 0 : 1)
             .saturation(saturation)
+            .frame(minHeight: titleLineHeight, maxHeight: titleLineHeight, alignment: .leading)
     }
 
     private func shortcutHintWidth(for label: String) -> CGFloat {
