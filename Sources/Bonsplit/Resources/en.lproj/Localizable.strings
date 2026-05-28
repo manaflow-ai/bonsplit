@@ -18,3 +18,4 @@
 "tabContext.pinTab" = "Pin Tab";
 "tabContext.markTabAsRead" = "Mark Tab as Read";
 "tabContext.markTabAsUnread" = "Mark Tab as Unread";
+"tabContext.forkConversation" = "Fork Conversation";

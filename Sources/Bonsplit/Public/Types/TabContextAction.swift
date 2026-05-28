@@ -20,6 +20,7 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case markAsRead
     case markAsUnread
     case toggleZoom
+    case forkConversation
 }
 
 public struct TabContextMoveDestination: Identifiable, Equatable, Sendable {

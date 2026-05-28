@@ -832,6 +832,17 @@ enum TabContextMenuBuilder {
             )
         }
 
+        if state.canForkConversation {
+            menu.addItem(.separator())
+            addAction(
+                title: localized("tabContext.forkConversation", defaultValue: "Fork Conversation"),
+                action: .forkConversation,
+                state: state,
+                target: target,
+                to: menu
+            )
+        }
+
         menu.addItem(.separator())
 
         addAction(

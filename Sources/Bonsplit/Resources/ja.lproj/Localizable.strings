@@ -18,3 +18,4 @@
 "tabContext.pinTab" = "タブをピン留め";
 "tabContext.markTabAsRead" = "タブを既読にする";
 "tabContext.markTabAsUnread" = "タブを未読にする";
+"tabContext.forkConversation" = "会話をフォーク";

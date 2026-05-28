@@ -77,6 +77,11 @@ public final class BonsplitController {
     /// Host-provided destinations for the tab context menu's Move Tab submenu.
     @ObservationIgnored public var tabContextMoveDestinationsProvider: ((TabID, PaneID) -> [TabContextMoveDestination])?
 
+    /// Host-provided synchronous check that decides whether the tab context menu should
+    /// surface a "Fork Conversation" action for the tab (e.g. an active forkable agent
+    /// session). Return `true` to enable the item, `false` (or omit the provider) to hide it.
+    @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+
     /// Called when the user explicitly requests to close a tab from the tab strip UI.
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID, _ source: TabCloseRequestSource) -> Void)?

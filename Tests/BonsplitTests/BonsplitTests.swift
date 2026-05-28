@@ -1558,6 +1558,7 @@ final class BonsplitTests: XCTestCase {
             canMoveToNewWorkspace: true,
             canMoveToLeftPane: false,
             canMoveToRightPane: true,
+            canForkConversation: false,
             isZoomed: false,
             hasSplits: true,
             shortcuts: [:]
