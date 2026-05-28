@@ -286,7 +286,7 @@ public final class BonsplitController {
     @discardableResult
     public func closeTab(_ tabId: TabID) -> Bool {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return false }
-        return closeTab(tabId, with: tabIndex, in: pane)
+        return closeTab(tabId, with: tabIndex, in: pane, closeEmptyPane: true)
     }
     
     /// Close a tab by ID in a specific pane.
@@ -297,15 +297,25 @@ public final class BonsplitController {
               let tabIndex = pane.tabs.firstIndex(where: { $0.id == tabId.id }) else {
             return false
         }
-        
-        return closeTab(tabId, with: tabIndex, in: pane)
+
+        return closeTab(tabId, with: tabIndex, in: pane, closeEmptyPane: true)
     }
-    
+
+    /// Close a tab while preserving its pane if the close leaves the pane empty.
+    ///
+    /// This is useful for restore/migration flows that must remove temporary tabs
+    /// without changing the saved split tree shape.
+    @discardableResult
+    public func closeTabPreservingEmptyPane(_ tabId: TabID) -> Bool {
+        guard let (pane, tabIndex) = findTabInternal(tabId) else { return false }
+        return closeTab(tabId, with: tabIndex, in: pane, closeEmptyPane: false)
+    }
+
     /// Internal helper to close a tab given its index in a pane
     /// - Parameter tabId: The tab to close
     /// - Parameter tabIndex: The position of the tab within the pane
     /// - Parameter pane: The pane in which to close the tab
-    private func closeTab(_ tabId: TabID, with tabIndex: Int, in pane: PaneState) -> Bool {
+    private func closeTab(_ tabId: TabID, with tabIndex: Int, in pane: PaneState, closeEmptyPane: Bool) -> Bool {
         let tabItem = pane.tabs[tabIndex]
         let tab = Tab(from: tabItem)
         let paneId = pane.id
@@ -315,7 +325,7 @@ public final class BonsplitController {
             return false
         }
 
-        internalController.closeTab(tabId.id, inPane: pane.id)
+        internalController.closeTab(tabId.id, inPane: pane.id, closeEmptyPane: closeEmptyPane)
 
         // Notify delegate
         delegate?.splitTabBar(self, didCloseTab: tabId, fromPane: paneId)

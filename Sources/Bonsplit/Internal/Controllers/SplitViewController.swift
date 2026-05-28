@@ -386,13 +386,13 @@ final class SplitViewController {
     }
 
     /// Close a tab in a specific pane
-    func closeTab(_ tabId: UUID, inPane paneId: PaneID) {
+    func closeTab(_ tabId: UUID, inPane paneId: PaneID, closeEmptyPane: Bool = true) {
         guard let pane = rootNode.findPane(paneId) else { return }
 
         pane.removeTab(tabId)
 
         // If pane is now empty and not the only pane, close it
-        if pane.tabs.isEmpty && rootNode.allPaneIds.count > 1 {
+        if closeEmptyPane, pane.tabs.isEmpty && rootNode.allPaneIds.count > 1 {
             closePane(paneId)
         }
     }
