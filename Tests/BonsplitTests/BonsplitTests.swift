@@ -1559,6 +1559,7 @@ final class BonsplitTests: XCTestCase {
             canMoveToLeftPane: false,
             canMoveToRightPane: true,
             canForkConversation: false,
+            forkConversationDefaultAction: .forkConversationRight,
             isZoomed: false,
             hasSplits: true,
             shortcuts: [:]
@@ -1591,6 +1592,53 @@ final class BonsplitTests: XCTestCase {
         let workspaceItem = try XCTUnwrap(moveItem?.submenu?.items.dropFirst().first)
         target.performMoveDestination(workspaceItem)
         XCTAssertEqual(selectedDestinationId, "workspace:abc")
+    }
+
+    @MainActor
+    func testTabContextMenuBuilderCreatesForkConversationSubmenu() throws {
+        let target = TabContextMenuActionTarget()
+        var selectedAction: TabContextAction?
+        target.onContextAction = { selectedAction = $0 }
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            canForkConversation: true,
+            forkConversationDefaultAction: .forkConversationLeft,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation" })
+        target.performContextAction(forkItem)
+        XCTAssertEqual(selectedAction, .forkConversation)
+
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let destinationItems = try XCTUnwrap(forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem })
+        XCTAssertEqual(
+            destinationItems.map(\.title),
+            ["Right Split", "Left Split", "Top Split", "Bottom Split", "New Tab", "New Workspace"]
+        )
+        XCTAssertEqual(destinationItems.map(\.state), [.off, .on, .off, .off, .off, .off])
+
+        let newTabItem = try XCTUnwrap(destinationItems.first { $0.title == "New Tab" })
+        target.performContextAction(newTabItem)
+        XCTAssertEqual(selectedAction, .forkConversationNewTab)
     }
 
     @MainActor

@@ -19,3 +19,10 @@
 "tabContext.markTabAsRead" = "Mark Tab as Read";
 "tabContext.markTabAsUnread" = "Mark Tab as Unread";
 "tabContext.forkConversation" = "Fork Conversation";
+"tabContext.forkConversationTo" = "Fork Conversation To";
+"tabContext.forkConversation.right" = "Right Split";
+"tabContext.forkConversation.left" = "Left Split";
+"tabContext.forkConversation.top" = "Top Split";
+"tabContext.forkConversation.bottom" = "Bottom Split";
+"tabContext.forkConversation.newTab" = "New Tab";
+"tabContext.forkConversation.newWorkspace" = "New Workspace";

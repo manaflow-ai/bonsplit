@@ -841,6 +841,7 @@ enum TabContextMenuBuilder {
                 target: target,
                 to: menu
             )
+            menu.addItem(forkConversationSubmenuItem(state: state, target: target))
         }
 
         menu.addItem(.separator())
@@ -972,6 +973,76 @@ enum TabContextMenuBuilder {
         return item
     }
 
+    private static func forkConversationSubmenuItem(
+        state: TabContextMenuState,
+        target: TabContextMenuActionTarget
+    ) -> NSMenuItem {
+        let item = NSMenuItem(
+            title: localized("tabContext.forkConversationTo", defaultValue: "Fork Conversation To"),
+            action: nil,
+            keyEquivalent: ""
+        )
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let defaultAction = state.forkConversationDefaultAction.isForkConversationDestination
+            ? state.forkConversationDefaultAction
+            : .defaultForkConversationDestination
+
+        addAction(
+            title: localized("tabContext.forkConversation.right", defaultValue: "Right Split"),
+            action: .forkConversationRight,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationRight ? .on : .off
+        )
+        addAction(
+            title: localized("tabContext.forkConversation.left", defaultValue: "Left Split"),
+            action: .forkConversationLeft,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationLeft ? .on : .off
+        )
+        addAction(
+            title: localized("tabContext.forkConversation.top", defaultValue: "Top Split"),
+            action: .forkConversationTop,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationTop ? .on : .off
+        )
+        addAction(
+            title: localized("tabContext.forkConversation.bottom", defaultValue: "Bottom Split"),
+            action: .forkConversationBottom,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationBottom ? .on : .off
+        )
+        submenu.addItem(.separator())
+        addAction(
+            title: localized("tabContext.forkConversation.newTab", defaultValue: "New Tab"),
+            action: .forkConversationNewTab,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationNewTab ? .on : .off
+        )
+        addAction(
+            title: localized("tabContext.forkConversation.newWorkspace", defaultValue: "New Workspace"),
+            action: .forkConversationNewWorkspace,
+            state: state,
+            target: target,
+            to: submenu,
+            stateValue: defaultAction == .forkConversationNewWorkspace ? .on : .off
+        )
+
+        item.submenu = submenu
+        item.isEnabled = true
+        return item
+    }
+
     @discardableResult
     private static func addAction(
         title: String,
@@ -979,7 +1050,8 @@ enum TabContextMenuBuilder {
         enabled: Bool = true,
         state: TabContextMenuState,
         target: TabContextMenuActionTarget,
-        to menu: NSMenu
+        to menu: NSMenu,
+        stateValue: NSControl.StateValue = .off
     ) -> NSMenuItem {
         let item = NSMenuItem(
             title: title,
@@ -989,6 +1061,7 @@ enum TabContextMenuBuilder {
         item.target = target
         item.representedObject = action.rawValue
         item.isEnabled = enabled
+        item.state = stateValue
         if let shortcut = state.shortcuts[action] {
             applyShortcut(shortcut, to: item)
         }

@@ -21,6 +21,28 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case markAsUnread
     case toggleZoom
     case forkConversation
+    case forkConversationRight
+    case forkConversationLeft
+    case forkConversationTop
+    case forkConversationBottom
+    case forkConversationNewTab
+    case forkConversationNewWorkspace
+
+    public static let defaultForkConversationDestination: TabContextAction = .forkConversationRight
+
+    public var isForkConversationDestination: Bool {
+        switch self {
+        case .forkConversationRight,
+             .forkConversationLeft,
+             .forkConversationTop,
+             .forkConversationBottom,
+             .forkConversationNewTab,
+             .forkConversationNewWorkspace:
+            return true
+        default:
+            return false
+        }
+    }
 }
 
 public struct TabContextMoveDestination: Identifiable, Equatable, Sendable {

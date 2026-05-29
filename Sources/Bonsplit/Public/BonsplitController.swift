@@ -82,6 +82,11 @@ public final class BonsplitController {
     /// session). Return `true` to enable the item, `false` (or omit the provider) to hide it.
     @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> Bool)?
 
+    /// Host-provided default destination for the tab context menu's primary "Fork
+    /// Conversation" action. Return a destination-specific fork action; invalid values
+    /// fall back to `.forkConversationRight`.
+    @ObservationIgnored public var tabContextForkConversationDefaultActionProvider: ((TabID, PaneID) -> TabContextAction)?
+
     /// Called when the user explicitly requests to close a tab from the tab strip UI.
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID, _ source: TabCloseRequestSource) -> Void)?

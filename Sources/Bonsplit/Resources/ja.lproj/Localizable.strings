@@ -19,3 +19,10 @@
 "tabContext.markTabAsRead" = "タブを既読にする";
 "tabContext.markTabAsUnread" = "タブを未読にする";
 "tabContext.forkConversation" = "会話をフォーク";
+"tabContext.forkConversationTo" = "会話のフォーク先";
+"tabContext.forkConversation.right" = "右分割";
+"tabContext.forkConversation.left" = "左分割";
+"tabContext.forkConversation.top" = "上分割";
+"tabContext.forkConversation.bottom" = "下分割";
+"tabContext.forkConversation.newTab" = "新規タブ";
+"tabContext.forkConversation.newWorkspace" = "新規ワークスペース";
