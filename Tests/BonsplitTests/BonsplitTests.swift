@@ -421,6 +421,29 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testVerticalSplitButtonLaneUsesSingleButtonWidth() {
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 800,
+            splitButtonCount: 5,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: true,
+            splitButtonAxis: .vertical
+        )
+        let expectedWidth = TabBarStyling.splitButtonsLeadingPadding
+            + TabBarStyling.splitButtonsTrailingPadding
+            + TabBarStyling.splitActionButtonReservedWidth
+        let expectedHeight = TabBarStyling.splitButtonsLeadingPadding
+            + TabBarStyling.splitButtonsTrailingPadding
+            + (CGFloat(5) * TabBarStyling.splitActionButtonReservedWidth)
+            + (CGFloat(4) * TabBarStyling.splitButtonsSpacing)
+
+        XCTAssertEqual(layout.fullSplitButtonLaneWidth, expectedWidth)
+        XCTAssertEqual(layout.trailingTabContentInset, expectedWidth)
+        XCTAssertEqual(layout.splitButtonLaneHeight, expectedHeight)
+        XCTAssertEqual(layout.splitActionButtonHeight, TabBarStyling.splitActionButtonReservedWidth)
+    }
+
     func testTabBarLayoutExpandsForMeasuredSplitButtonLaneWidth() {
         let layout = TabBarLayout(
             tabBarHeight: 28,

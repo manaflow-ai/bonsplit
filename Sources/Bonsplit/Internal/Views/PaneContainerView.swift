@@ -159,6 +159,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @State private var activeDropZone: DropZone?
     @State private var dropLifecycle: PaneDropLifecycle = .idle
+    @AppStorage("workspacePresentationMode") private var presentationMode = "standard"
 
     private var isFocused: Bool {
         controller.focusedPaneId == pane.id
@@ -168,13 +169,37 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         controller.draggingTab != nil || controller.activeDragTab != nil
     }
 
+    private var showsTabBar: Bool {
+        tabBarVisibility.showsTabBar(tabCount: pane.tabs.count)
+    }
+
+    private var isMinimalMode: Bool {
+        presentationMode == "minimal"
+    }
+
+    private var usesVerticalSplitButtonRail: Bool {
+        showSplitButtons
+            && showsTabBar
+            && !isMinimalMode
+            && bonsplitController.configuration.appearance.splitButtonAxis == .vertical
+            && !bonsplitController.configuration.appearance.splitButtons.isEmpty
+    }
+
+    private var verticalSplitButtonRailWidth: CGFloat {
+        TabBarStyling.splitButtonsBackdropWidth(
+            buttonCount: bonsplitController.configuration.appearance.splitButtons.count,
+            axis: .vertical
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
-            if tabBarVisibility.showsTabBar(tabCount: pane.tabs.count) {
+            if showsTabBar {
                 TabBarView(
                     pane: pane,
                     isFocused: isFocused,
-                    showSplitButtons: showSplitButtons
+                    showSplitButtons: showSplitButtons && !usesVerticalSplitButtonRail,
+                    reservedTrailingWidth: usesVerticalSplitButtonRail ? verticalSplitButtonRailWidth : 0
                 )
             }
 
@@ -182,6 +207,11 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
             contentAreaWithDropZones
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topTrailing) {
+            if usesVerticalSplitButtonRail {
+                SplitActionButtonRail(pane: pane, isFocused: isFocused)
+            }
+        }
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
         .onChange(of: controller.draggingTab) { _, newValue in
 #if DEBUG

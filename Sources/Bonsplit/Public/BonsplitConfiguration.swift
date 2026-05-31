@@ -358,6 +358,11 @@ extension BonsplitConfiguration {
     }
 
     public struct Appearance: Sendable {
+        public enum SplitButtonAxis: Sendable, Equatable {
+            case horizontal
+            case vertical
+        }
+
         public enum SplitButtonBackdropStyle: Int, CaseIterable, Sendable {
             case precompositedPaneBackground = 0
             case opaquePaneBackground = 1
@@ -490,6 +495,9 @@ extension BonsplitConfiguration {
         /// When true, split buttons are only visible on hover
         public var splitButtonsOnHover: Bool
 
+        /// Layout direction for the right-side action buttons.
+        public var splitButtonAxis: SplitButtonAxis
+
         /// Optional explicit backdrop style for the tab bar's right-side action buttons.
         /// When unset, Bonsplit uses the host app's debug override if one is configured.
         public var splitButtonBackdropStyle: SplitButtonBackdropStyle?
@@ -555,6 +563,7 @@ extension BonsplitConfiguration {
             showSplitButtons: Bool = true,
             splitButtons: [SplitActionButton] = SplitActionButton.defaults,
             splitButtonsOnHover: Bool = false,
+            splitButtonAxis: SplitButtonAxis = .horizontal,
             splitButtonBackdropStyle: SplitButtonBackdropStyle? = nil,
             splitButtonBackdropEffect: SplitButtonBackdropEffect? = nil,
             tabBarLeadingInset: CGFloat = 0,
@@ -574,6 +583,7 @@ extension BonsplitConfiguration {
             self.showSplitButtons = showSplitButtons
             self.splitButtons = Self.uniqueSplitButtons(splitButtons)
             self.splitButtonsOnHover = splitButtonsOnHover
+            self.splitButtonAxis = splitButtonAxis
             self.splitButtonBackdropStyle = splitButtonBackdropStyle
             self.splitButtonBackdropEffect = splitButtonBackdropEffect
             self.tabBarLeadingInset = tabBarLeadingInset
