@@ -95,8 +95,8 @@ struct TabItemView: View {
     var body: some View {
         HStack(spacing: 0) {
             // Icon + title block uses the standard spacing, but keep the close affordance tight.
-            HStack(spacing: TabBarMetrics.contentSpacing) {
-                let iconSlotSize = TabBarMetrics.iconSize
+            HStack(spacing: scaledContentSpacing) {
+                let iconSlotSize = scaledIconSize
                 let iconTintColor = isSelected
                     ? TabBarColors.nsColorActiveText(for: appearance)
                     : TabBarColors.nsColorInactiveText(for: appearance)
@@ -253,13 +253,37 @@ struct TabItemView: View {
         .safeHelp(tab.title)
     }
 
+    /// Scale factor of the configured tab title font relative to the default.
+    ///
+    /// Icons and close/pin affordances are multiplied by this so they grow and
+    /// shrink together with the tab title font size instead of staying pinned to
+    /// the default-size constants.
+    private var fontScale: CGFloat {
+        max(0.1, appearance.tabTitleFontSize / TabBarMetrics.titleFontSize)
+    }
+
+    /// Leading-icon slot size, scaled to the configured tab title font.
+    private var scaledIconSize: CGFloat {
+        TabBarMetrics.iconSize * fontScale
+    }
+
+    /// Close / pin glyph size, scaled to the configured tab title font.
+    private var scaledCloseIconSize: CGFloat {
+        TabBarMetrics.closeIconSize * fontScale
+    }
+
+    /// Spacing between the leading icon and the title, scaled to the font.
+    private var scaledContentSpacing: CGFloat {
+        TabBarMetrics.contentSpacing * fontScale
+    }
+
     private func glyphSize(for iconName: String) -> CGFloat {
         // `terminal.fill` reads visually heavier than most symbols at the same point size.
-        // Hardcode sizes to avoid cross-glyph layout shifts.
+        // Keep the base sizes hardcoded to avoid cross-glyph layout shifts, then scale to the font.
         if iconName == "terminal.fill" || iconName == "terminal" || iconName == "globe" {
-            return max(10, TabBarMetrics.iconSize - 2.5)
+            return max(10, TabBarMetrics.iconSize - 2.5) * fontScale
         }
-        return TabBarMetrics.iconSize
+        return scaledIconSize
     }
 
     private var shortcutHintLabel: String? {
@@ -448,7 +472,7 @@ struct TabItemView: View {
             if tab.isPinned {
                 if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
                     Image(systemName: "pin.fill")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: scaledCloseIconSize, weight: .semibold))
                         .foregroundStyle(TabBarColors.inactiveText(for: appearance))
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .saturation(saturation)
@@ -459,7 +483,7 @@ struct TabItemView: View {
                     onClose(.closeButton)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: TabBarMetrics.closeIconSize, weight: .semibold))
+                        .font(.system(size: scaledCloseIconSize, weight: .semibold))
                         .foregroundStyle(
                             isCloseHovered
                                 ? TabBarColors.activeText(for: appearance)
