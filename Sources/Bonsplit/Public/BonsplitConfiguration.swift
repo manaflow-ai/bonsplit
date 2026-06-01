@@ -490,6 +490,11 @@ extension BonsplitConfiguration {
         /// When true, split buttons are only visible on hover
         public var splitButtonsOnHover: Bool
 
+        /// When true, the tab bar's right-side action buttons collapse into a
+        /// single overflow ("⋯") menu instead of rendering as a row of icons.
+        /// Menu item labels come from each button's `tooltip`.
+        public var collapseSplitButtonsIntoMenu: Bool
+
         /// Optional explicit backdrop style for the tab bar's right-side action buttons.
         /// When unset, Bonsplit uses the host app's debug override if one is configured.
         public var splitButtonBackdropStyle: SplitButtonBackdropStyle?
@@ -555,6 +560,7 @@ extension BonsplitConfiguration {
             showSplitButtons: Bool = true,
             splitButtons: [SplitActionButton] = SplitActionButton.defaults,
             splitButtonsOnHover: Bool = false,
+            collapseSplitButtonsIntoMenu: Bool = false,
             splitButtonBackdropStyle: SplitButtonBackdropStyle? = nil,
             splitButtonBackdropEffect: SplitButtonBackdropEffect? = nil,
             tabBarLeadingInset: CGFloat = 0,
@@ -574,6 +580,7 @@ extension BonsplitConfiguration {
             self.showSplitButtons = showSplitButtons
             self.splitButtons = Self.uniqueSplitButtons(splitButtons)
             self.splitButtonsOnHover = splitButtonsOnHover
+            self.collapseSplitButtonsIntoMenu = collapseSplitButtonsIntoMenu
             self.splitButtonBackdropStyle = splitButtonBackdropStyle
             self.splitButtonBackdropEffect = splitButtonBackdropEffect
             self.tabBarLeadingInset = tabBarLeadingInset
