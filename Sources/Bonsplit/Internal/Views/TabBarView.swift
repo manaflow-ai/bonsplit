@@ -1760,15 +1760,23 @@ struct TabBarView: View {
         }
     }
 
+    /// Scale factor of the configured tab title font relative to the default,
+    /// so the trailing split / new-tab control icons grow and shrink together
+    /// with the tab title text instead of staying pinned at their default size.
+    private var controlIconFontScale: CGFloat {
+        max(0.1, appearance.tabTitleFontSize / TabBarMetrics.titleFontSize)
+    }
+
     @ViewBuilder
     private func splitActionButtonIcon(_ icon: BonsplitConfiguration.SplitActionButton.Icon) -> some View {
+        let scale = controlIconFontScale
         switch icon {
         case .systemImage(let name):
             Image(systemName: name)
-                .font(.system(size: 12))
-        case .emoji(let value, let scale):
+                .font(.system(size: 12 * scale))
+        case .emoji(let value, let emojiScale):
             Text(value)
-                .font(.system(size: emojiIconFontSize(scale: scale)))
+                .font(.system(size: emojiIconFontSize(scale: emojiScale) * scale))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
         case .imageData(let data):
@@ -1778,10 +1786,10 @@ struct TabBarView: View {
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
-                    .frame(width: 14, height: 14)
+                    .frame(width: 14 * scale, height: 14 * scale)
             } else {
                 Image(systemName: "questionmark.circle")
-                    .font(.system(size: 12))
+                    .font(.system(size: 12 * scale))
             }
         }
     }
