@@ -956,7 +956,7 @@ struct TabBarView: View {
             tabBarHeight: appearance.tabBarHeight,
             availableWidth: containerWidth,
             tabContentWidthExcludingSplitButtonLane: tabContentWidthExcludingSplitButtonLane,
-            splitButtonCount: visibleSplitButtons.count,
+            splitButtonCount: effectiveSplitButtonCount,
             splitButtonLaneVisible: shouldShowSplitButtons,
             reservesSplitButtonLane: showSplitButtons && !isMinimalMode,
             measuredSplitButtonLaneWidth: measuredSplitButtonLaneWidth
@@ -976,6 +976,15 @@ struct TabBarView: View {
     private var visibleSplitButtons: [BonsplitConfiguration.SplitActionButton] {
         guard showSplitButtons else { return [] }
         return appearance.splitButtons
+    }
+
+    /// Effective button count for reserving the trailing action lane. When the
+    /// buttons are collapsed into the "⋯" overflow menu, only that single menu
+    /// button occupies the lane, so reserve width for one — not all of them.
+    private var effectiveSplitButtonCount: Int {
+        let count = visibleSplitButtons.count
+        guard count > 0 else { return 0 }
+        return appearance.collapseSplitButtonsIntoMenu ? 1 : count
     }
 
     private var shouldRenderSplitButtons: Bool {
@@ -1721,22 +1730,73 @@ struct TabBarView: View {
     private var splitButtonRow: some View {
         let tooltips = controller.configuration.appearance.splitButtonTooltips
         let buttons = visibleSplitButtons
-        HStack(spacing: TabBarStyling.splitButtonsSpacing) {
-            ForEach(buttons.indices, id: \.self) { index in
-                let button = buttons[index]
-                Button {
-                    performSplitActionButton(button)
-                } label: {
-                    splitActionButtonIcon(button.icon)
+        Group {
+            if controller.configuration.appearance.collapseSplitButtonsIntoMenu, !buttons.isEmpty {
+                splitButtonOverflowMenu(buttons: buttons, tooltips: tooltips)
+            } else {
+                HStack(spacing: TabBarStyling.splitButtonsSpacing) {
+                    ForEach(buttons.indices, id: \.self) { index in
+                        let button = buttons[index]
+                        Button {
+                            performSplitActionButton(button)
+                        } label: {
+                            splitActionButtonIcon(button.icon)
+                        }
+                        .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+                        .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
+                        .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
+                    }
                 }
-                .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
-                .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
-                .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
             }
         }
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
         .padding(.trailing, TabBarStyling.splitButtonsTrailingPadding)
         .frame(height: tabBarHeight, alignment: .center)
+    }
+
+    /// Single "⋯" button that expands the split actions into a menu. Reuses the
+    /// exact same `performSplitActionButton` dispatch as the inline row, so
+    /// every action (including custom ones like New Note) behaves identically.
+    @ViewBuilder
+    private func splitButtonOverflowMenu(
+        buttons: [BonsplitConfiguration.SplitActionButton],
+        tooltips: BonsplitConfiguration.SplitButtonTooltips
+    ) -> some View {
+        Menu {
+            ForEach(buttons.indices, id: \.self) { index in
+                let button = buttons[index]
+                Button {
+                    performSplitActionButton(button)
+                } label: {
+                    splitActionButtonMenuLabel(button, tooltips: tooltips)
+                }
+                .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 12))
+        }
+        .menuStyle(.button)
+        .menuIndicator(.hidden)
+        .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+        .fixedSize()
+        .accessibilityIdentifier("paneTabBarControl.overflowMenu")
+    }
+
+    @ViewBuilder
+    private func splitActionButtonMenuLabel(
+        _ button: BonsplitConfiguration.SplitActionButton,
+        tooltips: BonsplitConfiguration.SplitButtonTooltips
+    ) -> some View {
+        let title = splitActionButtonTooltip(button, tooltips: tooltips)
+        switch button.icon {
+        case .systemImage(let name):
+            Label(title, systemImage: name)
+        case .emoji(let value, _):
+            Text("\(value)  \(title)")
+        case .imageData:
+            Text(title)
+        }
     }
 
     private func splitActionButtonAccessibilityIdentifier(_ button: BonsplitConfiguration.SplitActionButton) -> String {
