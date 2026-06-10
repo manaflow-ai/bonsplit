@@ -29,3 +29,5 @@
 "tabContext.forkConversation.bottom" = "下分割";
 "tabContext.forkConversation.newTab" = "新規タブ";
 "tabContext.forkConversation.newWorkspace" = "新規ワークスペース";
+"tabContext.disconnectRemote" = "SSH接続を解除";
+"tabContext.remoteConnectedAccessibility" = "SSH接続中";
