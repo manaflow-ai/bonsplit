@@ -872,8 +872,21 @@ enum TabContextMenuBuilder {
             )
         }
 
-        if state.canForkConversation {
+        if state.isTerminal || state.canForkConversation {
             menu.addItem(.separator())
+        }
+
+        if state.isTerminal {
+            addAction(
+                title: localized("tabContext.openAsChatView", defaultValue: "Open as Chat View"),
+                action: .openAsChatView,
+                state: state,
+                target: target,
+                to: menu
+            )
+        }
+
+        if state.canForkConversation {
             addAction(
                 title: localized("tabContext.forkConversation", defaultValue: "Fork Conversation"),
                 action: .forkConversation,

@@ -21,6 +21,7 @@
 "tabContext.pinTab" = "タブをピン留め";
 "tabContext.markTabAsRead" = "タブを既読にする";
 "tabContext.markTabAsUnread" = "タブを未読にする";
+"tabContext.openAsChatView" = "チャットビューで開く";
 "tabContext.forkConversation" = "会話をフォーク";
 "tabContext.forkConversationTo" = "会話のフォーク先";
 "tabContext.forkConversation.right" = "右分割";

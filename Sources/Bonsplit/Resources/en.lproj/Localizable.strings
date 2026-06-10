@@ -21,6 +21,7 @@
 "tabContext.pinTab" = "Pin Tab";
 "tabContext.markTabAsRead" = "Mark Tab as Read";
 "tabContext.markTabAsUnread" = "Mark Tab as Unread";
+"tabContext.openAsChatView" = "Open as Chat View";
 "tabContext.forkConversation" = "Fork Conversation";
 "tabContext.forkConversationTo" = "Fork Conversation To";
 "tabContext.forkConversation.right" = "Right Split";
