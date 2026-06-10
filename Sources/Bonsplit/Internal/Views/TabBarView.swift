@@ -1073,8 +1073,12 @@ struct TabBarView: View {
 
 
     var body: some View {
+        // A zoomed pane is the only visible pane, so it owns the reserved
+        // leading strip (traffic lights) even when it is not first in the tree.
+        let leadingInsetPaneId = splitViewController.zoomedPaneId
+            ?? splitViewController.rootNode.allPaneIds.first
         HStack(spacing: 0) {
-            if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
+            if appearance.tabBarLeadingInset > 0 && leadingInsetPaneId == pane.id {
                 TabBarDragZoneView(
                     isMinimalMode: isMinimalMode,
                     isFocusedPane: isFocused,
