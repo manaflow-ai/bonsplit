@@ -3162,6 +3162,42 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarTrailingEmptyChromeUsesScrolledContentCoordinates() throws {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 410, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+        view.scrollOffsetProvider = { 400 }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        contentView.addSubview(view)
+        window.makeKeyAndOrderFront(nil)
+        view.hitTestEventTypeOverride = .leftMouseDown
+
+        XCTAssertNil(
+            view.hitTest(NSPoint(x: 40, y: 15)),
+            "The empty chrome catcher must not cover a visible tab after horizontal scrolling"
+        )
+        XCTAssertIdentical(
+            view.hitTest(NSPoint(x: 140, y: 15)),
+            view,
+            "Empty chrome after the visible scrolled tab should still capture clicks"
+        )
+    }
+
+    @MainActor
     func testTabBarTrailingEmptyChromeDefersToRegisteredTabItemWhenFrameCacheIsEmpty() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
         view.hitRegion = .trailingEmptyChrome(tabFrames: [], reservedTrailingWidth: 48)
@@ -3216,6 +3252,23 @@ final class BonsplitTests: XCTestCase {
             view.windowDragCursorRectsForCurrentState(),
             [NSRect(x: 110, y: 0, width: 162, height: 30)],
             "Minimal mode should show the open-hand cursor only in empty chrome after the tab frames and before action buttons"
+        )
+    }
+
+    @MainActor
+    func testTabBarDragZoneCursorUsesScrolledContentCoordinates() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 410, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+        view.scrollOffsetProvider = { 400 }
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [NSRect(x: 110, y: 0, width: 162, height: 30)],
+            "Minimal-mode cursor rects should be derived from content-space tab frames translated into the visible viewport"
         )
     }
 
