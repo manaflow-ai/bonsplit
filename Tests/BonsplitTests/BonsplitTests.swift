@@ -642,6 +642,65 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(affordances.right)
     }
 
+    func testTabScrollAffordancesIgnoreTrailingDropZone() {
+        var affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 0,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertFalse(affordances.left)
+        XCTAssertTrue(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 70,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertTrue(affordances.left)
+        XCTAssertTrue(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 140,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertTrue(affordances.left)
+        XCTAssertFalse(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 0,
+            contentWidth: 190,
+            containerWidth: 160
+        )
+        XCTAssertFalse(affordances.left)
+        XCTAssertFalse(affordances.right)
+    }
+
+    func testTabLaneHitTestingUsesScrolledContentBounds() {
+        let scrollOffset: CGFloat = 420
+        let viewportBounds = CGRect(x: 0, y: 0, width: 220, height: 30)
+        let visibleContentBounds = viewportBounds.offsetBy(dx: scrollOffset, dy: 0)
+        let visibleTabFrame = CGRect(x: 500, y: 0, width: 80, height: 30)
+        let visiblePoint = NSPoint(x: 540, y: 14)
+
+        XCTAssertTrue(
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: visiblePoint,
+                tabFrames: [visibleTabFrame],
+                bounds: visibleContentBounds
+            ),
+            "Scrolled tab hit testing should compare content-space tab frames against content-space visible bounds"
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: visiblePoint,
+                tabFrames: [visibleTabFrame],
+                bounds: viewportBounds
+            ),
+            "Using viewport bounds with content-space tab frames drops visible scrolled tabs outside the hit lane"
+        )
+    }
+
     func testTabBarLayoutDoesNotHardClipSelectedChromeAtSplitButtonLane() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
