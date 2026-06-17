@@ -1421,6 +1421,24 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(pane.tabs.suffix(2).allSatisfy { !$0.isPinned }, true)
     }
 
+    func testIconOnlyPinnedAppliesOnlyToPinnedBrowserSurfacesWithFavicon() {
+        // Pinned browser surfaces with a favicon collapse to a favicon-only chip.
+        XCTAssertTrue(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "browser", hasFaviconImage: true))
+        XCTAssertTrue(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "extensionBrowser", hasFaviconImage: true))
+
+        // No favicon yet (loading / globe fallback): keep the title so tabs stay
+        // distinguishable instead of collapsing to identical placeholder chips.
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "browser", hasFaviconImage: false))
+
+        // Unpinned browser tabs keep their title.
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: false, kind: "browser", hasFaviconImage: true))
+
+        // Pinned non-browser tabs (e.g. terminals) keep their title so they stay
+        // distinguishable.
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: "terminal", hasFaviconImage: true))
+        XCTAssertFalse(TabItemStyling.isIconOnlyPinned(isPinned: true, kind: nil, hasFaviconImage: true))
+    }
+
     @MainActor
     func testCreateTabStoresKindAndPinnedState() {
         let controller = BonsplitController()
