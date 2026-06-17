@@ -105,9 +105,28 @@ struct TabItemView: View {
             if isIconOnlyPinned {
                 // Pinned browser tabs collapse to a favicon-only chip, mirroring
                 // pinned tabs in macOS browsers so long-lived utilities take less
-                // horizontal space in the tab bar.
-                leadingIcon
-                    .frame(maxWidth: .infinity, alignment: .center)
+                // horizontal space in the tab bar. The title and trailing close/pin
+                // accessory are hidden, but transient state stays visible: status
+                // dots (muted/unread/modified) overlay the favicon corner, and the
+                // control-shortcut hint takes over the chip while the modifier is
+                // held (matching how normal tabs surface the hint).
+                ZStack {
+                    leadingIcon
+                        .opacity(showsShortcutHint ? 0 : 1)
+                        .overlay(alignment: .topTrailing) {
+                            iconOnlyStatusBadge
+                                .opacity(showsShortcutHint ? 0 : 1)
+                                .offset(x: 4, y: -4)
+                        }
+
+                    if let shortcutHintLabel {
+                        shortcutHintCapsule(shortcutHintLabel)
+                            .opacity(showsShortcutHint ? 1 : 0)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .center)
+                .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
             } else {
                 // Icon + title block uses the standard spacing, but keep the close affordance tight.
                 HStack(spacing: scaledContentSpacing) {
@@ -368,31 +387,7 @@ struct TabItemView: View {
     private var trailingAccessory: some View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
-                Text(shortcutHintLabel)
-                    .font(.system(size: accessoryFontSize, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(.regularMaterial)
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(Color.white.opacity(0.30), lineWidth: 0.8)
-                            )
-                            .shadow(color: Color.black.opacity(0.22), radius: 2, x: 0, y: 1)
-                    )
-                    .offset(
-                        x: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset),
-                        y: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintYOffset)
-                    )
+                shortcutHintCapsule(shortcutHintLabel)
                     .opacity(showsShortcutHint ? 1 : 0)
                     .allowsHitTesting(false)
             }
@@ -403,6 +398,63 @@ struct TabItemView: View {
         }
         .frame(width: shortcutHintSlotWidth, height: accessorySlotSize, alignment: .center)
         .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
+    }
+
+    /// The control-shortcut hint capsule (e.g. "⌃1"), shared by the normal
+    /// trailing accessory and the pinned icon-only overlay.
+    @ViewBuilder
+    private func shortcutHintCapsule(_ label: String) -> some View {
+        Text(label)
+            .font(.system(size: accessoryFontSize, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(
+                isSelected
+                    ? TabBarColors.activeText(for: appearance)
+                    : TabBarColors.inactiveText(for: appearance)
+            )
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(.regularMaterial)
+                    .overlay(
+                        Capsule(style: .continuous)
+                            .stroke(Color.white.opacity(0.30), lineWidth: 0.8)
+                    )
+                    .shadow(color: Color.black.opacity(0.22), radius: 2, x: 0, y: 1)
+            )
+            .offset(
+                x: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset),
+                y: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintYOffset)
+            )
+    }
+
+    /// Compact status indicators (muted, unread, modified) overlaid on the
+    /// favicon of a pinned icon-only tab, where the title and trailing accessory
+    /// are hidden. Mirrors the activity/audio dots macOS browsers keep on pinned
+    /// tabs so state stays visible at chip size.
+    @ViewBuilder
+    private var iconOnlyStatusBadge: some View {
+        HStack(spacing: 1.5) {
+            if tab.isAudioMuted {
+                Image(systemName: "speaker.slash.fill")
+                    .font(.system(size: max(6, accessoryFontSize - 3), weight: .semibold))
+                    .foregroundStyle(TabBarColors.inactiveText(for: appearance))
+            }
+            if tab.showsNotificationBadge {
+                Circle()
+                    .fill(TabBarColors.notificationBadge(for: appearance))
+                    .frame(width: TabBarMetrics.notificationBadgeSize, height: TabBarMetrics.notificationBadgeSize)
+            }
+            if tab.isDirty {
+                Circle()
+                    .fill(TabBarColors.dirtyIndicator(for: appearance))
+                    .frame(width: TabBarMetrics.dirtyIndicatorSize, height: TabBarMetrics.dirtyIndicatorSize)
+            }
+        }
+        .saturation(saturation)
     }
 
     private func updateGlobeFallback() {
