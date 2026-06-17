@@ -49,10 +49,12 @@ enum TabItemStyling {
 
     /// Whether a tab should render in the pinned, icon-only (favicon) layout.
     ///
-    /// Only browser-backed surfaces (see ``TabItem/iconOnlyPinnedKinds``) collapse
-    /// to a favicon chip when pinned, matching pinned tabs in macOS browsers.
-    static func isIconOnlyPinned(isPinned: Bool, kind: String?) -> Bool {
-        isPinned && TabItem.iconOnlyPinnedKinds.contains(kind ?? "")
+    /// Only pinned browser-backed surfaces (see ``TabItem/iconOnlyPinnedKinds``)
+    /// that have a distinct favicon image collapse to a favicon chip, matching
+    /// pinned tabs in macOS browsers. Requiring a favicon avoids collapsing
+    /// several tabs into identical spinner/globe chips before their icons load.
+    static func isIconOnlyPinned(isPinned: Bool, kind: String?, hasFaviconImage: Bool) -> Bool {
+        isPinned && hasFaviconImage && TabItem.iconOnlyPinnedKinds.contains(kind ?? "")
     }
 
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
@@ -297,11 +299,19 @@ struct TabItemView: View {
 
     /// Whether this tab should render in the pinned, icon-only (favicon) layout.
     ///
-    /// Scoped to browser-backed surfaces: their favicons stay visually distinct
-    /// at chip size, matching pinned tabs in macOS browsers. Other pinned tabs
-    /// (e.g. terminals) keep their title so they remain distinguishable.
+    /// Scoped to pinned browser-backed surfaces that carry a distinct favicon:
+    /// those stay visually distinguishable at chip size, matching pinned tabs in
+    /// macOS browsers. Tabs without a favicon (still loading, or no icon), other
+    /// kinds (e.g. terminals), and the selected tab of a zoomed pane (which needs
+    /// its Exit-zoom affordance) keep the full layout.
     private var isIconOnlyPinned: Bool {
-        TabItemStyling.isIconOnlyPinned(isPinned: tab.isPinned, kind: tab.kind)
+        guard !showsZoomIndicator else { return false }
+        let hasFaviconImage = tab.iconImageData != nil || renderedFaviconImage != nil
+        return TabItemStyling.isIconOnlyPinned(
+            isPinned: tab.isPinned,
+            kind: tab.kind,
+            hasFaviconImage: hasFaviconImage
+        )
     }
 
     /// Fixed width of a pinned icon-only tab: the icon slot centered with
