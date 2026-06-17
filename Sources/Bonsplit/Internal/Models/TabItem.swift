@@ -15,6 +15,13 @@ extension UTType {
 
 /// Represents a single tab in a pane's tab bar (internal representation)
 struct TabItem: Identifiable, Hashable, Codable {
+    /// Consumer ``kind`` identifiers that render as pinned, icon-only (favicon)
+    /// tabs when pinned. These are browser-backed surfaces whose favicons stay
+    /// distinct at chip size, mirroring pinned tabs in macOS browsers. Kept in
+    /// sync with the cmux `SurfaceKind` browser raw values (`browser`,
+    /// `extensionBrowser`).
+    static let iconOnlyPinnedKinds: Set<String> = ["browser", "extensionBrowser"]
+
     let id: UUID
     var title: String
     var hasCustomTitle: Bool

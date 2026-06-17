@@ -47,6 +47,14 @@ enum TabItemStyling {
         return minimum...maximum
     }
 
+    /// Whether a tab should render in the pinned, icon-only (favicon) layout.
+    ///
+    /// Only browser-backed surfaces (see ``TabItem/iconOnlyPinnedKinds``) collapse
+    /// to a favicon chip when pinned, matching pinned tabs in macOS browsers.
+    static func isIconOnlyPinned(isPinned: Bool, kind: String?) -> Bool {
+        isPinned && TabItem.iconOnlyPinnedKinds.contains(kind ?? "")
+    }
+
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
         guard let incomingData else { return nil }
         if let decoded = NSImage(data: incomingData) {
@@ -94,124 +102,83 @@ struct TabItemView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // Icon + title block uses the standard spacing, but keep the close affordance tight.
-            HStack(spacing: scaledContentSpacing) {
-                let iconSlotSize = scaledIconSize
-                let iconTintColor = isSelected
-                    ? TabBarColors.nsColorActiveText(for: appearance)
-                    : TabBarColors.nsColorInactiveText(for: appearance)
-                let iconTint = Color(nsColor: iconTintColor)
-                let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
+            if isIconOnlyPinned {
+                // Pinned browser tabs collapse to a favicon-only chip, mirroring
+                // pinned tabs in macOS browsers so long-lived utilities take less
+                // horizontal space in the tab bar.
+                leadingIcon
+                    .frame(maxWidth: .infinity, alignment: .center)
+            } else {
+                // Icon + title block uses the standard spacing, but keep the close affordance tight.
+                HStack(spacing: scaledContentSpacing) {
+                    leadingIcon
 
-                Group {
-                    if tab.isLoading {
-                        // Slightly smaller than the icon slot so it reads cleaner at tab scale.
-                        TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTintColor)
-                    } else if let image = faviconImage {
-                        FaviconIconView(image: image)
-                            .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
-                            .clipped()
-                    } else if let iconName = tab.icon {
-                        if iconName == "globe", !showGlobeFallback {
-                            // Avoid a distracting "globe -> favicon" flash: show a neutral placeholder
-                            // briefly while the favicon fetch finishes. If no favicon arrives, we
-                            // reveal the globe after a short delay.
-                            RoundedRectangle(cornerRadius: 3)
-                                .stroke(iconTint.opacity(0.25), lineWidth: 1)
-                        } else {
-                            Image(systemName: iconName)
-                                .font(.system(size: glyphSize(for: iconName)))
-                                .foregroundStyle(iconTint)
-                        }
-                    }
-                }
-                // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
-                .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
-                .transaction { tx in
-                    // Prevent incidental parent animations from briefly fading icon content.
-                    tx.animation = nil
-                }
-                .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
-                .onAppear {
-                    updateRenderedFaviconImage()
-                    updateGlobeFallback()
-                }
-                .onDisappear {
-                    globeFallbackWorkItem?.cancel()
-                    globeFallbackWorkItem = nil
-                }
-                .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
-                .onChange(of: tab.iconImageData) { _ in
-                    updateRenderedFaviconImage()
-                    updateGlobeFallback()
-                }
-                .onChange(of: tab.icon) { _ in updateGlobeFallback() }
-
-                Text(tab.title)
-                    .font(.system(size: appearance.tabTitleFontSize))
-                    .lineLimit(1)
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
-                    .saturation(saturation)
-
-                if tab.isAudioMuted {
-                    Image(systemName: "speaker.slash")
-                        .font(.system(size: accessoryFontSize, weight: .semibold))
+                    Text(tab.title)
+                        .font(.system(size: appearance.tabTitleFontSize))
+                        .lineLimit(1)
                         .foregroundStyle(
-                            (isSelected
+                            isSelected
                                 ? TabBarColors.activeText(for: appearance)
-                                : TabBarColors.inactiveText(for: appearance))
-                                .opacity(0.78)
+                                : TabBarColors.inactiveText(for: appearance)
                         )
                         .saturation(saturation)
-                        .accessibilityHidden(true)
-                }
 
-                if showsZoomIndicator {
-                    Button {
-                        onZoomToggle()
-                    } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                    if tab.isAudioMuted {
+                        Image(systemName: "speaker.slash")
                             .font(.system(size: accessoryFontSize, weight: .semibold))
                             .foregroundStyle(
-                                isZoomHovered
+                                (isSelected
                                     ? TabBarColors.activeText(for: appearance)
-                                    : TabBarColors.inactiveText(for: appearance)
+                                    : TabBarColors.inactiveText(for: appearance))
+                                    .opacity(0.78)
                             )
-                            .frame(width: accessorySlotSize, height: accessorySlotSize)
-                            .background(
-                                Circle()
-                                    .fill(
-                                        isZoomHovered
-                                            ? TabBarColors.hoveredTabBackground(for: appearance)
-                                            : .clear
-                                    )
-                            )
+                            .saturation(saturation)
+                            .accessibilityHidden(true)
                     }
-                    .buttonStyle(.plain)
-                    .onHover { hovering in
-                        withTransaction(Transaction(animation: nil)) {
-                            isZoomHovered = hovering
+
+                    if showsZoomIndicator {
+                        Button {
+                            onZoomToggle()
+                        } label: {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.system(size: accessoryFontSize, weight: .semibold))
+                                .foregroundStyle(
+                                    isZoomHovered
+                                        ? TabBarColors.activeText(for: appearance)
+                                        : TabBarColors.inactiveText(for: appearance)
+                                )
+                                .frame(width: accessorySlotSize, height: accessorySlotSize)
+                                .background(
+                                    Circle()
+                                        .fill(
+                                            isZoomHovered
+                                                ? TabBarColors.hoveredTabBackground(for: appearance)
+                                                : .clear
+                                        )
+                                )
                         }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            withTransaction(Transaction(animation: nil)) {
+                                isZoomHovered = hovering
+                            }
+                        }
+                        .saturation(saturation)
+                        .accessibilityLabel("Exit zoom")
+                        .tabBarButtonAnimationsDisabled()
                     }
-                    .saturation(saturation)
-                    .accessibilityLabel("Exit zoom")
-                    .tabBarButtonAnimationsDisabled()
                 }
+
+                Spacer(minLength: 0)
+
+                // Close button / dirty indicator / shortcut hint share the same trailing slot.
+                trailingAccessory
             }
-
-            Spacer(minLength: 0)
-
-            // Close button / dirty indicator / shortcut hint share the same trailing slot.
-            trailingAccessory
         }
         .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
         .frame(
-            minWidth: tabWidthRange.lowerBound,
-            maxWidth: tabWidthRange.upperBound,
+            minWidth: isIconOnlyPinned ? pinnedIconOnlyWidth : tabWidthRange.lowerBound,
+            maxWidth: isIconOnlyPinned ? pinnedIconOnlyWidth : tabWidthRange.upperBound,
             minHeight: tabHeight,
             maxHeight: tabHeight
         )
@@ -251,6 +218,77 @@ struct TabItemView: View {
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .safeHelp(tab.title)
+    }
+
+    /// Leading icon (favicon / SF Symbol / loading spinner) shared by the normal
+    /// and the pinned icon-only tab layouts.
+    @ViewBuilder
+    private var leadingIcon: some View {
+        let iconSlotSize = scaledIconSize
+        let iconTintColor = isSelected
+            ? TabBarColors.nsColorActiveText(for: appearance)
+            : TabBarColors.nsColorInactiveText(for: appearance)
+        let iconTint = Color(nsColor: iconTintColor)
+        let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
+
+        Group {
+            if tab.isLoading {
+                // Slightly smaller than the icon slot so it reads cleaner at tab scale.
+                TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTintColor)
+            } else if let image = faviconImage {
+                FaviconIconView(image: image)
+                    .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
+                    .clipped()
+            } else if let iconName = tab.icon {
+                if iconName == "globe", !showGlobeFallback {
+                    // Avoid a distracting "globe -> favicon" flash: show a neutral placeholder
+                    // briefly while the favicon fetch finishes. If no favicon arrives, we
+                    // reveal the globe after a short delay.
+                    RoundedRectangle(cornerRadius: 3)
+                        .stroke(iconTint.opacity(0.25), lineWidth: 1)
+                } else {
+                    Image(systemName: iconName)
+                        .font(.system(size: glyphSize(for: iconName)))
+                        .foregroundStyle(iconTint)
+                }
+            }
+        }
+        // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
+        .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
+        .transaction { tx in
+            // Prevent incidental parent animations from briefly fading icon content.
+            tx.animation = nil
+        }
+        .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
+        .onAppear {
+            updateRenderedFaviconImage()
+            updateGlobeFallback()
+        }
+        .onDisappear {
+            globeFallbackWorkItem?.cancel()
+            globeFallbackWorkItem = nil
+        }
+        .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
+        .onChange(of: tab.iconImageData) { _ in
+            updateRenderedFaviconImage()
+            updateGlobeFallback()
+        }
+        .onChange(of: tab.icon) { _ in updateGlobeFallback() }
+    }
+
+    /// Whether this tab should render in the pinned, icon-only (favicon) layout.
+    ///
+    /// Scoped to browser-backed surfaces: their favicons stay visually distinct
+    /// at chip size, matching pinned tabs in macOS browsers. Other pinned tabs
+    /// (e.g. terminals) keep their title so they remain distinguishable.
+    private var isIconOnlyPinned: Bool {
+        TabItemStyling.isIconOnlyPinned(isPinned: tab.isPinned, kind: tab.kind)
+    }
+
+    /// Fixed width of a pinned icon-only tab: the icon slot centered with
+    /// symmetric horizontal padding.
+    private var pinnedIconOnlyWidth: CGFloat {
+        ceil(scaledIconSize + TabBarMetrics.tabHorizontalPadding * 2 + 8 * fontScale)
     }
 
     /// Scale factor of the configured tab title font relative to the default.
