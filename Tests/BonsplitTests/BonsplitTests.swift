@@ -693,6 +693,65 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(affordances.right)
     }
 
+    func testTabScrollAffordancesIgnoreTrailingDropZone() {
+        var affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 0,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertFalse(affordances.left)
+        XCTAssertTrue(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 70,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertTrue(affordances.left)
+        XCTAssertTrue(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 140,
+            contentWidth: 330,
+            containerWidth: 160
+        )
+        XCTAssertTrue(affordances.left)
+        XCTAssertFalse(affordances.right)
+
+        affordances = TabBarStyling.tabScrollAffordances(
+            scrollOffset: 0,
+            contentWidth: 190,
+            containerWidth: 160
+        )
+        XCTAssertFalse(affordances.left)
+        XCTAssertFalse(affordances.right)
+    }
+
+    func testTabLaneHitTestingUsesScrolledContentBounds() {
+        let scrollOffset: CGFloat = 420
+        let viewportBounds = CGRect(x: 0, y: 0, width: 220, height: 30)
+        let visibleContentBounds = viewportBounds.offsetBy(dx: scrollOffset, dy: 0)
+        let visibleTabFrame = CGRect(x: 500, y: 0, width: 80, height: 30)
+        let visiblePoint = NSPoint(x: 540, y: 14)
+
+        XCTAssertTrue(
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: visiblePoint,
+                tabFrames: [visibleTabFrame],
+                bounds: visibleContentBounds
+            ),
+            "Scrolled tab hit testing should compare content-space tab frames against content-space visible bounds"
+        )
+        XCTAssertFalse(
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: visiblePoint,
+                tabFrames: [visibleTabFrame],
+                bounds: viewportBounds
+            ),
+            "Using viewport bounds with content-space tab frames drops visible scrolled tabs outside the hit lane"
+        )
+    }
+
     func testTabBarLayoutDoesNotHardClipSelectedChromeAtSplitButtonLane() {
         let layout = TabBarLayout(
             tabBarHeight: 28,
@@ -3170,6 +3229,42 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarTrailingEmptyChromeUsesScrolledContentCoordinates() throws {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 410, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+        view.scrollOffsetProvider = { 400 }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 360, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        contentView.addSubview(view)
+        window.makeKeyAndOrderFront(nil)
+        view.hitTestEventTypeOverride = .leftMouseDown
+
+        XCTAssertNil(
+            view.hitTest(NSPoint(x: 40, y: 15)),
+            "The empty chrome catcher must not cover a visible tab after horizontal scrolling"
+        )
+        XCTAssertIdentical(
+            view.hitTest(NSPoint(x: 140, y: 15)),
+            view,
+            "Empty chrome after the visible scrolled tab should still capture clicks"
+        )
+    }
+
+    @MainActor
     func testTabBarTrailingEmptyChromeDefersToRegisteredTabItemWhenFrameCacheIsEmpty() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
         view.hitRegion = .trailingEmptyChrome(tabFrames: [], reservedTrailingWidth: 48)
@@ -3224,6 +3319,23 @@ final class BonsplitTests: XCTestCase {
             view.windowDragCursorRectsForCurrentState(),
             [NSRect(x: 110, y: 0, width: 162, height: 30)],
             "Minimal mode should show the open-hand cursor only in empty chrome after the tab frames and before action buttons"
+        )
+    }
+
+    @MainActor
+    func testTabBarDragZoneCursorUsesScrolledContentCoordinates() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
+        view.hitRegion = .trailingEmptyChrome(
+            tabFrames: [CGRect(x: 410, y: 0, width: 90, height: 30)],
+            reservedTrailingWidth: 48
+        )
+        view.scrollOffsetProvider = { 400 }
+        view.isMinimalMode = true
+
+        XCTAssertEqual(
+            view.windowDragCursorRectsForCurrentState(),
+            [NSRect(x: 110, y: 0, width: 162, height: 30)],
+            "Minimal-mode cursor rects should be derived from content-space tab frames translated into the visible viewport"
         )
     }
 

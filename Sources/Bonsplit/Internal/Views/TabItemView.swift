@@ -216,6 +216,19 @@ struct TabItemView: View {
             maxHeight: tabHeight
         )
         .background(tabBackground.saturation(saturation))
+        .overlay(alignment: .topLeading) {
+            if isSelected {
+                Rectangle()
+                    .fill(TabBarColors.activeIndicator(saturation: saturation))
+                    .frame(height: TabBarMetrics.activeIndicatorHeight)
+                    .padding(.trailing, TabBarMetrics.activeIndicatorTrailingInset)
+                    .transaction { transaction in
+                        transaction.animation = nil
+                        transaction.disablesAnimations = true
+                    }
+            }
+        }
+        .animation(nil, value: isSelected)
         .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
         .contentShape(Rectangle().inset(by: -BonsplitTabItemHitTesting.horizontalSlop))
         // Middle click to close (macOS convention).
