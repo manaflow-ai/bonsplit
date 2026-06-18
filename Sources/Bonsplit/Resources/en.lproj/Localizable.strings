@@ -29,3 +29,5 @@
 "tabContext.forkConversation.bottom" = "Bottom Split";
 "tabContext.forkConversation.newTab" = "New Tab";
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
+"tabContext.disconnectRemote" = "Disconnect SSH";
+"tabContext.remoteConnectedAccessibility" = "Connected over SSH";

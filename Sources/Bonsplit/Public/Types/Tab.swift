@@ -19,6 +19,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let isAudioMuted: Bool
     /// Whether the tab is pinned in its pane.
     public let isPinned: Bool
+    /// Whether the tab should show a remote-connection indicator (library consumer-defined meaning, e.g. SSH).
+    public let showsRemoteIndicator: Bool
 
     public init(
         id: TabID = TabID(),
@@ -31,7 +33,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         showsNotificationBadge: Bool = false,
         isLoading: Bool = false,
         isAudioMuted: Bool = false,
-        isPinned: Bool = false
+        isPinned: Bool = false,
+        showsRemoteIndicator: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -44,6 +47,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isLoading = isLoading
         self.isAudioMuted = isAudioMuted
         self.isPinned = isPinned
+        self.showsRemoteIndicator = showsRemoteIndicator
     }
 
     internal init(from tabItem: TabItem) {
@@ -58,5 +62,6 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isLoading = tabItem.isLoading
         self.isAudioMuted = tabItem.isAudioMuted
         self.isPinned = tabItem.isPinned
+        self.showsRemoteIndicator = tabItem.showsRemoteIndicator
     }
 }

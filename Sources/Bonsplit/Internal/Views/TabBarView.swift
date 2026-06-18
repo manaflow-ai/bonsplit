@@ -917,6 +917,7 @@ struct TabContextMenuState {
     let isZoomed: Bool
     let hasSplits: Bool
     let shortcuts: [TabContextAction: KeyboardShortcut]
+    var canDisconnectRemote: Bool = false
 
     var canMarkAsUnread: Bool {
         !isUnread
@@ -1421,7 +1422,8 @@ struct TabBarView: View {
             forkConversationDefaultAction: controller.tabContextForkConversationDefaultActionProvider?(TabID(id: tab.id), pane.id) ?? .defaultForkConversationDestination,
             isZoomed: splitViewController.zoomedPaneId == pane.id,
             hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
-            shortcuts: controller.contextMenuShortcuts
+            shortcuts: controller.contextMenuShortcuts,
+            canDisconnectRemote: controller.tabContextDisconnectRemoteAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false
         )
     }
 

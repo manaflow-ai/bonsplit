@@ -1780,6 +1780,57 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuShowsDisconnectRemoteOnlyWhenAvailable() throws {
+        let target = TabContextMenuActionTarget()
+        var selectedAction: TabContextAction?
+        target.onContextAction = { selectedAction = $0 }
+        func makeState(canDisconnectRemote: Bool) -> TabContextMenuState {
+            TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: false,
+                isAudioMuted: false,
+                isTerminal: true,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                canForkConversation: false,
+                forkConversationDefaultAction: .forkConversationRight,
+                isZoomed: false,
+                hasSplits: false,
+                shortcuts: [:],
+                canDisconnectRemote: canDisconnectRemote
+            )
+        }
+
+        let withoutRemote = TabContextMenuBuilder.makeMenu(
+            snapshot: TabContextMenuSnapshot(
+                tabId: UUID(),
+                state: makeState(canDisconnectRemote: false),
+                moveDestinationsProvider: { [] }
+            ),
+            target: target
+        )
+        XCTAssertFalse(withoutRemote.items.contains { $0.title == "Disconnect SSH" })
+
+        let withRemote = TabContextMenuBuilder.makeMenu(
+            snapshot: TabContextMenuSnapshot(
+                tabId: UUID(),
+                state: makeState(canDisconnectRemote: true),
+                moveDestinationsProvider: { [] }
+            ),
+            target: target
+        )
+        let disconnectItem = try XCTUnwrap(withRemote.items.first { $0.title == "Disconnect SSH" })
+        target.performContextAction(disconnectItem)
+        XCTAssertEqual(selectedAction, .disconnectRemote)
+    }
+
+    @MainActor
     func testDoubleClickingEmptyTrailingTabBarSpaceRequestsNewTerminalTab() {
         let appearance = BonsplitConfiguration.Appearance()
         let configuration = BonsplitConfiguration(appearance: appearance)
