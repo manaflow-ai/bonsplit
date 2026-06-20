@@ -197,6 +197,20 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testSplitPaneWithTabPreservesAudioPlaying() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base", icon: "doc")
+        let playing = Bonsplit.Tab(title: "Playing", isAudioPlaying: true)
+
+        let newPane = controller.splitPane(orientation: .horizontal, withTab: playing)
+
+        XCTAssertNotNil(newPane)
+        // The supplied tab's audio-playing state must survive the public
+        // Tab -> internal TabItem conversion in the split path.
+        XCTAssertEqual(controller.tab(playing.id)?.isAudioPlaying, true)
+    }
+
+    @MainActor
     func testTabClose() {
         let controller = BonsplitController()
         let tabId = controller.createTab(title: "Test Tab", icon: "doc")!

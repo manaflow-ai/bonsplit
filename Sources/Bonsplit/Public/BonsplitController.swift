@@ -450,6 +450,7 @@ public final class BonsplitController {
                 showsNotificationBadge: tab.showsNotificationBadge,
                 isLoading: tab.isLoading,
                 isAudioMuted: tab.isAudioMuted,
+                isAudioPlaying: tab.isAudioPlaying,
                 isPinned: tab.isPinned
             )
         } else {
@@ -515,6 +516,7 @@ public final class BonsplitController {
             showsNotificationBadge: tab.showsNotificationBadge,
             isLoading: tab.isLoading,
             isAudioMuted: tab.isAudioMuted,
+            isAudioPlaying: tab.isAudioPlaying,
             isPinned: tab.isPinned
         )
 
