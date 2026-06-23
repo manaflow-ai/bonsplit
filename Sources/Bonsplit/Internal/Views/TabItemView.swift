@@ -258,7 +258,18 @@ struct TabItemView: View {
                 }
             }
 
-            Spacer(minLength: 0)
+            if fillsWidth {
+                // Fill mode stretches each tab to share the strip width, so a
+                // flexible spacer pushes the close button to the trailing edge.
+                Spacer(minLength: 0)
+            } else {
+                // Fixed mode hugs each tab to its content. A greedy spacer here
+                // would inflate the tab's ideal width so the `maxWidth` clamp
+                // resolves to the maximum, leaving a large empty gap on short
+                // titles (e.g. "~"). A fixed gap keeps the close button off the
+                // title while letting the tab size to its content.
+                Color.clear.frame(width: scaledContentSpacing)
+            }
 
             // Close button / dirty indicator / shortcut hint share the same trailing slot.
             trailingAccessory
@@ -272,6 +283,12 @@ struct TabItemView: View {
             minHeight: tabHeight,
             maxHeight: tabHeight
         )
+        // Fixed mode: size each tab to its own content and ignore the width the
+        // tab strip would otherwise propose. Without this the flexible `maxWidth`
+        // frame lets SwiftUI distribute slack equally across tabs, so a single
+        // long-titled tab drags every other tab wider (and over-truncates short
+        // titles). Fill mode keeps the flexible behavior so tabs share the strip.
+        .fixedSize(horizontal: !fillsWidth, vertical: false)
         .background(tabBackground.saturation(saturation))
         .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
         .contentShape(Rectangle().inset(by: -BonsplitTabItemHitTesting.horizontalSlop))
@@ -357,7 +374,10 @@ struct TabItemView: View {
     }
 
     private var shortcutHintSlotWidth: CGFloat {
-        guard let label = shortcutHintLabel else {
+        // Only reserve the wider shortcut-hint width while the hint is actually
+        // visible. Otherwise size the trailing slot to the close button so a tab
+        // hugs its content instead of leaving a gap before the close affordance.
+        guard showsShortcutHint, let label = shortcutHintLabel else {
             return accessorySlotSize
         }
         let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset))) + 2
