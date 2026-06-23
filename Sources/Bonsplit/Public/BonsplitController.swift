@@ -206,6 +206,37 @@ public final class BonsplitController {
         delegate?.splitTabBar(self, didRequestNewTab: kind, inPane: pane)
     }
 
+    /// Performs the split action button at a point in the current layout's
+    /// coordinate space.
+    ///
+    /// Hosts that transform the full split tree, such as a magnified outer
+    /// scroll view, can use this as the Bonsplit-owned fallback when SwiftUI's
+    /// internal hit testing cannot deliver a physical mouse-down to the button
+    /// overlay. The action still flows through the same controller/delegate path
+    /// as the native tab-bar controls.
+    @discardableResult
+    public func performSplitActionButton(atLayoutPoint point: CGPoint) -> Bool {
+        guard isInteractive,
+              let hit = splitActionButtonHit(atLayoutPoint: point) else {
+            return false
+        }
+
+        focusPane(hit.paneId)
+        switch hit.button.action {
+        case .newTerminal:
+            requestNewTab(kind: "terminal", inPane: hit.paneId)
+        case .newBrowser:
+            requestNewTab(kind: "browser", inPane: hit.paneId)
+        case .splitRight:
+            _ = splitPane(hit.paneId, orientation: .horizontal)
+        case .splitDown:
+            _ = splitPane(hit.paneId, orientation: .vertical)
+        case .custom(let identifier):
+            requestCustomAction(identifier, inPane: hit.paneId)
+        }
+        return true
+    }
+
     /// Request the delegate to handle a host-defined tab bar action.
     public func requestCustomAction(_ identifier: String, inPane pane: PaneID) {
         delegate?.splitTabBar(self, didRequestCustomAction: identifier, inPane: pane)
@@ -885,6 +916,63 @@ public final class BonsplitController {
     }
 
     // MARK: - Private Helpers
+
+    private struct SplitActionButtonHit {
+        let paneId: PaneID
+        let button: BonsplitConfiguration.SplitActionButton
+    }
+
+    private func splitActionButtonHit(atLayoutPoint point: CGPoint) -> SplitActionButtonHit? {
+        let buttons = configuration.appearance.splitButtons
+        guard !buttons.isEmpty else { return nil }
+
+        let snapshot = layoutSnapshot()
+        let tabBarHeight = configuration.appearance.tabBarHeight
+        let laneWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: buttons.count)
+        guard laneWidth > 0 else { return nil }
+
+        for pane in snapshot.panes.reversed() {
+            guard let paneUUID = UUID(uuidString: pane.paneId) else { continue }
+            let paneFrame = CGRect(
+                x: pane.frame.x - snapshot.containerFrame.x,
+                y: pane.frame.y - snapshot.containerFrame.y,
+                width: pane.frame.width,
+                height: pane.frame.height
+            )
+            guard paneFrame.contains(point),
+                  point.y <= paneFrame.minY + tabBarHeight else {
+                continue
+            }
+
+            let visibleLaneWidth = min(max(0, paneFrame.width), laneWidth)
+            let laneMinX = paneFrame.maxX - visibleLaneWidth
+            guard point.x >= laneMinX, point.x <= paneFrame.maxX else { return nil }
+
+            let visualWidths = buttons.map { TabBarStyling.splitActionButtonHitWidth(for: $0.icon) }
+            let buttonsWidth = visualWidths.reduce(0, +)
+                + (CGFloat(max(0, buttons.count - 1)) * TabBarStyling.splitButtonsSpacing)
+            let rowWidth = TabBarStyling.splitButtonsLeadingPadding
+                + buttonsWidth
+                + TabBarStyling.splitButtonsTrailingPadding
+            let rowMinX = laneMinX + max(0, visibleLaneWidth - rowWidth)
+            let localPoint = CGPoint(x: point.x - rowMinX, y: point.y - paneFrame.minY)
+            var buttonX = TabBarStyling.splitButtonsLeadingPadding
+            for (button, buttonWidth) in zip(buttons, visualWidths) {
+                let buttonRect = CGRect(
+                    x: buttonX,
+                    y: 0,
+                    width: buttonWidth,
+                    height: tabBarHeight
+                )
+                if buttonRect.contains(localPoint) {
+                    return SplitActionButtonHit(paneId: PaneID(id: paneUUID), button: button)
+                }
+                buttonX += buttonWidth + TabBarStyling.splitButtonsSpacing
+            }
+            return nil
+        }
+        return nil
+    }
 
     private func findTabInternal(_ tabId: TabID) -> (PaneState, Int)? {
         for pane in internalController.rootNode.allPanes {

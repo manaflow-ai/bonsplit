@@ -367,6 +367,23 @@ enum TabBarStyling {
         return SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0, pointSize: 12)
     }
 
+    static func splitActionButtonHitWidth(for icon: BonsplitConfiguration.SplitActionButton.Icon) -> CGFloat {
+        switch icon {
+        case .systemImage(let name):
+            let image = splitActionSystemImage(for: name)
+            let configuration = NSImage.SymbolConfiguration(pointSize: image.pointSize, weight: .regular)
+            if let symbol = NSImage(systemSymbolName: image.name, accessibilityDescription: nil)?
+                .withSymbolConfiguration(configuration) {
+                return max(18, ceil(symbol.size.width))
+            }
+            return 18
+        case .emoji(_, let scale):
+            return max(18, ceil(13 * CGFloat(scale)))
+        case .imageData:
+            return 18
+        }
+    }
+
     static func splitButtonBackdropSolidSurfaceWidth(
         effectSolidWidth: CGFloat,
         visibleLaneWidth: CGFloat,
