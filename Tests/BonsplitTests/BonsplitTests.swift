@@ -934,6 +934,60 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testSplitActionButtonsRegisterTabBarHitRegionsWithoutCapturingHits() {
+        let controller = BonsplitController(configuration: BonsplitConfiguration())
+        guard let pane = controller.internalController.rootNode.allPanes.first else {
+            XCTFail("Expected a default pane")
+            return
+        }
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: true)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 60),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+
+        let hitRegion = waitForDescendant(
+            ofType: NSView.self,
+            in: contentView,
+            where: { $0.identifier?.rawValue == "BonsplitSplitActionHitRegion" && !$0.bounds.isEmpty }
+        )
+        guard let hitRegion else {
+            XCTFail("Expected split action button hit region")
+            return
+        }
+
+        let localCenter = NSPoint(x: hitRegion.bounds.midX, y: hitRegion.bounds.midY)
+        let windowPoint = hitRegion.convert(localCenter, to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarHitRegionRegistry.containsWindowPoint(windowPoint, in: window),
+            "Split action buttons must register chrome hit regions so portal-hosted content can pass events through to the real button"
+        )
+        XCTAssertNil(
+            hitRegion.hitTest(localCenter),
+            "The registration view must not capture the click itself"
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),

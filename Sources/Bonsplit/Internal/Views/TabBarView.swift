@@ -1804,6 +1804,7 @@ struct TabBarView: View {
                 .contentShape(Rectangle())
                 .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: false))
                 .tabBarButtonAnimationsDisabled()
+                .background(SplitActionHitRegionView())
                 .overlay(
                     SplitActionMouseDownOverlay {
                         performSplitActionButton(button)
@@ -1819,6 +1820,7 @@ struct TabBarView: View {
                 splitActionButtonIcon(button.icon)
             }
             .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+            .background(SplitActionHitRegionView())
         }
     }
 
@@ -2144,6 +2146,39 @@ private struct SplitActionButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.72 : 1.0)
             .tabBarButtonAnimationsDisabled()
     }
+}
+
+private struct SplitActionHitRegionView: NSViewRepresentable {
+    func makeNSView(context: Context) -> SplitActionHitRegionNSView {
+        let view = SplitActionHitRegionNSView()
+        view.identifier = NSUserInterfaceItemIdentifier("BonsplitSplitActionHitRegion")
+        return view
+    }
+
+    func updateNSView(_ nsView: SplitActionHitRegionNSView, context: Context) {}
+}
+
+private final class SplitActionHitRegionNSView: NSView {
+    deinit {
+        BonsplitTabBarHitRegionRegistry.unregister(self)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        BonsplitTabBarHitRegionRegistry.unregister(self)
+        if window != nil {
+            BonsplitTabBarHitRegionRegistry.register(self)
+        }
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if superview == nil {
+            BonsplitTabBarHitRegionRegistry.unregister(self)
+        }
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 private struct SplitActionMouseDownOverlay: NSViewRepresentable {
