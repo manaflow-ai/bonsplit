@@ -305,7 +305,7 @@ enum TabBarColors {
     }
 }
 
-private extension NSColor {
+extension NSColor {
     private static let bonsplitHexDigits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
 
     convenience init?(bonsplitHex value: String) {

@@ -1053,6 +1053,14 @@ struct TabBarView: View {
         )
     }
 
+    private var minimalModeWorkspaceBadgeTitle: String? {
+        guard isMinimalMode,
+              appearance.tabBarLeadingInset > 0,
+              controller.internalController.rootNode.allPaneIds.first == pane.id else { return nil }
+        let title = appearance.minimalModeWorkspaceBadgeTitle?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return title.isEmpty ? nil : title
+    }
+
     private var leadingScrollAnchorId: String {
         "tab-bar-leading-\(pane.id.id.uuidString)"
     }
@@ -1162,6 +1170,12 @@ struct TabBarView: View {
                 ) { return false }
                     .frame(width: appearance.tabBarLeadingInset)
             }
+
+            if let title = minimalModeWorkspaceBadgeTitle {
+                minimalModeWorkspaceBadge(title: title)
+                    .padding(.trailing, 8)
+            }
+
             // Scrollable tabs with fade overlays
             GeometryReader { containerGeo in
                 ScrollViewReader { proxy in
@@ -1222,6 +1236,7 @@ struct TabBarView: View {
                 .frame(height: tabBarHeight)
                 .mask(combinedMask)
             }
+
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: tabBarHeight)
@@ -1313,6 +1328,34 @@ struct TabBarView: View {
         .onDisappear {
             controlKeyMonitor.stop()
         }
+    }
+
+    private func minimalModeWorkspaceBadge(title: String) -> some View {
+        let background = appearance.minimalModeWorkspaceBadgeBackgroundHex.flatMap(NSColor.init(bonsplitHex:)) ?? .controlAccentColor
+        let foreground = appearance.minimalModeWorkspaceBadgeForegroundHex.flatMap(NSColor.init(bonsplitHex:)) ?? .white
+        let font = NSFont.systemFont(ofSize: 11, weight: .semibold)
+        let textWidth = ceil((title as NSString).size(withAttributes: [.font: font]).width)
+        let badgeWidth = min(appearance.minimalModeWorkspaceBadgeMaxWidth, max(44, textWidth + 18))
+
+        return Text(title)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(Color(nsColor: foreground))
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .padding(.horizontal, 9)
+            .frame(width: badgeWidth, height: 20, alignment: .leading)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(Color(nsColor: background))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(Color(nsColor: foreground).opacity(0.18), lineWidth: 1)
+            )
+            .accessibilityIdentifier("minimalMode.workspaceBadge")
+            .accessibilityLabel(appearance.minimalModeWorkspaceBadgeAccessibilityLabel ?? title)
+            .accessibilityValue(title)
+            .allowsHitTesting(false)
     }
 
     // MARK: - Tab Item
