@@ -66,6 +66,12 @@ public protocol BonsplitDelegate: AnyObject {
     /// Called when the user triggers an action from a tab's context menu.
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID)
 
+    /// Called when the user commits an inline tab rename.
+    func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, for tab: Tab, inPane pane: PaneID)
+
+    /// Called when the user commits an inline tab rename, including the title that opened in the editor.
+    func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, initialTitle: String, for tab: Tab, inPane pane: PaneID)
+
     /// Called when the user chooses a host-provided destination from the tab move submenu.
     func splitTabBar(_ controller: BonsplitController, didRequestTabMoveToDestination destinationId: String, for tab: Tab, inPane pane: PaneID)
 
@@ -96,6 +102,10 @@ public extension BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestCustomAction identifier: String, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID) {}
+    func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, for tab: Tab, inPane pane: PaneID) {}
+    func splitTabBar(_ controller: BonsplitController, didCommitInlineRename title: String, initialTitle: String, for tab: Tab, inPane pane: PaneID) {
+        splitTabBar(controller, didCommitInlineRename: title, for: tab, inPane: pane)
+    }
     func splitTabBar(_ controller: BonsplitController, didRequestTabMoveToDestination destinationId: String, for tab: Tab, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {}
     func splitTabBar(_ controller: BonsplitController, shouldNotifyDuringDrag: Bool) -> Bool { false }

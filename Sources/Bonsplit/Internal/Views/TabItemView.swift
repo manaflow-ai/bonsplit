@@ -73,10 +73,274 @@ enum TabItemStyling {
     }
 }
 
+private struct InlineTabRenameField: NSViewRepresentable {
+    let initialTitle: String
+    let fontSize: CGFloat
+    let textColor: NSColor
+    let height: CGFloat
+    let showsNativeText: Bool
+    let onTextChange: (String) -> Void
+    let onCommit: (String) -> Void
+    let onCancel: () -> Void
+
+    fileprivate final class InlineRenameTextField: NSTextField {
+        override class var cellClass: AnyClass? {
+            get { InlineRenameTextFieldCell.self }
+            set {}
+        }
+    }
+
+    fileprivate final class InlineRenameTextFieldCell: NSTextFieldCell {
+        override func drawingRect(forBounds rect: NSRect) -> NSRect {
+            textRect(forBounds: rect)
+        }
+
+        override func edit(
+            withFrame rect: NSRect,
+            in controlView: NSView,
+            editor textObj: NSText,
+            delegate: Any?,
+            event: NSEvent?
+        ) {
+            super.edit(
+                withFrame: textRect(forBounds: rect),
+                in: controlView,
+                editor: textObj,
+                delegate: delegate,
+                event: event
+            )
+        }
+
+        override func select(
+            withFrame rect: NSRect,
+            in controlView: NSView,
+            editor textObj: NSText,
+            delegate: Any?,
+            start selStart: Int,
+            length selLength: Int
+        ) {
+            super.select(
+                withFrame: textRect(forBounds: rect),
+                in: controlView,
+                editor: textObj,
+                delegate: delegate,
+                start: selStart,
+                length: selLength
+            )
+        }
+
+        private func textRect(forBounds rect: NSRect) -> NSRect {
+            guard let font else {
+                let fallback = super.drawingRect(forBounds: rect)
+                return NSRect(x: rect.minX, y: fallback.minY, width: rect.width, height: fallback.height)
+            }
+
+            let lineHeight = min(max(1, ceil(font.boundingRectForFont.height)), max(1, rect.height))
+            let lineY = rect.minY + floor((rect.height - lineHeight) / 2)
+            return NSRect(x: rect.minX, y: lineY, width: rect.width, height: lineHeight)
+        }
+    }
+
+    fileprivate final class InlineRenameHostView: NSView {
+        let field: InlineRenameTextField
+        var contentHeight: CGFloat {
+            didSet {
+                invalidateIntrinsicContentSize()
+                needsLayout = true
+            }
+        }
+        var onAttachToWindow: ((NSTextField) -> Void)?
+        private var didRequestInitialFocus = false
+
+        init(field: InlineRenameTextField, contentHeight: CGFloat) {
+            self.field = field
+            self.contentHeight = contentHeight
+            super.init(frame: .zero)
+            addSubview(field)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            nil
+        }
+
+        override var intrinsicContentSize: NSSize {
+            NSSize(width: NSView.noIntrinsicMetric, height: contentHeight)
+        }
+
+        override func layout() {
+            super.layout()
+            field.frame = bounds
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard window != nil, !didRequestInitialFocus else { return }
+            didRequestInitialFocus = true
+            onAttachToWindow?(field)
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: InlineTabRenameField
+        var didFinish = false
+        private var outsideClickMonitor: Any?
+
+        init(parent: InlineTabRenameField) {
+            self.parent = parent
+        }
+
+        deinit {
+            removeOutsideClickMonitor()
+        }
+
+        func attach(to field: NSTextField) {
+            installOutsideClickMonitor(for: field)
+            configureFieldEditor(for: field)
+        }
+
+        func configureFieldEditor(for field: NSTextField) {
+            guard let fieldEditor = field.currentEditor() as? NSTextView else { return }
+            let textColor = parent.showsNativeText ? parent.textColor : .clear
+            fieldEditor.textContainerInset = .zero
+            fieldEditor.textContainer?.lineFragmentPadding = 0
+            fieldEditor.font = field.font
+            fieldEditor.textColor = textColor
+            fieldEditor.insertionPointColor = parent.textColor
+            fieldEditor.selectedTextAttributes = [
+                .foregroundColor: textColor,
+                .backgroundColor: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.42),
+            ]
+        }
+
+        func showNativeTextImmediately(for field: NSTextField) {
+            guard let fieldEditor = field.currentEditor() as? NSTextView else { return }
+            field.textColor = parent.textColor
+            fieldEditor.textColor = parent.textColor
+            fieldEditor.selectedTextAttributes = [
+                .foregroundColor: parent.textColor,
+                .backgroundColor: NSColor.selectedTextBackgroundColor.withAlphaComponent(0.42),
+            ]
+        }
+
+        func finishCommit(_ title: String) {
+            guard !didFinish else { return }
+            didFinish = true
+            removeOutsideClickMonitor()
+            parent.onCommit(title)
+        }
+
+        func finishCancel() {
+            guard !didFinish else { return }
+            didFinish = true
+            removeOutsideClickMonitor()
+            parent.onCancel()
+        }
+
+        func controlTextDidEndEditing(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            finishCommit(field.stringValue)
+        }
+
+        func controlTextDidChange(_ obj: Notification) {
+            guard let field = obj.object as? NSTextField else { return }
+            parent.onTextChange(field.stringValue)
+            showNativeTextImmediately(for: field)
+        }
+
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            switch commandSelector {
+            case #selector(NSResponder.insertNewline(_:)):
+                guard !textView.hasMarkedText() else { return false }
+                finishCommit(textView.string)
+                return true
+            case #selector(NSResponder.cancelOperation(_:)):
+                guard !textView.hasMarkedText() else { return false }
+                finishCancel()
+                return true
+            default:
+                return false
+            }
+        }
+
+        private func installOutsideClickMonitor(for field: NSTextField) {
+            guard outsideClickMonitor == nil else { return }
+            outsideClickMonitor = NSEvent.addLocalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+            ) { [weak self, weak field] event in
+                guard let self, let field, !self.didFinish else { return event }
+                guard !self.event(event, isInside: field) else { return event }
+
+                self.finishCommit(field.stringValue)
+                field.window?.makeFirstResponder(nil)
+                return event
+            }
+        }
+
+        private func removeOutsideClickMonitor() {
+            if let outsideClickMonitor {
+                NSEvent.removeMonitor(outsideClickMonitor)
+                self.outsideClickMonitor = nil
+            }
+        }
+
+        private func event(_ event: NSEvent, isInside field: NSTextField) -> Bool {
+            guard let window = field.window, event.window === window else { return false }
+            let point = field.convert(event.locationInWindow, from: nil)
+            return field.bounds.contains(point)
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    fileprivate func makeNSView(context: Context) -> InlineRenameHostView {
+        let field = InlineRenameTextField(string: initialTitle)
+        field.delegate = context.coordinator
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = .systemFont(ofSize: fontSize)
+        field.textColor = showsNativeText ? textColor : .clear
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.usesSingleLineMode = true
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
+        field.setAccessibilityIdentifier("paneTab.inlineRenameField")
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let host = InlineRenameHostView(field: field, contentHeight: height)
+        host.onAttachToWindow = { [coordinator = context.coordinator] field in
+            guard !coordinator.didFinish else { return }
+            coordinator.attach(to: field)
+            field.selectText(nil)
+            coordinator.configureFieldEditor(for: field)
+        }
+
+        return host
+    }
+
+    fileprivate func updateNSView(_ host: InlineRenameHostView, context: Context) {
+        context.coordinator.parent = self
+        let field = host.field
+        field.font = .systemFont(ofSize: fontSize)
+        field.textColor = showsNativeText ? textColor : .clear
+        host.contentHeight = height
+        context.coordinator.configureFieldEditor(for: field)
+        if field.currentEditor() == nil, field.stringValue != initialTitle {
+            field.stringValue = initialTitle
+        }
+    }
+}
+
 /// Individual tab view with icon, title, close button, and dirty indicator
 struct TabItemView: View {
     let tab: TabItem
     let isSelected: Bool
+    let isInlineRenaming: Bool
     let showsZoomIndicator: Bool
     let appearance: BonsplitConfiguration.Appearance
     /// When true, the tab drops its fixed maximum width and grows to fill the slack
@@ -94,6 +358,9 @@ struct TabItemView: View {
     let onSelect: () -> Void
     let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
+    let onInlineRenameRequest: () -> Void
+    let onInlineRenameCommit: (String, String) -> Void
+    let onInlineRenameCancel: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
 
@@ -107,6 +374,9 @@ struct TabItemView: View {
     @State private var lastLoadingStoppedAt: Date?
     @State private var renderedFaviconData: Data?
     @State private var renderedFaviconImage: NSImage?
+    @State private var inlineRenameInitialTitle: String?
+    @State private var inlineRenameDraftTitle: String?
+    @State private var inlineRenameShowsNativeText = false
     @AppStorage(TabControlShortcutHintDebugSettings.xKey) private var controlShortcutHintXOffset = TabControlShortcutHintDebugSettings.defaultX
     @AppStorage(TabControlShortcutHintDebugSettings.yKey) private var controlShortcutHintYOffset = TabControlShortcutHintDebugSettings.defaultY
     @AppStorage(TabControlShortcutHintDebugSettings.alwaysShowKey) private var alwaysShowShortcutHints = TabControlShortcutHintDebugSettings.defaultAlwaysShow
@@ -166,15 +436,50 @@ struct TabItemView: View {
                 }
                 .onChange(of: tab.icon) { _ in updateGlobeFallback() }
 
-                Text(tab.title)
-                    .font(.system(size: appearance.tabTitleFontSize))
-                    .lineLimit(1)
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
-                    .saturation(saturation)
+                if isInlineRenaming {
+                    titleLabel
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .overlay(alignment: .leading) {
+                            InlineTabRenameField(
+                                initialTitle: inlineRenameInitialTitle ?? tab.title,
+                                fontSize: appearance.tabTitleFontSize,
+                                textColor: titleTextNSColor,
+                                height: titleLineHeight,
+                                showsNativeText: inlineRenameShowsNativeText,
+                                onTextChange: {
+                                    inlineRenameDraftTitle = $0
+                                    inlineRenameShowsNativeText = true
+                                },
+                                onCommit: { title in
+                                    let initialTitle = inlineRenameInitialTitle ?? tab.title
+                                    inlineRenameInitialTitle = nil
+                                    inlineRenameDraftTitle = nil
+                                    inlineRenameShowsNativeText = false
+                                    onInlineRenameCommit(title, initialTitle)
+                                },
+                                onCancel: {
+                                    inlineRenameInitialTitle = nil
+                                    inlineRenameDraftTitle = nil
+                                    inlineRenameShowsNativeText = false
+                                    onInlineRenameCancel()
+                                }
+                            )
+                            .frame(minWidth: 44, maxWidth: .infinity, minHeight: titleLineHeight, maxHeight: titleLineHeight)
+                        }
+                        .onAppear {
+                            inlineRenameInitialTitle = tab.title
+                            inlineRenameDraftTitle = tab.title
+                            inlineRenameShowsNativeText = false
+                        }
+                        .onDisappear {
+                            inlineRenameInitialTitle = nil
+                            inlineRenameDraftTitle = nil
+                            inlineRenameShowsNativeText = false
+                        }
+                        .layoutPriority(1)
+                } else {
+                    titleLabel
+                }
 
                 // Chrome/Safari-style audio affordance: a speaker glyph appears
                 // when the tab is producing audible audio (click to mute) or has
@@ -312,7 +617,7 @@ struct TabItemView: View {
         }
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
-                onZoomToggle()
+                onInlineRenameRequest()
             }
         )
         .onHover { hovering in
@@ -320,7 +625,7 @@ struct TabItemView: View {
                 isHovered = hovering
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: isInlineRenaming ? .contain : .combine)
         .accessibilityLabel(tab.title)
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
@@ -395,6 +700,40 @@ struct TabItemView: View {
 
     private var tabHeight: CGFloat {
         max(1, appearance.tabBarHeight)
+    }
+
+    private var titleLineHeight: CGFloat {
+        let font = NSFont.systemFont(ofSize: appearance.tabTitleFontSize)
+        return max(1, ceil(font.boundingRectForFont.height))
+    }
+
+    private var displayedTitle: String {
+        if isInlineRenaming {
+            return inlineRenameDraftTitle ?? inlineRenameInitialTitle ?? tab.title
+        }
+        return tab.title
+    }
+
+    private var titleTextColor: Color {
+        isSelected
+            ? TabBarColors.activeText(for: appearance)
+            : TabBarColors.inactiveText(for: appearance)
+    }
+
+    private var titleTextNSColor: NSColor {
+        isSelected
+            ? TabBarColors.nsColorActiveText(for: appearance)
+            : TabBarColors.nsColorInactiveText(for: appearance)
+    }
+
+    private var titleLabel: some View {
+        Text(displayedTitle)
+            .font(.system(size: appearance.tabTitleFontSize))
+            .lineLimit(1)
+            .foregroundStyle(titleTextColor)
+            .opacity(isInlineRenaming && inlineRenameShowsNativeText ? 0 : 1)
+            .saturation(saturation)
+            .frame(minHeight: titleLineHeight, maxHeight: titleLineHeight, alignment: .leading)
     }
 
     private func shortcutHintWidth(for label: String) -> CGFloat {
@@ -1259,12 +1598,13 @@ private struct TabContextMenuPresenter: NSViewRepresentable {
 
         let coordinator = context.coordinator
         coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak coordinator] event in
-            guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return event }
             guard let coordinator, let view = coordinator.view, let window = view.window else { return event }
             guard event.window === window else { return event }
 
             let point = view.convert(event.locationInWindow, from: nil)
             guard view.bounds.contains(point) else { return event }
+
+            guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return event }
 
             coordinator.presentMenu(at: point, in: view)
             return nil

@@ -946,6 +946,7 @@ struct TabBarView: View {
     @State private var tabContentWidthExcludingSplitButtonLane: CGFloat?
     @State private var containerWidth: CGFloat = 0
     @State private var tabFramesInBar: [UUID: CGRect] = [:]
+    @State private var inlineRenamingTabId: UUID?
     @State private var measuredSplitButtonLaneWidth: CGFloat = 0
     @State private var splitButtonScrollOffset: CGFloat = 0
     @State private var splitButtonContentWidth: CGFloat = 0
@@ -1307,6 +1308,11 @@ struct TabBarView: View {
                 tabFramesInBar = frames
             }
         }
+        .onChange(of: pane.tabs.map(\.id)) { _, tabIds in
+            if let inlineRenamingTabId, !tabIds.contains(inlineRenamingTabId) {
+                self.inlineRenamingTabId = nil
+            }
+        }
         .onPreferenceChange(SplitButtonLaneWidthPreferenceKey.self) { width in
             measuredSplitButtonLaneWidth = width
         }
@@ -1332,6 +1338,7 @@ struct TabBarView: View {
         TabItemView(
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
+            isInlineRenaming: inlineRenamingTabId == tab.id,
             showsZoomIndicator: showsZoomIndicator,
             appearance: appearance,
             fillsWidth: fillsTabsToWidth,
@@ -1373,6 +1380,23 @@ struct TabBarView: View {
             },
             onZoomToggle: {
                 _ = controller.requestTabZoomToggle(for: TabID(id: tab.id), inPane: pane.id)
+            },
+            onInlineRenameRequest: {
+#if DEBUG
+                dlog("tab.doubleClick.rename pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5))")
+#endif
+                withTransaction(Transaction(animation: nil)) {
+                    pane.selectTab(tab.id)
+                    controller.focusPane(pane.id)
+                }
+                inlineRenamingTabId = tab.id
+            },
+            onInlineRenameCommit: { title, initialTitle in
+                inlineRenamingTabId = nil
+                controller.requestInlineTabRename(title, initialTitle: initialTitle, for: TabID(id: tab.id), inPane: pane.id)
+            },
+            onInlineRenameCancel: {
+                inlineRenamingTabId = nil
             },
             onContextAction: { action in
                 controller.requestTabContextAction(action, for: TabID(id: tab.id), inPane: pane.id)
