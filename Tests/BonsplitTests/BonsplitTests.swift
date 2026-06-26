@@ -1923,6 +1923,7 @@ final class BonsplitTests: XCTestCase {
             splitButtons: []
         )
         let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: appearance))
+        controller.tabShortcutHintsEnabled = false
         let pane = controller.internalController.rootNode.allPanes.first!
         let tab = TabItem(title: "~", icon: "terminal.fill")
         pane.tabs = [tab]
@@ -4160,6 +4161,7 @@ final class BonsplitTests: XCTestCase {
         extract: (NSView) -> T?
     ) -> T? {
         let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: appearance))
+        controller.tabShortcutHintsEnabled = false
         guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
         if let configurePane {
             configurePane(pane)
