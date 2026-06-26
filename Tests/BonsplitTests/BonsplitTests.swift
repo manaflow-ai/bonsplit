@@ -2437,6 +2437,30 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(range.upperBound, 220)
     }
 
+    func testTabShortcutHintSlotWidthDoesNotChangeWithVisibility() {
+        let label = "⌃9"
+        let accessorySlotSize: CGFloat = 18
+        let fontSize: CGFloat = 10
+
+        let hiddenWidth = TabItemStyling.shortcutHintSlotWidth(
+            label: label,
+            showsShortcutHint: false,
+            accessorySlotSize: accessorySlotSize,
+            fontSize: fontSize,
+            xOffset: 0
+        )
+        let visibleWidth = TabItemStyling.shortcutHintSlotWidth(
+            label: label,
+            showsShortcutHint: true,
+            accessorySlotSize: accessorySlotSize,
+            fontSize: fontSize,
+            xOffset: 0
+        )
+
+        XCTAssertEqual(hiddenWidth, visibleWidth)
+        XCTAssertGreaterThanOrEqual(hiddenWidth, accessorySlotSize)
+    }
+
     func testActiveTabIndicatorHeightIsOneAndHalfPixels() {
         XCTAssertEqual(TabBarMetrics.activeIndicatorHeight, 1.5)
     }

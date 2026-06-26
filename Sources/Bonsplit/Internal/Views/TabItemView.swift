@@ -62,6 +62,26 @@ enum TabItemStyling {
         return minimum...maximum
     }
 
+    static func shortcutHintWidth(for label: String, fontSize: CGFloat) -> CGFloat {
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
+        return ceil(textWidth) + 8
+    }
+
+    static func shortcutHintSlotWidth(
+        label: String?,
+        showsShortcutHint: Bool,
+        accessorySlotSize: CGFloat,
+        fontSize: CGFloat,
+        xOffset: Double
+    ) -> CGFloat {
+        guard showsShortcutHint, let label else {
+            return accessorySlotSize
+        }
+        let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(xOffset))) + 2
+        return max(accessorySlotSize, shortcutHintWidth(for: label, fontSize: fontSize) + positiveDebugInset)
+    }
+
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
         guard let incomingData else { return nil }
         if let decoded = NSImage(data: incomingData) {
@@ -377,11 +397,13 @@ struct TabItemView: View {
         // Only reserve the wider shortcut-hint width while the hint is actually
         // visible. Otherwise size the trailing slot to the close button so a tab
         // hugs its content instead of leaving a gap before the close affordance.
-        guard showsShortcutHint, let label = shortcutHintLabel else {
-            return accessorySlotSize
-        }
-        let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset))) + 2
-        return max(accessorySlotSize, shortcutHintWidth(for: label) + positiveDebugInset)
+        TabItemStyling.shortcutHintSlotWidth(
+            label: shortcutHintLabel,
+            showsShortcutHint: showsShortcutHint,
+            accessorySlotSize: accessorySlotSize,
+            fontSize: accessoryFontSize,
+            xOffset: controlShortcutHintXOffset
+        )
     }
 
     private var accessoryFontSize: CGFloat {
@@ -395,12 +417,6 @@ struct TabItemView: View {
 
     private var tabHeight: CGFloat {
         max(1, appearance.tabBarHeight)
-    }
-
-    private func shortcutHintWidth(for label: String) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: accessoryFontSize, weight: .semibold)
-        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        return ceil(textWidth) + 8
     }
 
     @ViewBuilder
