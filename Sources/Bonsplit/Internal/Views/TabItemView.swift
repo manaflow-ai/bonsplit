@@ -47,6 +47,55 @@ private enum TabControlShortcutHintDebugSettings {
     }
 }
 
+enum TabControlShortcutHintStyle {
+    static let foregroundColor = Color.primary
+    static let horizontalPadding: CGFloat = 6
+    static let verticalPadding: CGFloat = 2
+    static let strokeOpacity = 0.30
+    static let strokeWidth: CGFloat = 0.8
+    static let shadowOpacity = 0.22
+    static let shadowRadius: CGFloat = 2
+    static let shadowX: CGFloat = 0
+    static let shadowY: CGFloat = 1
+}
+
+struct TabControlShortcutHintPillBackground: View {
+    var body: some View {
+        Capsule(style: .continuous)
+            .fill(.regularMaterial)
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(
+                        Color.white.opacity(TabControlShortcutHintStyle.strokeOpacity),
+                        lineWidth: TabControlShortcutHintStyle.strokeWidth
+                    )
+            )
+            .shadow(
+                color: Color.black.opacity(TabControlShortcutHintStyle.shadowOpacity),
+                radius: TabControlShortcutHintStyle.shadowRadius,
+                x: TabControlShortcutHintStyle.shadowX,
+                y: TabControlShortcutHintStyle.shadowY
+            )
+    }
+}
+
+struct TabControlShortcutHintPill: View {
+    let text: String
+    let fontSize: CGFloat
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundColor(TabControlShortcutHintStyle.foregroundColor)
+            .padding(.horizontal, TabControlShortcutHintStyle.horizontalPadding)
+            .padding(.vertical, TabControlShortcutHintStyle.verticalPadding)
+            .background(TabControlShortcutHintPillBackground())
+    }
+}
+
 enum TabItemStyling {
     static func iconSaturation(hasRasterIcon: Bool, tabSaturation: Double) -> Double {
         hasRasterIcon ? 1.0 : tabSaturation
@@ -65,7 +114,7 @@ enum TabItemStyling {
     static func shortcutHintWidth(for label: String, fontSize: CGFloat) -> CGFloat {
         let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
         let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
-        return ceil(textWidth) + 8
+        return ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
     }
 
     static func shortcutHintSlotWidth(
@@ -423,27 +472,7 @@ struct TabItemView: View {
     private var trailingAccessory: some View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
-                Text(shortcutHintLabel)
-                    .font(.system(size: accessoryFontSize, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 1)
-                    .background(
-                        Capsule(style: .continuous)
-                            .fill(.regularMaterial)
-                            .overlay(
-                                Capsule(style: .continuous)
-                                    .stroke(Color.white.opacity(0.30), lineWidth: 0.8)
-                            )
-                            .shadow(color: Color.black.opacity(0.22), radius: 2, x: 0, y: 1)
-                    )
+                TabControlShortcutHintPill(text: shortcutHintLabel, fontSize: accessoryFontSize)
                     .offset(
                         x: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset),
                         y: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintYOffset)

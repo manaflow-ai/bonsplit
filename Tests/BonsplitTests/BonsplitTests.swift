@@ -2461,6 +2461,18 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hiddenWidth, accessorySlotSize)
     }
 
+    func testTabShortcutHintWidthUsesSharedPillPadding() {
+        let label = "⌘9"
+        let fontSize: CGFloat = 10
+        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
+
+        XCTAssertEqual(
+            TabItemStyling.shortcutHintWidth(for: label, fontSize: fontSize),
+            ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
+        )
+    }
+
     func testActiveTabIndicatorHeightIsOneAndHalfPixels() {
         XCTAssertEqual(TabBarMetrics.activeIndicatorHeight, 1.5)
     }
