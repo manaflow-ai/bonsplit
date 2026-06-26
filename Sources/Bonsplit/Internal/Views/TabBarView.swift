@@ -3193,6 +3193,10 @@ enum TabControlShortcutHintPolicy {
         return defaults.bool(forKey: showHintsOnControlHoldKey)
     }
 
+    static func configuredShortcutModifierSymbol(defaults: UserDefaults = .standard) -> String {
+        TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
+    }
+
     private static func triggerAllowsHintReveal(
         for modifierFlags: NSEvent.ModifierFlags,
         defaults: UserDefaults = .standard
@@ -3273,7 +3277,7 @@ private struct TabBarHostWindowReader: NSViewRepresentable {
 @MainActor
 private final class TabControlShortcutKeyMonitor: ObservableObject {
     @Published private(set) var isShortcutHintVisible = false
-    @Published private(set) var shortcutModifierSymbol = "⌃"
+    @Published private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
 
     private weak var hostWindow: NSWindow?
     private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
@@ -3432,6 +3436,7 @@ private final class TabControlShortcutKeyMonitor: ObservableObject {
         pendingShowWorkItem = nil
         pendingModifier = nil
         if resetVisible {
+            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
             withAnimation(TabControlShortcutHintAnimation.visibility) {
                 isShortcutHintVisible = false
             }
