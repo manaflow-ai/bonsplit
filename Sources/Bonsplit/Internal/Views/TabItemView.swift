@@ -70,12 +70,12 @@ enum TabItemStyling {
 
     static func shortcutHintSlotWidth(
         label: String?,
-        showsShortcutHint: Bool,
+        showsShortcutHint _: Bool,
         accessorySlotSize: CGFloat,
         fontSize: CGFloat,
         xOffset: Double
     ) -> CGFloat {
-        guard showsShortcutHint, let label else {
+        guard let label else {
             return accessorySlotSize
         }
         let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(xOffset))) + 2
@@ -394,9 +394,9 @@ struct TabItemView: View {
     }
 
     private var shortcutHintSlotWidth: CGFloat {
-        // Only reserve the wider shortcut-hint width while the hint is actually
-        // visible. Otherwise size the trailing slot to the close button so a tab
-        // hugs its content instead of leaving a gap before the close affordance.
+        // Reserve the wider shortcut-hint width whenever this tab has a hint,
+        // not only while the modifier is held. Modifier-hold should change
+        // opacity, not the tab strip's measured width.
         TabItemStyling.shortcutHintSlotWidth(
             label: shortcutHintLabel,
             showsShortcutHint: showsShortcutHint,
