@@ -62,15 +62,15 @@ enum TabControlShortcutHintStyle {
     static let shadowX: CGFloat = 0
     static let shadowY: CGFloat = 1
 
-    static var font: Font {
-        .system(size: fontSize, weight: fontWeight, design: fontDesign)
-    }
-
-    static var measurementFont: NSFont {
+    static let font: Font = .system(size: fontSize, weight: fontWeight, design: fontDesign)
+    static let measurementFont: NSFont = {
         let baseFont = NSFont.systemFont(ofSize: fontSize, weight: nsFontWeight)
         return baseFont.fontDescriptor.withDesign(.rounded)
             .flatMap { NSFont(descriptor: $0, size: fontSize) } ?? baseFont
-    }
+    }()
+    static let measurementAttributes: [NSAttributedString.Key: Any] = [
+        .font: measurementFont
+    ]
 }
 
 struct TabControlShortcutHintPillBackground: View {
@@ -129,9 +129,7 @@ enum TabItemStyling {
     }
 
     static func shortcutHintWidth(for label: String) -> CGFloat {
-        let textWidth = (label as NSString).size(withAttributes: [
-            .font: TabControlShortcutHintStyle.measurementFont
-        ]).width
+        let textWidth = (label as NSString).size(withAttributes: TabControlShortcutHintStyle.measurementAttributes).width
         return ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
     }
 

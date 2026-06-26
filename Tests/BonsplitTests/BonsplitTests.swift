@@ -2472,9 +2472,9 @@ final class BonsplitTests: XCTestCase {
 
     func testTabShortcutHintWidthUsesSharedPillPadding() {
         let label = "⌘9"
-        let textWidth = (label as NSString).size(withAttributes: [
-            .font: TabControlShortcutHintStyle.measurementFont
-        ]).width
+        let textWidth = (label as NSString).size(
+            withAttributes: TabControlShortcutHintStyle.measurementAttributes
+        ).width
 
         XCTAssertEqual(
             TabItemStyling.shortcutHintWidth(for: label),
