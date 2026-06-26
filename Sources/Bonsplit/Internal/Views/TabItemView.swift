@@ -48,6 +48,10 @@ private enum TabControlShortcutHintDebugSettings {
 }
 
 enum TabControlShortcutHintStyle {
+    static let fontSize: CGFloat = 9
+    static let fontWeight: Font.Weight = .semibold
+    static let nsFontWeight: NSFont.Weight = .semibold
+    static let fontDesign: Font.Design = .rounded
     static let foregroundColor = Color.primary
     static let horizontalPadding: CGFloat = 6
     static let verticalPadding: CGFloat = 2
@@ -57,6 +61,16 @@ enum TabControlShortcutHintStyle {
     static let shadowRadius: CGFloat = 2
     static let shadowX: CGFloat = 0
     static let shadowY: CGFloat = 1
+
+    static var font: Font {
+        .system(size: fontSize, weight: fontWeight, design: fontDesign)
+    }
+
+    static var measurementFont: NSFont {
+        let baseFont = NSFont.systemFont(ofSize: fontSize, weight: nsFontWeight)
+        return baseFont.fontDescriptor.withDesign(.rounded)
+            .flatMap { NSFont(descriptor: $0, size: fontSize) } ?? baseFont
+    }
 }
 
 struct TabControlShortcutHintPillBackground: View {
@@ -81,11 +95,10 @@ struct TabControlShortcutHintPillBackground: View {
 
 struct TabControlShortcutHintPill: View {
     let text: String
-    let fontSize: CGFloat
 
     var body: some View {
         Text(text)
-            .font(.system(size: fontSize, weight: .semibold, design: .rounded))
+            .font(TabControlShortcutHintStyle.font)
             .monospacedDigit()
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: false)
@@ -111,9 +124,10 @@ enum TabItemStyling {
         return minimum...maximum
     }
 
-    static func shortcutHintWidth(for label: String, fontSize: CGFloat) -> CGFloat {
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
+    static func shortcutHintWidth(for label: String) -> CGFloat {
+        let textWidth = (label as NSString).size(withAttributes: [
+            .font: TabControlShortcutHintStyle.measurementFont
+        ]).width
         return ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
     }
 
@@ -121,14 +135,13 @@ enum TabItemStyling {
         label: String?,
         showsShortcutHint _: Bool,
         accessorySlotSize: CGFloat,
-        fontSize: CGFloat,
         xOffset: Double
     ) -> CGFloat {
         guard let label else {
             return accessorySlotSize
         }
         let positiveDebugInset = max(0, CGFloat(TabControlShortcutHintDebugSettings.clamped(xOffset))) + 2
-        return max(accessorySlotSize, shortcutHintWidth(for: label, fontSize: fontSize) + positiveDebugInset)
+        return max(accessorySlotSize, shortcutHintWidth(for: label) + positiveDebugInset)
     }
 
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
@@ -450,7 +463,6 @@ struct TabItemView: View {
             label: shortcutHintLabel,
             showsShortcutHint: showsShortcutHint,
             accessorySlotSize: accessorySlotSize,
-            fontSize: accessoryFontSize,
             xOffset: controlShortcutHintXOffset
         )
     }
@@ -472,7 +484,7 @@ struct TabItemView: View {
     private var trailingAccessory: some View {
         ZStack(alignment: .center) {
             if let shortcutHintLabel {
-                TabControlShortcutHintPill(text: shortcutHintLabel, fontSize: accessoryFontSize)
+                TabControlShortcutHintPill(text: shortcutHintLabel)
                     .offset(
                         x: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintXOffset),
                         y: TabControlShortcutHintDebugSettings.clamped(controlShortcutHintYOffset)

@@ -2440,20 +2440,17 @@ final class BonsplitTests: XCTestCase {
     func testTabShortcutHintSlotWidthDoesNotChangeWithVisibility() {
         let label = "⌃9"
         let accessorySlotSize: CGFloat = 18
-        let fontSize: CGFloat = 10
 
         let hiddenWidth = TabItemStyling.shortcutHintSlotWidth(
             label: label,
             showsShortcutHint: false,
             accessorySlotSize: accessorySlotSize,
-            fontSize: fontSize,
             xOffset: 0
         )
         let visibleWidth = TabItemStyling.shortcutHintSlotWidth(
             label: label,
             showsShortcutHint: true,
             accessorySlotSize: accessorySlotSize,
-            fontSize: fontSize,
             xOffset: 0
         )
 
@@ -2463,14 +2460,20 @@ final class BonsplitTests: XCTestCase {
 
     func testTabShortcutHintWidthUsesSharedPillPadding() {
         let label = "⌘9"
-        let fontSize: CGFloat = 10
-        let font = NSFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let textWidth = (label as NSString).size(withAttributes: [.font: font]).width
+        let textWidth = (label as NSString).size(withAttributes: [
+            .font: TabControlShortcutHintStyle.measurementFont
+        ]).width
 
         XCTAssertEqual(
-            TabItemStyling.shortcutHintWidth(for: label, fontSize: fontSize),
+            TabItemStyling.shortcutHintWidth(for: label),
             ceil(textWidth) + (TabControlShortcutHintStyle.horizontalPadding * 2)
         )
+    }
+
+    func testTabShortcutHintStyleMatchesCommandHintPillFont() {
+        XCTAssertEqual(TabControlShortcutHintStyle.fontSize, 9)
+        XCTAssertEqual(TabControlShortcutHintStyle.nsFontWeight, .semibold)
+        XCTAssertEqual(TabControlShortcutHintStyle.measurementFont.fontDescriptor.object(forKey: .face) as? String, "Semibold")
     }
 
     func testActiveTabIndicatorHeightIsOneAndHalfPixels() {
