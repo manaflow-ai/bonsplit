@@ -118,6 +118,10 @@ enum TabItemStyling {
         isHovered && !isSelected
     }
 
+    static func shortcutHintSlotLabel(label: String?, allowsShortcutHints: Bool) -> String? {
+        allowsShortcutHints ? label : nil
+    }
+
     static func tabWidthRange(for appearance: BonsplitConfiguration.Appearance) -> ClosedRange<CGFloat> {
         let minimum = max(1, TabBarMetrics.tabMinWidth)
         let maximum = max(minimum, appearance.tabMaxWidth)
@@ -460,7 +464,10 @@ struct TabItemView: View {
         // not only while the modifier is held. Modifier-hold should change
         // opacity, not the tab strip's measured width.
         TabItemStyling.shortcutHintSlotWidth(
-            label: shortcutHintLabel,
+            label: TabItemStyling.shortcutHintSlotLabel(
+                label: shortcutHintLabel,
+                allowsShortcutHints: allowsShortcutHints
+            ),
             showsShortcutHint: showsShortcutHint,
             accessorySlotSize: accessorySlotSize,
             xOffset: controlShortcutHintXOffset

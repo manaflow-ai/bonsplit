@@ -2458,6 +2458,18 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hiddenWidth, accessorySlotSize)
     }
 
+    func testTabShortcutHintSlotLabelRequiresHintEligibility() {
+        let label = "⌃9"
+
+        XCTAssertEqual(
+            TabItemStyling.shortcutHintSlotLabel(label: label, allowsShortcutHints: true),
+            label
+        )
+        XCTAssertNil(
+            TabItemStyling.shortcutHintSlotLabel(label: label, allowsShortcutHints: false)
+        )
+    }
+
     func testTabShortcutHintWidthUsesSharedPillPadding() {
         let label = "⌘9"
         let textWidth = (label as NSString).size(withAttributes: [
