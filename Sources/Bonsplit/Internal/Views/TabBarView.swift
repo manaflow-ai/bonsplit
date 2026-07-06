@@ -915,6 +915,7 @@ struct TabContextMenuState {
     let canForkConversation: Bool
     let forkConversationDefaultAction: TabContextAction
     let isZoomed: Bool
+    let isFullWidthTabMode: Bool
     let hasSplits: Bool
     let shortcuts: [TabContextAction: KeyboardShortcut]
 
@@ -924,6 +925,89 @@ struct TabContextMenuState {
 
     var canMarkAsRead: Bool {
         isUnread
+    }
+
+    init(
+        isPinned: Bool,
+        isUnread: Bool,
+        isBrowser: Bool,
+        isAudioMuted: Bool,
+        isTerminal: Bool,
+        hasCustomTitle: Bool,
+        canCloseToLeft: Bool,
+        canCloseToRight: Bool,
+        canCloseOthers: Bool,
+        canMoveToNewWorkspace: Bool,
+        canMoveToLeftPane: Bool,
+        canMoveToRightPane: Bool,
+        canForkConversation: Bool,
+        forkConversationDefaultAction: TabContextAction,
+        isZoomed: Bool,
+        isFullWidthTabMode: Bool = false,
+        hasSplits: Bool,
+        shortcuts: [TabContextAction: KeyboardShortcut]
+    ) {
+        self.isPinned = isPinned
+        self.isUnread = isUnread
+        self.isBrowser = isBrowser
+        self.isAudioMuted = isAudioMuted
+        self.isTerminal = isTerminal
+        self.hasCustomTitle = hasCustomTitle
+        self.canCloseToLeft = canCloseToLeft
+        self.canCloseToRight = canCloseToRight
+        self.canCloseOthers = canCloseOthers
+        self.canMoveToNewWorkspace = canMoveToNewWorkspace
+        self.canMoveToLeftPane = canMoveToLeftPane
+        self.canMoveToRightPane = canMoveToRightPane
+        self.canForkConversation = canForkConversation
+        self.forkConversationDefaultAction = forkConversationDefaultAction
+        self.isZoomed = isZoomed
+        self.isFullWidthTabMode = isFullWidthTabMode
+        self.hasSplits = hasSplits
+        self.shortcuts = shortcuts
+    }
+
+    @MainActor
+    init(
+        tab: TabItem,
+        index: Int,
+        pane: PaneState,
+        controller: BonsplitController,
+        splitViewController: SplitViewController
+    ) {
+        let allowsCloseTabs = controller.configuration.allowCloseTabs
+        let leftTabs = pane.tabs.prefix(index)
+        let canCloseToLeft = allowsCloseTabs && leftTabs.contains(where: { !$0.isPinned })
+        let canCloseToRight: Bool
+        if (index + 1) < pane.tabs.count {
+            canCloseToRight = allowsCloseTabs && pane.tabs.suffix(from: index + 1).contains(where: { !$0.isPinned })
+        } else {
+            canCloseToRight = false
+        }
+        let canCloseOthers = allowsCloseTabs
+            && pane.tabs.enumerated().contains { itemIndex, item in
+                itemIndex != index && !item.isPinned
+            }
+        self.init(
+            isPinned: tab.isPinned,
+            isUnread: tab.showsNotificationBadge,
+            isBrowser: tab.kind == "browser",
+            isAudioMuted: tab.isAudioMuted,
+            isTerminal: tab.kind == "terminal",
+            hasCustomTitle: tab.hasCustomTitle,
+            canCloseToLeft: canCloseToLeft,
+            canCloseToRight: canCloseToRight,
+            canCloseOthers: canCloseOthers,
+            canMoveToNewWorkspace: controller.allTabIds.count > 1,
+            canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
+            canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
+            canForkConversation: controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false,
+            forkConversationDefaultAction: controller.tabContextForkConversationDefaultActionProvider?(TabID(id: tab.id), pane.id) ?? .defaultForkConversationDestination,
+            isZoomed: splitViewController.zoomedPaneId == pane.id,
+            isFullWidthTabMode: pane.isFullWidthTabMode,
+            hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
+            shortcuts: controller.contextMenuShortcuts
+        )
     }
 }
 
@@ -1418,37 +1502,12 @@ struct TabBarView: View {
     }
 
     private func contextMenuState(for tab: TabItem, at index: Int) -> TabContextMenuState {
-        let allowsCloseTabs = controller.configuration.allowCloseTabs
-        let leftTabs = pane.tabs.prefix(index)
-        let canCloseToLeft = allowsCloseTabs && leftTabs.contains(where: { !$0.isPinned })
-        let canCloseToRight: Bool
-        if (index + 1) < pane.tabs.count {
-            canCloseToRight = allowsCloseTabs && pane.tabs.suffix(from: index + 1).contains(where: { !$0.isPinned })
-        } else {
-            canCloseToRight = false
-        }
-        let canCloseOthers = allowsCloseTabs
-            && pane.tabs.enumerated().contains { itemIndex, item in
-                itemIndex != index && !item.isPinned
-            }
         return TabContextMenuState(
-            isPinned: tab.isPinned,
-            isUnread: tab.showsNotificationBadge,
-            isBrowser: tab.kind == "browser",
-            isAudioMuted: tab.isAudioMuted,
-            isTerminal: tab.kind == "terminal",
-            hasCustomTitle: tab.hasCustomTitle,
-            canCloseToLeft: canCloseToLeft,
-            canCloseToRight: canCloseToRight,
-            canCloseOthers: canCloseOthers,
-            canMoveToNewWorkspace: controller.allTabIds.count > 1,
-            canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
-            canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
-            canForkConversation: controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false,
-            forkConversationDefaultAction: controller.tabContextForkConversationDefaultActionProvider?(TabID(id: tab.id), pane.id) ?? .defaultForkConversationDestination,
-            isZoomed: splitViewController.zoomedPaneId == pane.id,
-            hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
-            shortcuts: controller.contextMenuShortcuts
+            tab: tab,
+            index: index,
+            pane: pane,
+            controller: controller,
+            splitViewController: splitViewController
         )
     }
 

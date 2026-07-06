@@ -1594,6 +1594,66 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testFullWidthTabModeAPITracksStateAndUnknownPanesAreSafe() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let unknownPane = PaneID()
+
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: pane))
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: unknownPane))
+        XCTAssertFalse(controller.setFullWidthTabMode(true, inPane: unknownPane))
+        XCTAssertFalse(controller.toggleFullWidthTabMode(inPane: unknownPane))
+
+        XCTAssertTrue(controller.setFullWidthTabMode(true, inPane: pane))
+        XCTAssertTrue(controller.isFullWidthTabMode(inPane: pane))
+
+        XCTAssertFalse(controller.toggleFullWidthTabMode(inPane: pane))
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: pane))
+
+        XCTAssertTrue(controller.toggleFullWidthTabMode(inPane: pane))
+        XCTAssertTrue(controller.isFullWidthTabMode(inPane: pane))
+    }
+
+    @MainActor
+    func testFullWidthTabModeIsIndependentPerPaneAndListed() {
+        let controller = BonsplitController()
+        let firstPane = controller.focusedPaneId!
+        guard let secondPane = controller.splitPane(firstPane, orientation: .horizontal) else {
+            return XCTFail("Expected splitPane to create a new pane")
+        }
+
+        XCTAssertTrue(controller.setFullWidthTabMode(true, inPane: firstPane))
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: secondPane))
+        XCTAssertEqual(controller.fullWidthTabModePaneIds, [firstPane])
+
+        XCTAssertTrue(controller.setFullWidthTabMode(true, inPane: secondPane))
+        XCTAssertEqual(Set(controller.fullWidthTabModePaneIds), Set([firstPane, secondPane]))
+
+        XCTAssertTrue(controller.setFullWidthTabMode(false, inPane: firstPane))
+        XCTAssertEqual(controller.fullWidthTabModePaneIds, [secondPane])
+    }
+
+    @MainActor
+    func testFullWidthTabModeDiesWithClosedPane() {
+        let controller = BonsplitController()
+        let firstPane = controller.focusedPaneId!
+        guard let closingPane = controller.splitPane(firstPane, orientation: .horizontal) else {
+            return XCTFail("Expected splitPane to create a new pane")
+        }
+
+        XCTAssertTrue(controller.setFullWidthTabMode(true, inPane: closingPane))
+        XCTAssertTrue(controller.isFullWidthTabMode(inPane: closingPane))
+
+        XCTAssertTrue(controller.closePane(closingPane))
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: closingPane))
+
+        guard let recreatedPane = controller.splitPane(firstPane, orientation: .horizontal) else {
+            return XCTFail("Expected splitPane to create another pane")
+        }
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: recreatedPane))
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!
@@ -1761,6 +1821,78 @@ final class BonsplitTests: XCTestCase {
 
         XCTAssertTrue(menu.items.contains { $0.title == "Unmute Tab" })
         XCTAssertFalse(menu.items.contains { $0.title == "Mute Tab" })
+    }
+
+    @MainActor
+    func testTabContextMenuCreatesFullWidthTabToggle() throws {
+        let target = TabContextMenuActionTarget()
+        var selectedAction: TabContextAction?
+        target.onContextAction = { selectedAction = $0 }
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: false,
+                isAudioMuted: false,
+                isTerminal: true,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                canForkConversation: false,
+                forkConversationDefaultAction: .forkConversationRight,
+                isZoomed: false,
+                isFullWidthTabMode: false,
+                hasSplits: false,
+                shortcuts: [:]
+            ),
+            moveDestinationsProvider: { [] }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Full Width Tab" })
+        target.performContextAction(item)
+
+        XCTAssertEqual(selectedAction, .toggleFullWidthTab)
+        XCTAssertFalse(menu.items.contains { $0.title == "Exit Full Width Tab" })
+    }
+
+    @MainActor
+    func testTabContextMenuUsesExitFullWidthTabTitleWhenEnabled() {
+        let target = TabContextMenuActionTarget()
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: false,
+                isAudioMuted: false,
+                isTerminal: true,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                canForkConversation: false,
+                forkConversationDefaultAction: .forkConversationRight,
+                isZoomed: false,
+                isFullWidthTabMode: true,
+                hasSplits: false,
+                shortcuts: [:]
+            ),
+            moveDestinationsProvider: { [] }
+        )
+
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+
+        XCTAssertTrue(menu.items.contains { $0.title == "Exit Full Width Tab" })
+        XCTAssertFalse(menu.items.contains { $0.title == "Full Width Tab" })
     }
 
     @MainActor

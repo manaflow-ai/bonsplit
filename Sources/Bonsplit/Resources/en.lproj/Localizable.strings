@@ -17,6 +17,8 @@
 "tabContext.audioMutedAccessibility" = "Muted";
 "tabContext.exitZoom" = "Exit Zoom";
 "tabContext.zoomPane" = "Zoom Pane";
+"tabContext.enterFullWidthTab" = "Full Width Tab";
+"tabContext.exitFullWidthTab" = "Exit Full Width Tab";
 "tabContext.unpinTab" = "Unpin Tab";
 "tabContext.pinTab" = "Pin Tab";
 "tabContext.markTabAsRead" = "Mark Tab as Read";

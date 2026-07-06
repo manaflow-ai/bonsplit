@@ -694,6 +694,46 @@ public final class BonsplitController {
         return togglePaneZoom(inPane: paneId)
     }
 
+    // MARK: - Full Width Tab Mode
+
+    /// Pane IDs whose tab chrome is currently rendered in full-width-tab mode.
+    public var fullWidthTabModePaneIds: [PaneID] {
+        internalController.rootNode.allPanes
+            .filter(\.isFullWidthTabMode)
+            .map(\.id)
+    }
+
+    /// Set full-width-tab mode for a pane.
+    ///
+    /// - Parameters:
+    ///   - enabled: Whether the pane should render the selected tab as a full-width title header.
+    ///   - pane: The pane to update.
+    /// - Returns: `true` when the pane exists and was updated; otherwise `false`.
+    @discardableResult
+    public func setFullWidthTabMode(_ enabled: Bool, inPane pane: PaneID) -> Bool {
+        guard let paneState = internalController.rootNode.findPane(pane) else { return false }
+        paneState.isFullWidthTabMode = enabled
+        return true
+    }
+
+    /// Return whether a pane is currently in full-width-tab mode.
+    ///
+    /// Unknown panes are treated as off and return `false`.
+    public func isFullWidthTabMode(inPane pane: PaneID) -> Bool {
+        internalController.rootNode.findPane(pane)?.isFullWidthTabMode ?? false
+    }
+
+    /// Toggle full-width-tab mode for a pane.
+    ///
+    /// - Parameter pane: The pane to toggle.
+    /// - Returns: The new mode state when the pane exists. Returns `false` without mutating state when the pane is unknown.
+    @discardableResult
+    public func toggleFullWidthTabMode(inPane pane: PaneID) -> Bool {
+        guard let paneState = internalController.rootNode.findPane(pane) else { return false }
+        paneState.isFullWidthTabMode.toggle()
+        return paneState.isFullWidthTabMode
+    }
+
     // MARK: - Context Menu Shortcut Hints
 
     /// Keyboard shortcuts to display in tab context menus, keyed by context action.

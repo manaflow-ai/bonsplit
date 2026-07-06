@@ -1278,6 +1278,16 @@ enum TabContextMenuBuilder {
         }
 
         addAction(
+            title: state.isFullWidthTabMode
+                ? localized("tabContext.exitFullWidthTab", defaultValue: "Exit Full Width Tab")
+                : localized("tabContext.enterFullWidthTab", defaultValue: "Full Width Tab"),
+            action: .toggleFullWidthTab,
+            state: state,
+            target: target,
+            to: menu
+        )
+
+        addAction(
             title: state.isPinned
                 ? localized("tabContext.unpinTab", defaultValue: "Unpin Tab")
                 : localized("tabContext.pinTab", defaultValue: "Pin Tab"),
@@ -1474,7 +1484,7 @@ private extension EventModifiers {
     }
 }
 
-private struct TabContextMenuPresenter: NSViewRepresentable {
+struct TabContextMenuPresenter: NSViewRepresentable {
     let snapshot: TabContextMenuSnapshot
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void

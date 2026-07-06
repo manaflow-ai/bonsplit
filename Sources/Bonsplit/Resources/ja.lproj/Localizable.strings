@@ -17,6 +17,8 @@
 "tabContext.audioMutedAccessibility" = "ミュート中";
 "tabContext.exitZoom" = "ズームを終了";
 "tabContext.zoomPane" = "ペインをズーム";
+"tabContext.enterFullWidthTab" = "タブを全幅表示";
+"tabContext.exitFullWidthTab" = "全幅表示を解除";
 "tabContext.unpinTab" = "タブのピン留めを解除";
 "tabContext.pinTab" = "タブをピン留め";
 "tabContext.markTabAsRead" = "タブを既読にする";

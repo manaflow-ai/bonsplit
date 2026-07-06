@@ -7,15 +7,18 @@ final class PaneState: Identifiable {
     let id: PaneID
     var tabs: [TabItem]
     var selectedTabId: UUID?
+    var isFullWidthTabMode: Bool = false
 
     init(
         id: PaneID = PaneID(),
         tabs: [TabItem] = [],
-        selectedTabId: UUID? = nil
+        selectedTabId: UUID? = nil,
+        isFullWidthTabMode: Bool = false
     ) {
         self.id = id
         self.tabs = tabs
         self.selectedTabId = selectedTabId ?? tabs.first?.id
+        self.isFullWidthTabMode = isFullWidthTabMode
     }
 
     /// Currently selected tab
