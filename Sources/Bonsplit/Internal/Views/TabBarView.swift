@@ -1514,71 +1514,10 @@ struct TabBarView: View {
     // MARK: - Item Provider
 
     private func createItemProvider(for tab: TabItem) -> NSItemProvider {
-        #if DEBUG
-        NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
-        #endif
-#if DEBUG
-        dlog("tab.dragStart pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
-#endif
-        // Clear any stale drop indicator from previous incomplete drag
-        dropTargetIndex = nil
-        dropLifecycle = .idle
-
-        // Set drag source for visual feedback (observable) and drop delegates (non-observable).
-        splitViewController.dragGeneration += 1
-        splitViewController.draggingTab = tab
-        splitViewController.dragSourcePaneId = pane.id
-        splitViewController.activeDragTab = tab
-        splitViewController.activeDragSourcePaneId = pane.id
-
-        // Install a one-shot mouse-up monitor to clear stale drag state if the drag is
-        // cancelled (dropped outside any valid target). SwiftUI's onDrag doesn't provide
-        // a drag-cancelled callback, so performDrop never fires and draggingTab stays set,
-        // which disables hit testing on all content views.
-        let controller = splitViewController
-        let dragGen = controller.dragGeneration
-        var monitorRef: Any?
-        monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { event in
-            // One-shot: remove ourselves, then clean up stale drag state.
-            if let m = monitorRef {
-                NSEvent.removeMonitor(m)
-                monitorRef = nil
-            }
-            // Use async to avoid mutating @Observable state during event dispatch.
-            DispatchQueue.main.async {
-                guard controller.dragGeneration == dragGen else { return }
-                if controller.draggingTab != nil || controller.activeDragTab != nil {
-#if DEBUG
-                    dlog("tab.dragCancel (stale draggingTab cleared)")
-#endif
-                    controller.draggingTab = nil
-                    controller.dragSourcePaneId = nil
-                    controller.activeDragTab = nil
-                    controller.activeDragSourcePaneId = nil
-                }
-            }
-            return event
+        splitViewController.makeTabDragItemProvider(for: tab, from: pane.id) {
+            dropTargetIndex = nil
+            dropLifecycle = .idle
         }
-
-        let transfer = TabTransferData(tab: tab, sourcePaneId: pane.id.id)
-        if let data = try? JSONEncoder().encode(transfer) {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: UTType.tabTransfer.identifier,
-                visibility: .ownProcess
-            ) { completion in
-                completion(data, nil)
-                return nil
-            }
-#if DEBUG
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                let types = NSPasteboard(name: .drag).types?.map(\.rawValue).joined(separator: ",") ?? "-"
-                dlog("tab.dragPasteboard types=\(types)")
-            }
-#endif
-            return provider
-        }
-        return NSItemProvider()
     }
 
     private func tabControlShortcutDigit(for index: Int, tabCount: Int) -> Int? {
@@ -2538,11 +2477,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
                     "tab=\(session.sourceTab.id.uuidString.prefix(5)) title=\"\(session.sourceTab.title)\""
             )
 #endif
-            splitViewController.dragGeneration += 1
-            splitViewController.draggingTab = session.sourceTab
-            splitViewController.dragSourcePaneId = session.sourcePaneId
-            splitViewController.activeDragTab = session.sourceTab
-            splitViewController.activeDragSourcePaneId = session.sourcePaneId
+            _ = splitViewController.beginTabDrag(session.sourceTab, from: session.sourcePaneId)
         }
 
         private func clearManualDrag() {

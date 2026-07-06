@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Header shown when a pane renders its selected tab as the full-width title.
 struct FullWidthTabHeaderView: View {
@@ -8,6 +9,9 @@ struct FullWidthTabHeaderView: View {
 
     @Bindable var pane: PaneState
     let isFocused: Bool
+
+    @State private var dropTargetIndex: Int?
+    @State private var dropLifecycle: TabDropLifecycle = .idle
 
     private var appearance: BonsplitConfiguration.Appearance {
         controller.configuration.appearance
@@ -32,6 +36,10 @@ struct FullWidthTabHeaderView: View {
             ? baseBarColor
             : baseBarColor.withAlphaComponent(baseBarColor.alphaComponent * 0.95)
         return Color(nsColor: resolved)
+    }
+
+    private var appendDropTargetIndex: Int {
+        pane.tabs.count
     }
 
     var body: some View {
@@ -64,12 +72,34 @@ struct FullWidthTabHeaderView: View {
                             }
                         )
                     )
+                    .onDrag {
+                        splitViewController.makeTabDragItemProvider(for: selectedTab, from: pane.id) {
+                            clearDropState()
+                        }
+                    } preview: {
+                        TabDragPreview(tab: selectedTab, appearance: appearance)
+                    }
+                    .onDrop(of: [.tabTransfer, .fileURL], delegate: TabDropDelegate(
+                        targetIndex: appendDropTargetIndex,
+                        pane: pane,
+                        bonsplitController: controller,
+                        controller: splitViewController,
+                        dropTargetIndex: $dropTargetIndex,
+                        dropLifecycle: $dropLifecycle
+                    ))
             } else {
                 Color.clear
             }
         }
         .frame(height: appearance.tabBarHeight)
         .background(backgroundColor)
+        .overlay {
+            if dropTargetIndex == appendDropTargetIndex {
+                headerDropHighlight
+                    .saturation(saturation)
+                    .allowsHitTesting(false)
+            }
+        }
         .overlay(alignment: .bottom) {
             Rectangle()
                 .fill(TabBarColors.separator(for: appearance))
@@ -79,6 +109,11 @@ struct FullWidthTabHeaderView: View {
         .onTapGesture {
             withTransaction(Transaction(animation: nil)) {
                 controller.focusPane(pane.id)
+            }
+        }
+        .onChange(of: splitViewController.draggingTab) { _, newValue in
+            if newValue == nil {
+                clearDropState()
             }
         }
     }
@@ -124,6 +159,17 @@ struct FullWidthTabHeaderView: View {
         .accessibilityLabel(tab.title)
     }
 
+    private var headerDropHighlight: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(TabBarColors.dropIndicator(for: appearance).opacity(0.12))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(TabBarColors.dropIndicator(for: appearance), lineWidth: 2)
+            )
+            .padding(.horizontal, 4)
+            .padding(.vertical, 3)
+    }
+
     @ViewBuilder
     private func tabIcon(for tab: TabItem) -> some View {
         let iconSize = max(14, appearance.tabTitleFontSize + 3)
@@ -143,5 +189,10 @@ struct FullWidthTabHeaderView: View {
                 .frame(width: iconSize, height: iconSize)
                 .saturation(saturation)
         }
+    }
+
+    private func clearDropState() {
+        dropTargetIndex = nil
+        dropLifecycle = .idle
     }
 }

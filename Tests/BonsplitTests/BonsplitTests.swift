@@ -1654,6 +1654,60 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testBeginTabDragTracksStateAndCancelClearsMatchingGeneration() {
+        let controller = SplitViewController()
+        let pane = controller.focusedPane!
+        let tab = pane.selectedTab!
+
+        let generation = controller.beginTabDrag(tab, from: pane.id)
+
+        XCTAssertEqual(controller.dragGeneration, generation)
+        XCTAssertEqual(controller.draggingTab?.id, tab.id)
+        XCTAssertEqual(controller.dragSourcePaneId, pane.id)
+        XCTAssertEqual(controller.activeDragTab?.id, tab.id)
+        XCTAssertEqual(controller.activeDragSourcePaneId, pane.id)
+
+        controller.cancelTabDragIfGenerationMatches(generation)
+
+        XCTAssertNil(controller.draggingTab)
+        XCTAssertNil(controller.dragSourcePaneId)
+        XCTAssertNil(controller.activeDragTab)
+        XCTAssertNil(controller.activeDragSourcePaneId)
+    }
+
+    @MainActor
+    func testCancelTabDragIgnoresStaleGeneration() {
+        let controller = SplitViewController()
+        let firstPane = controller.focusedPane!
+        let firstTab = firstPane.selectedTab!
+
+        let staleGeneration = controller.beginTabDrag(firstTab, from: firstPane.id)
+
+        controller.splitPaneWithTab(
+            firstPane.id,
+            orientation: .horizontal,
+            tab: TabItem(title: "Second"),
+            insertFirst: false
+        )
+        guard let secondPaneId = controller.rootNode.allPaneIds.first(where: { $0 != firstPane.id }),
+              let secondPane = controller.rootNode.findPane(secondPaneId),
+              let secondTab = secondPane.selectedTab else {
+            return XCTFail("Expected splitPane to create another pane with a selected tab")
+        }
+
+        let currentGeneration = controller.beginTabDrag(secondTab, from: secondPane.id)
+        XCTAssertGreaterThan(currentGeneration, staleGeneration)
+
+        controller.cancelTabDragIfGenerationMatches(staleGeneration)
+
+        XCTAssertEqual(controller.dragGeneration, currentGeneration)
+        XCTAssertEqual(controller.draggingTab?.id, secondTab.id)
+        XCTAssertEqual(controller.dragSourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.activeDragTab?.id, secondTab.id)
+        XCTAssertEqual(controller.activeDragSourcePaneId, secondPane.id)
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!
