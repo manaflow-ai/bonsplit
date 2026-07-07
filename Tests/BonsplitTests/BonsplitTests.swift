@@ -1753,6 +1753,20 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testRequestTabContextActionSelectsTargetTabBeforeFullWidthToggle() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let firstTab = controller.createTab(title: "First", kind: "terminal")!
+        let secondTab = controller.createTab(title: "Second", kind: "terminal")!
+        controller.selectTab(firstTab)
+
+        controller.requestTabContextAction(.toggleFullWidthTab, for: secondTab, inPane: pane)
+
+        XCTAssertEqual(controller.selectedTab(inPane: pane)?.id, secondTab)
+        XCTAssertTrue(controller.isFullWidthTabMode(inPane: pane))
+    }
+
+    @MainActor
     func testRequestTabContextActionUsesFullWidthTabToggleHandlerWhenSet() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!

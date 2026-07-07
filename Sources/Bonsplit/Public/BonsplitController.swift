@@ -752,6 +752,9 @@ public final class BonsplitController {
     public func requestTabFullWidthToggle(for tabId: TabID, inPane paneId: PaneID) -> Bool {
         guard let (pane, _) = findTabInternal(tabId),
               pane.id == paneId else { return false }
+        if pane.selectedTabId != tabId.id {
+            selectTab(tabId)
+        }
         if let onTabFullWidthToggleRequest {
             return onTabFullWidthToggleRequest(tabId, paneId)
         }
