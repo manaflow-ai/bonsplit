@@ -171,19 +171,11 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             if tabBarVisibility.showsTabBar(tabCount: pane.tabs.count) {
-                if pane.isFullWidthTabMode, !pane.tabs.isEmpty {
-                    FullWidthTabHeaderView(
-                        pane: pane,
-                        isFocused: isFocused,
-                        showSplitButtons: showSplitButtons
-                    )
-                } else {
-                    TabBarView(
-                        pane: pane,
-                        isFocused: isFocused,
-                        showSplitButtons: showSplitButtons
-                    )
-                }
+                TabBarView(
+                    pane: pane,
+                    isFocused: isFocused,
+                    showSplitButtons: showSplitButtons
+                )
             }
 
             // Content area with drop zones

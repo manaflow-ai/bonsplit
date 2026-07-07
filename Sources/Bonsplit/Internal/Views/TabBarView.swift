@@ -1061,9 +1061,14 @@ struct TabBarView: View {
         controller.configuration.appearance
     }
 
+    private var isFullWidthTabMode: Bool {
+        pane.isFullWidthTabMode && !pane.tabs.isEmpty
+    }
+
     /// Whether tabs should stretch to fill the pane's available tab-bar width.
+    /// Full-width mode uses the same flexible tab item chrome as configured fill mode.
     private var fillsTabsToWidth: Bool {
-        appearance.tabWidthMode == .fill
+        appearance.tabWidthMode == .fill || isFullWidthTabMode
     }
 
     /// Minimum width to impose on the (already trailing-inset-padded) tab row when
@@ -1153,6 +1158,20 @@ struct TabBarView: View {
         )
     }
 
+    private var visibleTabEntries: [(index: Int, tab: TabItem)] {
+        if isFullWidthTabMode {
+            let selectedTab = pane.selectedTab ?? pane.tabs.first
+            if let selectedTab,
+               let selectedIndex = pane.tabs.firstIndex(where: { $0.id == selectedTab.id }) {
+                return [(selectedIndex, selectedTab)]
+            }
+        }
+
+        return pane.tabs.enumerated().map { index, tab in
+            (index, tab)
+        }
+    }
+
     private func focusPaneFromTabBarChrome() -> Bool {
         guard !isFocused else { return false }
         withTransaction(Transaction(animation: nil)) {
@@ -1200,8 +1219,8 @@ struct TabBarView: View {
     /// The horizontally-scrolling tab row hosted inside the tab strip's `ScrollView`.
     ///
     /// Extracted from `body` so the SwiftUI type-checker can resolve the surrounding
-    /// view tree in reasonable time. In fill mode `tabRowFillMinWidth` forces the row
-    /// to the viewport width so the flexible tabs distribute the slack.
+    /// view tree in reasonable time. In fill/full-width mode `tabRowFillMinWidth`
+    /// forces the row to the viewport width so the flexible tabs distribute the slack.
     @ViewBuilder
     private var tabScrollContent: some View {
         HStack(spacing: TabBarMetrics.tabSpacing) {
@@ -1209,13 +1228,15 @@ struct TabBarView: View {
                 .frame(width: 0, height: tabBarHeight)
                 .id(leadingScrollAnchorId)
 
-            ForEach(Array(pane.tabs.enumerated()), id: \.element.id) { index, tab in
-                tabItem(for: tab, at: index)
-                    .id(tab.id)
+            ForEach(visibleTabEntries, id: \.tab.id) { entry in
+                tabItem(for: entry.tab, at: entry.index)
+                    .id(entry.tab.id)
             }
 
-            // Unified drop zone after the last tab.
-            dropZoneAfterTabs
+            if !isFullWidthTabMode {
+                // Unified drop zone after the last tab.
+                dropZoneAfterTabs
+            }
         }
         .padding(.horizontal, TabBarMetrics.barPadding)
         .padding(.trailing, trailingTabContentInset)

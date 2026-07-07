@@ -2933,15 +2933,31 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testFullWidthHeaderIndicatorUsesFocusedAccent() {
-        guard let focusedSaturation = renderedFullWidthHeaderIndicatorSaturation(isFocused: true),
-              let unfocusedSaturation = renderedFullWidthHeaderIndicatorSaturation(isFocused: false) else {
-            XCTFail("Expected rendered full-width header colors")
+    func testFullWidthTabModeIndicatorUsesFocusedAccent() {
+        guard let focusedSaturation = renderedFullWidthTabModeIndicatorSaturation(isFocused: true),
+              let unfocusedSaturation = renderedFullWidthTabModeIndicatorSaturation(isFocused: false) else {
+            XCTFail("Expected rendered full-width tab colors")
             return
         }
 
         XCTAssertGreaterThan(focusedSaturation, 0.4)
         XCTAssertLessThan(unfocusedSaturation, 0.1)
+    }
+
+    @MainActor
+    func testFullWidthTabModeStretchesSelectedTabChrome() {
+        let size = NSSize(width: 320, height: TabBarMetrics.barHeight)
+        guard let range = renderedFullWidthTabModeIndicatorRange(size: size) else {
+            XCTFail("Expected rendered full-width selected tab indicator")
+            return
+        }
+
+        XCTAssertLessThanOrEqual(range.lowerBound, 1)
+        XCTAssertEqual(
+            range.upperBound,
+            size.width - TabBarMetrics.activeIndicatorTrailingInset,
+            accuracy: 1
+        )
     }
 
     @MainActor
@@ -3964,44 +3980,38 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    private func renderedFullWidthHeaderIndicatorSaturation(isFocused: Bool) -> CGFloat? {
-        let controller = BonsplitController()
-        guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
-        let tab = TabItem(title: "", icon: nil)
-        pane.tabs = [tab]
-        pane.selectedTabId = tab.id
-        pane.isFullWidthTabMode = true
+    private func renderedFullWidthTabModeIndicatorSaturation(isFocused: Bool) -> CGFloat? {
+        renderedTabBarValue(
+            isFocused: isFocused,
+            configurePane: { pane in
+                let tab = TabItem(title: "", icon: nil)
+                pane.tabs = [tab]
+                pane.selectedTabId = tab.id
+                pane.isFullWidthTabMode = true
+            }
+        ) { hostingView in
+            let sampleRect = NSRect(x: 4, y: 0, width: 152, height: 4)
+            return maximumSaturation(in: hostingView, sampleRect: sampleRect)
+        }
+    }
 
-        let size = NSSize(width: 160, height: TabBarMetrics.barHeight)
-        let hostingView = NSHostingView(
-            rootView: FullWidthTabHeaderView(pane: pane, isFocused: isFocused, showSplitButtons: true)
-                .environment(controller)
-                .environment(controller.internalController)
-        )
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        defer { window.orderOut(nil) }
-        guard let contentView = window.contentView else { return nil }
-
-        contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.clear.cgColor
-        hostingView.frame = NSRect(origin: .zero, size: size)
-        hostingView.autoresizingMask = [.width, .height]
-        contentView.addSubview(hostingView)
-
-        window.makeKeyAndOrderFront(nil)
-        contentView.layoutSubtreeIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        contentView.layoutSubtreeIfNeeded()
-
-        let sampleRect = NSRect(x: 4, y: 0, width: size.width - 8, height: 4)
-        return maximumSaturation(in: hostingView, sampleRect: sampleRect)
+    @MainActor
+    private func renderedFullWidthTabModeIndicatorRange(size: NSSize) -> ClosedRange<CGFloat>? {
+        renderedTabBarValue(
+            isFocused: true,
+            size: size,
+            configurePane: { pane in
+                let first = TabItem(title: "First", icon: nil)
+                let selected = TabItem(title: "Selected", icon: "terminal")
+                let third = TabItem(title: "Third", icon: nil)
+                pane.tabs = [first, selected, third]
+                pane.selectedTabId = selected.id
+                pane.isFullWidthTabMode = true
+            }
+        ) { hostingView in
+            let sampleRect = NSRect(x: 0, y: 0, width: size.width, height: 4)
+            return highSaturationRange(in: hostingView, sampleRect: sampleRect)
+        }
     }
 
     @MainActor
