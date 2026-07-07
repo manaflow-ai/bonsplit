@@ -19,6 +19,8 @@
 "tabContext.zoomPane" = "Zoom Pane";
 "tabContext.enterFullWidthTab" = "Full Width Tab";
 "tabContext.exitFullWidthTab" = "Exit Full Width Tab";
+"tabContext.switchTab" = "Switch Tab";
+"tabContext.paneActions" = "Pane Actions";
 "tabContext.unpinTab" = "Unpin Tab";
 "tabContext.pinTab" = "Pin Tab";
 "tabContext.markTabAsRead" = "Mark Tab as Read";

@@ -9,6 +9,7 @@ struct FullWidthTabHeaderView: View {
 
     @Bindable var pane: PaneState
     let isFocused: Bool
+    let showSplitButtons: Bool
 
     @State private var dropTargetIndex: Int?
     @State private var dropLifecycle: TabDropLifecycle = .idle
@@ -40,6 +41,15 @@ struct FullWidthTabHeaderView: View {
 
     private var appendDropTargetIndex: Int {
         pane.tabs.count
+    }
+
+    private var visibleSplitButtons: [BonsplitConfiguration.SplitActionButton] {
+        guard showSplitButtons else { return [] }
+        return appearance.splitButtons
+    }
+
+    private var showsTrailingControls: Bool {
+        pane.tabs.count > 1 || !visibleSplitButtons.isEmpty
     }
 
     var body: some View {
@@ -140,29 +150,23 @@ struct FullWidthTabHeaderView: View {
                     )
                     .saturation(saturation)
             }
-            .padding(.horizontal, 44)
+            .padding(.horizontal, showsTrailingControls ? 92 : 44)
             .frame(maxWidth: .infinity, alignment: .center)
 
-            if pane.tabs.count > 1 {
-                HStack {
+            if showsTrailingControls {
+                HStack(spacing: 6) {
                     Spacer(minLength: 0)
-                    Text("\(index + 1)/\(pane.tabs.count)")
-                        .font(.system(size: max(9, appearance.tabTitleFontSize - 1), weight: .medium))
-                        .foregroundStyle(TabBarColors.inactiveText(for: appearance))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(
-                            Capsule()
-                                .fill(TabBarColors.hoveredTabBackground(for: appearance))
-                        )
-                        .saturation(saturation)
+                    if pane.tabs.count > 1 {
+                        tabSwitcherMenu(selectedIndex: index)
+                    }
+                    if !visibleSplitButtons.isEmpty {
+                        splitActionsMenu
+                    }
                 }
                 .padding(.trailing, 8)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(tab.title)
     }
 
     private var activeHeaderIndicator: some View {
@@ -190,6 +194,101 @@ struct FullWidthTabHeaderView: View {
             .padding(.vertical, 3)
     }
 
+    private func tabSwitcherMenu(selectedIndex: Int) -> some View {
+        Menu {
+            ForEach(Array(pane.tabs.enumerated()), id: \.element.id) { index, tab in
+                Button {
+                    withTransaction(Transaction(animation: nil)) {
+                        controller.selectTab(TabID(id: tab.id))
+                    }
+                } label: {
+                    Text(tab.title)
+                    if index == selectedIndex {
+                        Image(systemName: "checkmark")
+                    }
+                }
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Text("\(selectedIndex + 1)/\(pane.tabs.count)")
+                    .font(.system(size: max(9, appearance.tabTitleFontSize - 1), weight: .medium))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: max(7, appearance.tabTitleFontSize - 4), weight: .semibold))
+            }
+            .foregroundStyle(TabBarColors.inactiveText(for: appearance))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(
+                Capsule()
+                    .fill(TabBarColors.hoveredTabBackground(for: appearance))
+            )
+            .saturation(saturation)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel(localized("tabContext.switchTab", defaultValue: "Switch Tab"))
+    }
+
+    private var splitActionsMenu: some View {
+        Menu {
+            ForEach(visibleSplitButtons) { button in
+                Button(splitActionButtonTitle(button)) {
+                    performSplitActionButton(button)
+                }
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: max(11, appearance.tabTitleFontSize), weight: .semibold))
+                .foregroundStyle(TabBarColors.inactiveText(for: appearance))
+                .frame(width: 22, height: 20)
+                .background(
+                    Circle()
+                        .fill(TabBarColors.hoveredTabBackground(for: appearance))
+                )
+                .saturation(saturation)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .accessibilityLabel(localized("tabContext.paneActions", defaultValue: "Pane Actions"))
+    }
+
+    private func splitActionButtonTitle(_ button: BonsplitConfiguration.SplitActionButton) -> String {
+        if let tooltip = button.tooltip, !tooltip.isEmpty {
+            return tooltip
+        }
+
+        let tooltips = appearance.splitButtonTooltips
+        switch button.action {
+        case .newTerminal:
+            return tooltips.newTerminal
+        case .newBrowser:
+            return tooltips.newBrowser
+        case .splitRight:
+            return tooltips.splitRight
+        case .splitDown:
+            return tooltips.splitDown
+        case .custom(let identifier):
+            return identifier
+        }
+    }
+
+    private func performSplitActionButton(_ button: BonsplitConfiguration.SplitActionButton) {
+        guard splitViewController.isInteractive else { return }
+
+        switch button.action {
+        case .newTerminal:
+            controller.requestNewTab(kind: "terminal", inPane: pane.id)
+        case .newBrowser:
+            controller.requestNewTab(kind: "browser", inPane: pane.id)
+        case .splitRight:
+            controller.splitPane(pane.id, orientation: .horizontal)
+        case .splitDown:
+            controller.splitPane(pane.id, orientation: .vertical)
+        case .custom(let identifier):
+            controller.requestCustomAction(identifier, inPane: pane.id)
+        }
+    }
+
     @ViewBuilder
     private func tabIcon(for tab: TabItem) -> some View {
         let iconSize = max(14, appearance.tabTitleFontSize + 3)
@@ -215,5 +314,9 @@ struct FullWidthTabHeaderView: View {
     private func clearDropState() {
         dropTargetIndex = nil
         dropLifecycle = .idle
+    }
+
+    private func localized(_ key: String, defaultValue: String) -> String {
+        Bundle.module.localizedString(forKey: key, value: defaultValue, table: nil)
     }
 }

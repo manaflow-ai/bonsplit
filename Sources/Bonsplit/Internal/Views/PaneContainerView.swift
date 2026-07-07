@@ -174,7 +174,8 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
                 if pane.isFullWidthTabMode, !pane.tabs.isEmpty {
                     FullWidthTabHeaderView(
                         pane: pane,
-                        isFocused: isFocused
+                        isFocused: isFocused,
+                        showSplitButtons: showSplitButtons
                     )
                 } else {
                     TabBarView(

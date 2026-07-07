@@ -19,6 +19,8 @@
 "tabContext.zoomPane" = "ペインをズーム";
 "tabContext.enterFullWidthTab" = "タブを全幅表示";
 "tabContext.exitFullWidthTab" = "全幅表示を解除";
+"tabContext.switchTab" = "タブを切り替え";
+"tabContext.paneActions" = "ペイン操作";
 "tabContext.unpinTab" = "タブのピン留めを解除";
 "tabContext.pinTab" = "タブをピン留め";
 "tabContext.markTabAsRead" = "タブを既読にする";

@@ -3960,7 +3960,7 @@ final class BonsplitTests: XCTestCase {
 
         let size = NSSize(width: 160, height: TabBarMetrics.barHeight)
         let hostingView = NSHostingView(
-            rootView: FullWidthTabHeaderView(pane: pane, isFocused: isFocused)
+            rootView: FullWidthTabHeaderView(pane: pane, isFocused: isFocused, showSplitButtons: true)
                 .environment(controller)
                 .environment(controller.internalController)
         )
