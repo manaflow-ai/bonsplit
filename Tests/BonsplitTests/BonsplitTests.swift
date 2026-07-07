@@ -144,6 +144,22 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    private final class SplitActionButtonDelegateSpy: BonsplitDelegate {
+        var requestedKind: String?
+        var requestedPaneId: PaneID?
+        var customIdentifier: String?
+
+        func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {
+            requestedKind = kind
+            requestedPaneId = pane
+        }
+
+        func splitTabBar(_ controller: BonsplitController, didRequestCustomAction identifier: String, inPane pane: PaneID) {
+            customIdentifier = identifier
+            requestedPaneId = pane
+        }
+    }
+
     @MainActor
     func testControllerCreation() {
         let controller = BonsplitController()
@@ -289,6 +305,52 @@ final class BonsplitTests: XCTestCase {
             BonsplitConfiguration.SplitActionButton.defaults,
             [.newTerminal, .newBrowser, .splitRight, .splitDown]
         )
+    }
+
+    @MainActor
+    func testPerformSplitActionButtonAtLayoutPointRequestsMatchingBuiltInTabKind() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        controller.setContainerFrame(CGRect(x: 0, y: 0, width: 800, height: 600))
+        let delegate = SplitActionButtonDelegateSpy()
+        controller.delegate = delegate
+        let pane = controller.focusedPaneId
+        let paneFrame = try! XCTUnwrap(controller.layoutSnapshot().panes.first?.frame)
+        let buttons = BonsplitConfiguration.SplitActionButton.defaults
+        let visualWidths = buttons.map { TabBarStyling.splitActionButtonHitWidth(for: $0.icon) }
+        let laneWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: buttons.count)
+        let rowWidth = TabBarStyling.splitButtonsLeadingPadding
+            + visualWidths.reduce(0, +)
+            + (CGFloat(buttons.count - 1) * TabBarStyling.splitButtonsSpacing)
+            + TabBarStyling.splitButtonsTrailingPadding
+        let rowMinX = paneFrame.x + paneFrame.width - Double(rowWidth)
+        let firstButtonX = rowMinX + Double(TabBarStyling.splitButtonsLeadingPadding + visualWidths[0] / 2)
+        let secondButtonX = firstButtonX + Double((visualWidths[0] + visualWidths[1]) / 2 + TabBarStyling.splitButtonsSpacing)
+        let buttonY = paneFrame.y + 15
+
+        XCTAssertLessThan(rowWidth, laneWidth)
+        XCTAssertTrue(controller.performSplitActionButton(atLayoutPoint: CGPoint(x: firstButtonX, y: buttonY)))
+        XCTAssertEqual(delegate.requestedKind, "terminal")
+        XCTAssertEqual(delegate.requestedPaneId, pane)
+
+        delegate.requestedKind = nil
+        XCTAssertTrue(controller.performSplitActionButton(atLayoutPoint: CGPoint(x: secondButtonX, y: buttonY)))
+        XCTAssertEqual(delegate.requestedKind, "browser")
+        XCTAssertEqual(delegate.requestedPaneId, pane)
+    }
+
+    @MainActor
+    func testPerformSplitActionButtonAtLayoutPointIgnoresNonButtonChrome() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        controller.setContainerFrame(CGRect(x: 0, y: 0, width: 800, height: 600))
+        let delegate = SplitActionButtonDelegateSpy()
+        controller.delegate = delegate
+        let paneFrame = try! XCTUnwrap(controller.layoutSnapshot().panes.first?.frame)
+
+        XCTAssertFalse(controller.performSplitActionButton(atLayoutPoint: CGPoint(x: paneFrame.x + 100, y: paneFrame.y + 15)))
+        XCTAssertNil(delegate.requestedKind)
+        XCTAssertNil(delegate.customIdentifier)
     }
 
     func testCustomSplitActionButtonRoundTrips() throws {
