@@ -48,7 +48,6 @@ struct FullWidthTabHeaderView: View {
                 headerContent(tab: selectedTab, index: selectedIndex)
                     .frame(maxWidth: .infinity, alignment: .center)
                     .frame(height: appearance.tabBarHeight)
-                    .contentShape(Rectangle())
                     .background(
                         TabContextMenuPresenter(
                             snapshot: TabContextMenuSnapshot(
@@ -62,6 +61,9 @@ struct FullWidthTabHeaderView: View {
                                 ),
                                 moveDestinationsProvider: {
                                     controller.tabContextMoveDestinationsProvider?(TabID(id: selectedTab.id), pane.id) ?? []
+                                },
+                                forkConversationOpenAvailabilityProvider: {
+                                    controller.tabContextForkConversationOpenAvailabilityProvider?(TabID(id: selectedTab.id), pane.id)
                                 }
                             ),
                             onContextAction: { action in
@@ -93,6 +95,10 @@ struct FullWidthTabHeaderView: View {
         }
         .frame(height: appearance.tabBarHeight)
         .background(backgroundColor)
+        .overlay(alignment: .topLeading) {
+            activeHeaderIndicator
+                .allowsHitTesting(false)
+        }
         .overlay {
             if dropTargetIndex == appendDropTargetIndex {
                 headerDropHighlight
@@ -159,6 +165,20 @@ struct FullWidthTabHeaderView: View {
         .accessibilityLabel(tab.title)
     }
 
+    private var activeHeaderIndicator: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(TabBarColors.activeIndicator(saturation: saturation))
+                .frame(height: TabBarMetrics.activeIndicatorHeight)
+            Color.clear
+                .frame(width: TabBarMetrics.activeIndicatorTrailingInset)
+        }
+        .frame(height: TabBarMetrics.activeIndicatorHeight, alignment: .top)
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+    }
+
     private var headerDropHighlight: some View {
         RoundedRectangle(cornerRadius: 6)
             .fill(TabBarColors.dropIndicator(for: appearance).opacity(0.12))
@@ -182,6 +202,7 @@ struct FullWidthTabHeaderView: View {
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: iconSize, height: iconSize)
+                .saturation(saturation)
         } else if let iconName = tab.icon {
             Image(systemName: iconName)
                 .font(.system(size: iconSize, weight: .medium))

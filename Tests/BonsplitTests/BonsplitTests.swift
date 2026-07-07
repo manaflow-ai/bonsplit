@@ -1907,7 +1907,8 @@ final class BonsplitTests: XCTestCase {
                 hasSplits: false,
                 shortcuts: [:]
             ),
-            moveDestinationsProvider: { [] }
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1943,7 +1944,8 @@ final class BonsplitTests: XCTestCase {
                 hasSplits: false,
                 shortcuts: [:]
             ),
-            moveDestinationsProvider: { [] }
+            moveDestinationsProvider: { [] },
+            forkConversationOpenAvailabilityProvider: { nil }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -2236,6 +2238,25 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 0, visibility: .multipleTabs)))
         XCTAssertFalse(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 1, visibility: .multipleTabs)))
         XCTAssertTrue(try XCTUnwrap(renderedPaneContainerHasTabBar(tabCount: 2, visibility: .multipleTabs)))
+    }
+
+    @MainActor
+    func testFullWidthTabModeRespectsPaneTabBarVisibility() throws {
+        XCTAssertEqual(
+            try XCTUnwrap(renderedFullWidthPaneChromeAlpha(tabCount: 1, visibility: .always)),
+            1,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(renderedFullWidthPaneChromeAlpha(tabCount: 1, visibility: .multipleTabs)),
+            0,
+            accuracy: 0.01
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(renderedFullWidthPaneChromeAlpha(tabCount: 2, visibility: .multipleTabs)),
+            1,
+            accuracy: 0.01
+        )
     }
 
     func testIconSaturationKeepsRasterFaviconInColorWhenInactive() {
@@ -2855,6 +2876,18 @@ final class BonsplitTests: XCTestCase {
         guard let focusedSaturation = renderedTabBarIndicatorSaturation(isFocused: true),
               let unfocusedSaturation = renderedTabBarIndicatorSaturation(isFocused: false) else {
             XCTFail("Expected rendered tab bar colors")
+            return
+        }
+
+        XCTAssertGreaterThan(focusedSaturation, 0.4)
+        XCTAssertLessThan(unfocusedSaturation, 0.1)
+    }
+
+    @MainActor
+    func testFullWidthHeaderIndicatorUsesFocusedAccent() {
+        guard let focusedSaturation = renderedFullWidthHeaderIndicatorSaturation(isFocused: true),
+              let unfocusedSaturation = renderedFullWidthHeaderIndicatorSaturation(isFocused: false) else {
+            XCTFail("Expected rendered full-width header colors")
             return
         }
 
@@ -3882,6 +3915,47 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    private func renderedFullWidthHeaderIndicatorSaturation(isFocused: Bool) -> CGFloat? {
+        let controller = BonsplitController()
+        guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
+        let tab = TabItem(title: "", icon: nil)
+        pane.tabs = [tab]
+        pane.selectedTabId = tab.id
+        pane.isFullWidthTabMode = true
+
+        let size = NSSize(width: 160, height: TabBarMetrics.barHeight)
+        let hostingView = NSHostingView(
+            rootView: FullWidthTabHeaderView(pane: pane, isFocused: isFocused)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else { return nil }
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        let sampleRect = NSRect(x: 4, y: 0, width: size.width - 8, height: 4)
+        return maximumSaturation(in: hostingView, sampleRect: sampleRect)
+    }
+
+    @MainActor
     private func renderedTabBarIndicatorWidth(isFocused: Bool) -> CGFloat? {
         renderedTabBarValue(isFocused: isFocused) { hostingView in
             let sampleRect = NSRect(x: 0, y: 0, width: 80, height: 4)
@@ -4582,6 +4656,63 @@ final class BonsplitTests: XCTestCase {
             in: hostingView,
             timeout: 0.1
         ) != nil
+    }
+
+    @MainActor
+    private func renderedFullWidthPaneChromeAlpha(
+        tabCount: Int,
+        visibility: TabBarVisibility
+    ) -> CGFloat? {
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(tabBarVisibility: visibility)
+        )
+        guard let pane = controller.internalController.rootNode.allPanes.first else { return nil }
+
+        let tabs = (0..<tabCount).map { index in
+            TabItem(title: "Tab \(index + 1)", icon: nil)
+        }
+        pane.tabs = tabs
+        pane.selectedTabId = tabs.first?.id
+        pane.isFullWidthTabMode = true
+
+        let size = NSSize(width: 320, height: 180)
+        let hostingView = NSHostingView(
+            rootView: PaneContainerView(
+                pane: pane,
+                controller: controller.internalController,
+                contentBuilder: { _, _ in Color.clear },
+                emptyPaneBuilder: { _ in Color.clear },
+                showSplitButtons: false,
+                tabBarVisibility: visibility
+            )
+            .environment(controller)
+            .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else { return nil }
+
+        contentView.wantsLayer = true
+        contentView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        return renderedColorInViewCoordinates(in: hostingView, at: NSPoint(x: 4, y: 0))?
+            .usingColorSpace(.sRGB)?
+            .alphaComponent
     }
 
     @MainActor
