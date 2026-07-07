@@ -1738,6 +1738,41 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testRequestTabContextActionTogglesFullWidthTabModeWithoutDelegate() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Test", kind: "terminal")!
+
+        controller.requestTabContextAction(.toggleFullWidthTab, for: tabId, inPane: pane)
+
+        XCTAssertTrue(controller.isFullWidthTabMode(inPane: pane))
+
+        controller.requestTabContextAction(.toggleFullWidthTab, for: tabId, inPane: pane)
+
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: pane))
+    }
+
+    @MainActor
+    func testRequestTabContextActionUsesFullWidthTabToggleHandlerWhenSet() {
+        let controller = BonsplitController()
+        let pane = controller.focusedPaneId!
+        let tabId = controller.createTab(title: "Test", kind: "terminal")!
+        var requestedTab: TabID?
+        var requestedPane: PaneID?
+        controller.onTabFullWidthToggleRequest = { tab, pane in
+            requestedTab = tab
+            requestedPane = pane
+            return true
+        }
+
+        controller.requestTabContextAction(.toggleFullWidthTab, for: tabId, inPane: pane)
+
+        XCTAssertEqual(requestedTab, tabId)
+        XCTAssertEqual(requestedPane, pane)
+        XCTAssertFalse(controller.isFullWidthTabMode(inPane: pane))
+    }
+
+    @MainActor
     func testRequestTabMoveDestinationForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!

@@ -98,6 +98,10 @@ public final class BonsplitController {
     /// When set, the host owns the full toggle and should return whether it succeeded.
     @ObservationIgnored public var onTabZoomToggleRequest: (@MainActor (_ tabId: TabID, _ paneId: PaneID) -> Bool)?
 
+    /// Called when the user explicitly requests to toggle full-width-tab mode from tab chrome.
+    /// When set, the host owns the full toggle and should return whether it succeeded.
+    @ObservationIgnored public var onTabFullWidthToggleRequest: (@MainActor (_ tabId: TabID, _ paneId: PaneID) -> Bool)?
+
     // MARK: - Internal State
 
     internal var internalController: SplitViewController
@@ -216,6 +220,11 @@ public final class BonsplitController {
 
     /// Request the delegate to handle a tab context-menu action.
     public func requestTabContextAction(_ action: TabContextAction, for tabId: TabID, inPane pane: PaneID) {
+        if action == .toggleFullWidthTab {
+            _ = requestTabFullWidthToggle(for: tabId, inPane: pane)
+            return
+        }
+
         guard let tab = tab(tabId) else { return }
         delegate?.splitTabBar(self, didRequestTabContextAction: action, for: tab, inPane: pane)
     }
@@ -735,6 +744,18 @@ public final class BonsplitController {
         guard let paneState = internalController.rootNode.findPane(pane) else { return false }
         paneState.isFullWidthTabMode.toggle()
         return paneState.isFullWidthTabMode
+    }
+
+    /// Request a tab-chrome full-width-tab toggle for a specific tab.
+    /// Hosts can intercept this to run their own focus/layout reconciliation.
+    @discardableResult
+    public func requestTabFullWidthToggle(for tabId: TabID, inPane paneId: PaneID) -> Bool {
+        guard let (pane, _) = findTabInternal(tabId),
+              pane.id == paneId else { return false }
+        if let onTabFullWidthToggleRequest {
+            return onTabFullWidthToggleRequest(tabId, paneId)
+        }
+        return toggleFullWidthTabMode(inPane: paneId)
     }
 
     // MARK: - Context Menu Shortcut Hints
