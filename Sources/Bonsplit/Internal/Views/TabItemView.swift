@@ -229,6 +229,7 @@ struct TabItemView: View {
     let allowsClose: Bool
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let forkConversationOpenAvailabilityProvider: () -> Bool?
     let onSelect: () -> Void
     let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
@@ -281,7 +282,8 @@ struct TabItemView: View {
             snapshot: TabContextMenuSnapshot(
                 tabId: tab.id,
                 state: contextMenuState,
-                moveDestinationsProvider: moveDestinationsProvider
+                moveDestinationsProvider: moveDestinationsProvider,
+                forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
             ),
             onContextAction: onContextAction,
             onMoveDestination: onMoveDestination
@@ -1112,6 +1114,7 @@ struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let forkConversationOpenAvailabilityProvider: () -> Bool?
 }
 
 final class TabContextMenuActionTarget: NSObject {
@@ -1137,7 +1140,10 @@ enum TabContextMenuBuilder {
         snapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
     ) -> NSMenu {
-        let state = snapshot.state
+        var state = snapshot.state
+        let canForkConversationAtOpen = snapshot.forkConversationOpenAvailabilityProvider()
+        let forkConversationEnabled = canForkConversationAtOpen ?? state.canForkConversation
+        state.canForkConversation = state.canForkConversation || forkConversationEnabled
         let menu = NSMenu()
         menu.autoenablesItems = false
 
@@ -1212,11 +1218,16 @@ enum TabContextMenuBuilder {
             addAction(
                 title: localized("tabContext.forkConversation", defaultValue: "Fork Conversation"),
                 action: .forkConversation,
+                enabled: forkConversationEnabled,
                 state: state,
                 target: target,
                 to: menu
             )
-            menu.addItem(forkConversationSubmenuItem(state: state, target: target))
+            menu.addItem(forkConversationSubmenuItem(
+                state: state,
+                target: target,
+                enabled: forkConversationEnabled
+            ))
         }
 
         menu.addItem(.separator())
@@ -1369,7 +1380,8 @@ enum TabContextMenuBuilder {
 
     private static func forkConversationSubmenuItem(
         state: TabContextMenuState,
-        target: TabContextMenuActionTarget
+        target: TabContextMenuActionTarget,
+        enabled: Bool
     ) -> NSMenuItem {
         let item = NSMenuItem(
             title: localized("tabContext.forkConversationTo", defaultValue: "Fork Conversation To"),
@@ -1385,6 +1397,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.right", defaultValue: "Right Split"),
             action: .forkConversationRight,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1393,6 +1406,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.left", defaultValue: "Left Split"),
             action: .forkConversationLeft,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1401,6 +1415,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.top", defaultValue: "Top Split"),
             action: .forkConversationTop,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1409,6 +1424,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.bottom", defaultValue: "Bottom Split"),
             action: .forkConversationBottom,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1418,6 +1434,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.newTab", defaultValue: "New Tab"),
             action: .forkConversationNewTab,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1426,6 +1443,7 @@ enum TabContextMenuBuilder {
         addAction(
             title: localized("tabContext.forkConversation.newWorkspace", defaultValue: "New Workspace"),
             action: .forkConversationNewWorkspace,
+            enabled: enabled,
             state: state,
             target: target,
             to: submenu,
@@ -1433,7 +1451,7 @@ enum TabContextMenuBuilder {
         )
 
         item.submenu = submenu
-        item.isEnabled = true
+        item.isEnabled = enabled
         return item
     }
 

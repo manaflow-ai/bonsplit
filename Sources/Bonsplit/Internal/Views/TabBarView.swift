@@ -912,7 +912,7 @@ struct TabContextMenuState {
     let canMoveToNewWorkspace: Bool
     let canMoveToLeftPane: Bool
     let canMoveToRightPane: Bool
-    let canForkConversation: Bool
+    var canForkConversation: Bool
     let forkConversationDefaultAction: TabContextAction
     let isZoomed: Bool
     let isFullWidthTabMode: Bool
@@ -1432,6 +1432,9 @@ struct TabBarView: View {
             contextMenuState: contextMenuState,
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
+            forkConversationOpenAvailabilityProvider: {
+                controller.tabContextForkConversationOpenAvailabilityProvider?(TabID(id: tab.id), pane.id)
             },
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane

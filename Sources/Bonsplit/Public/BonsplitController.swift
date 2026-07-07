@@ -82,6 +82,9 @@ public final class BonsplitController {
     /// session). Return `true` to enable the item, `false` (or omit the provider) to hide it.
     @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> Bool)?
 
+    /// Host-provided check evaluated only when the tab context menu is opening.
+    @ObservationIgnored public var tabContextForkConversationOpenAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+
     /// Host-provided default destination for the tab context menu's primary "Fork
     /// Conversation" action. Return a destination-specific fork action; invalid values
     /// fall back to `.forkConversationRight`.
