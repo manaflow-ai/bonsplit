@@ -149,7 +149,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #else
         let splitView = ThemedSplitView()
 #endif
-        splitView.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        splitView.customDividerColor = TabBarColors.nsColorSplitDivider(for: appearance)
         splitView.customDividerThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
@@ -355,7 +355,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
-        (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSplitDivider(for: appearance)
         let resolvedThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         let dividerThicknessChanged = (splitView as? ThemedSplitView)?.customDividerThickness != resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerThickness = resolvedThickness

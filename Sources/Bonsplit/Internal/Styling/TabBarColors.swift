@@ -263,6 +263,15 @@ enum TabBarColors {
         return tone.withAlphaComponent(alpha)
     }
 
+    static func nsColorSplitDivider(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        if let splitDividerHex = appearance.chromeColors.splitDividerHex,
+           let explicit = NSColor(bonsplitHex: splitDividerHex) {
+            return explicit
+        }
+
+        return nsColorSeparator(for: appearance)
+    }
+
     static var dropIndicator: Color {
         Color.accentColor
     }
