@@ -2,8 +2,8 @@ import SwiftUI
 import Bonsplit
 
 struct ContentView: View {
-    @StateObject private var appState = AppState()
-    @ObservedObject var debugState: DebugState
+    @State private var appState = AppState()
+    let debugState: DebugState
 
     var body: some View {
         BonsplitView(controller: appState.controller) { tab, paneId in
@@ -28,7 +28,7 @@ struct ContentView: View {
 struct TabContentView: View {
     let tab: Bonsplit.Tab
     let paneId: PaneID
-    @ObservedObject var appState: AppState
+    let appState: AppState
     @FocusState private var isEditorFocused: Bool
 
     var body: some View {
@@ -69,7 +69,7 @@ struct TabContentView: View {
 /// Custom view for empty panes - developer can fully customize this
 struct EmptyPaneView: View {
     let paneId: PaneID
-    @ObservedObject var appState: AppState
+    let appState: AppState
 
     var body: some View {
         VStack(spacing: 20) {

@@ -3,7 +3,7 @@ import AppKit
 import Bonsplit
 
 struct DebugWindowView: View {
-    @ObservedObject var debugState: DebugState
+    let debugState: DebugState
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,7 +29,7 @@ struct DebugWindowView: View {
 
 struct GeometrySection: View {
     let snapshot: LayoutSnapshot
-    @ObservedObject var debugState: DebugState
+    let debugState: DebugState
 
     var body: some View {
         ScrollView {
@@ -83,7 +83,7 @@ struct GeometrySection: View {
 
 struct SplitControlsView: View {
     let node: ExternalTreeNode
-    @ObservedObject var debugState: DebugState
+    let debugState: DebugState
 
     var body: some View {
         switch node {
@@ -101,7 +101,7 @@ struct SplitControlsView: View {
 
 struct DividerSlider: View {
     let split: ExternalSplitNode
-    @ObservedObject var debugState: DebugState
+    let debugState: DebugState
     @State private var position: Double
 
     init(split: ExternalSplitNode, debugState: DebugState) {

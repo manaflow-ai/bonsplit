@@ -217,7 +217,7 @@ private struct SplitButtonLaneWidthReader: View {
 }
 
 @MainActor
-private final class TabBarScrollViewBridge: ObservableObject {
+private final class TabBarScrollViewBridge {
     private struct ScrollMetrics {
         let offset: CGFloat
         let documentWidth: CGFloat
@@ -1034,8 +1034,8 @@ struct TabBarView: View {
     @State private var splitButtonScrollOffset: CGFloat = 0
     @State private var splitButtonContentWidth: CGFloat = 0
     @State private var splitButtonViewportWidth: CGFloat = 0
-    @StateObject private var controlKeyMonitor = TabControlShortcutKeyMonitor()
-    @StateObject private var scrollViewBridge = TabBarScrollViewBridge()
+    @State private var controlKeyMonitor = TabControlShortcutKeyMonitor()
+    @State private var scrollViewBridge = TabBarScrollViewBridge()
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -3294,18 +3294,19 @@ private struct TabBarHostWindowReader: NSViewRepresentable {
 }
 
 @MainActor
-private final class TabControlShortcutKeyMonitor: ObservableObject {
-    @Published private(set) var isShortcutHintVisible = false
-    @Published private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
+@Observable
+private final class TabControlShortcutKeyMonitor {
+    private(set) var isShortcutHintVisible = false
+    private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
 
-    private weak var hostWindow: NSWindow?
-    private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
-    private var hostWindowDidResignKeyObserver: NSObjectProtocol?
-    private var flagsMonitor: Any?
-    private var keyDownMonitor: Any?
-    private var resignObserver: NSObjectProtocol?
-    private var pendingShowWorkItem: DispatchWorkItem?
-    private var pendingModifier: TabControlShortcutModifier?
+    @ObservationIgnored private weak var hostWindow: NSWindow?
+    @ObservationIgnored private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
+    @ObservationIgnored private var hostWindowDidResignKeyObserver: NSObjectProtocol?
+    @ObservationIgnored private var flagsMonitor: Any?
+    @ObservationIgnored private var keyDownMonitor: Any?
+    @ObservationIgnored private var resignObserver: NSObjectProtocol?
+    @ObservationIgnored private var pendingShowTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingModifier: TabControlShortcutModifier?
 
     func setHostWindow(_ window: NSWindow?) {
         guard hostWindow !== window else { return }
@@ -3421,15 +3422,17 @@ private final class TabControlShortcutKeyMonitor: ObservableObject {
     }
 
     private func queueHintShow(for modifier: TabControlShortcutModifier) {
-        if pendingModifier == modifier, pendingShowWorkItem != nil {
+        if pendingModifier == modifier, pendingShowTask != nil {
             return
         }
 
-        pendingShowWorkItem?.cancel()
+        pendingShowTask?.cancel()
 
-        let workItem = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            self.pendingShowWorkItem = nil
+        pendingModifier = modifier
+        pendingShowTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(TabControlShortcutHintPolicy.intentionalHoldDelay))
+            guard !Task.isCancelled, let self else { return }
+            self.pendingShowTask = nil
             self.pendingModifier = nil
             guard TabControlShortcutHintPolicy.shouldShowHints(
                 for: NSEvent.modifierFlags,
@@ -3444,15 +3447,11 @@ private final class TabControlShortcutKeyMonitor: ObservableObject {
                 self.isShortcutHintVisible = true
             }
         }
-
-        pendingModifier = modifier
-        pendingShowWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + TabControlShortcutHintPolicy.intentionalHoldDelay, execute: workItem)
     }
 
     private func cancelPendingHintShow(resetVisible: Bool) {
-        pendingShowWorkItem?.cancel()
-        pendingShowWorkItem = nil
+        pendingShowTask?.cancel()
+        pendingShowTask = nil
         pendingModifier = nil
         if resetVisible {
             shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()

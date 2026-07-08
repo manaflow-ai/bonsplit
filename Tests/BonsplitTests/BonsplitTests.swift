@@ -5,6 +5,12 @@ import Observation
 import QuartzCore
 import SwiftUI
 
+@MainActor
+@Observable
+private final class DropZoneModel {
+    var zone: DropZone?
+}
+
 final class BonsplitTests: XCTestCase {
     @MainActor
     private final class FakeTabBarHitRegionView: NSView {
@@ -88,13 +94,8 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    private final class DropZoneModel: ObservableObject {
-        @Published var zone: DropZone?
-    }
-
-    @MainActor
     private struct PaneDropInteractionHarness: View {
-        @ObservedObject var model: DropZoneModel
+        let model: DropZoneModel
         let probeView: LayoutProbeView
 
         var body: some View {

@@ -8,10 +8,11 @@ struct TabContent {
 
 /// Application state managing tabs and their content
 @MainActor
-class AppState: ObservableObject {
+@Observable
+class AppState {
     let controller: BonsplitController
 
-    @Published var tabContents: [TabID: TabContent] = [:]
+    var tabContents: [TabID: TabContent] = [:]
 
     /// Reference to debug state for geometry notifications
     weak var debugState: DebugState?

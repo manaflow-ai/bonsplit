@@ -3,10 +3,11 @@ import Bonsplit
 
 /// Observable state for the geometry debug panel
 @MainActor
-class DebugState: ObservableObject {
-    @Published var logs: [String] = []
-    @Published var currentSnapshot: LayoutSnapshot?
-    @Published var currentTree: ExternalTreeNode?
+@Observable
+class DebugState {
+    var logs: [String] = []
+    var currentSnapshot: LayoutSnapshot?
+    var currentTree: ExternalTreeNode?
 
     weak var controller: BonsplitController?
 
