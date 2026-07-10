@@ -40,9 +40,15 @@ struct SplitViewContainer<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private var splitNodeContent: some View {
-        let nodeToRender = controller.zoomedNode ?? controller.rootNode
+        // Always render the full tree. Zoom is applied by collapsing the
+        // non-zoomed side of each split on the zoom path (see
+        // SplitContainerView), never by swapping the rendered node: swapping
+        // changes SwiftUI structural identity and tears down / rebuilds the
+        // entire AppKit split hierarchy (one NSHostingController per pane),
+        // which made maximize/minimize scale with pane count.
         SplitNodeView(
-            node: nodeToRender,
+            node: controller.rootNode,
+            zoomedPaneId: controller.zoomedPaneId,
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
             appearance: appearance,

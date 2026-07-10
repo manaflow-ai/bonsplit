@@ -9,7 +9,37 @@ final class SplitViewController {
     var rootNode: SplitNode
 
     /// Currently zoomed pane. When set, rendering should only show this pane.
-    var zoomedPaneId: PaneID?
+    var zoomedPaneId: PaneID? {
+        didSet {
+            guard oldValue != zoomedPaneId else { return }
+            notifyZoomCollapseAppliers()
+        }
+    }
+
+    /// Registered zoom-collapse appliers, one per live SplitContainerView
+    /// coordinator. Zoom is applied to the AppKit split hierarchy synchronously
+    /// when `zoomedPaneId` changes, in the same runloop turn as the toggle;
+    /// waiting for the SwiftUI update to thread the new value through every
+    /// nested NSHostingController adds several display-cycle-paced passes
+    /// (~200ms on deep trees). The SwiftUI pass still runs afterwards as an
+    /// idempotent backstop for views created mid-zoom.
+    @ObservationIgnored
+    private var zoomCollapseAppliers: [ObjectIdentifier: (PaneID?) -> Void] = [:]
+
+    func registerZoomCollapseApplier(key: ObjectIdentifier, _ applier: @escaping (PaneID?) -> Void) {
+        zoomCollapseAppliers[key] = applier
+    }
+
+    func unregisterZoomCollapseApplier(key: ObjectIdentifier) {
+        zoomCollapseAppliers.removeValue(forKey: key)
+    }
+
+    private func notifyZoomCollapseAppliers() {
+        let zoomed = zoomedPaneId
+        for applier in zoomCollapseAppliers.values {
+            applier(zoomed)
+        }
+    }
 
     /// Currently focused pane ID
     var focusedPaneId: PaneID?
