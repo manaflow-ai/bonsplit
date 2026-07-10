@@ -146,6 +146,19 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    @MainActor
+    private final class GeometryDelegateSpy: BonsplitDelegate {
+        var snapshots: [LayoutSnapshot] = []
+        var reenterOnFirstGeometryChange = false
+
+        func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {
+            snapshots.append(snapshot)
+            if reenterOnFirstGeometryChange, snapshots.count == 1 {
+                controller.notifyGeometryChange()
+            }
+        }
+    }
+
     private final class ObservationInvalidationFlag: @unchecked Sendable {
         var didInvalidate = false
     }
@@ -154,6 +167,76 @@ final class BonsplitTests: XCTestCase {
     func testControllerCreation() {
         let controller = BonsplitController()
         XCTAssertNotNil(controller.focusedPaneId)
+    }
+
+    @MainActor
+    func testNotifyGeometryChangeSuppressesTimestampOnlyDuplicate() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 1)
+    }
+
+    @MainActor
+    func testNotifyGeometryChangeDeliversContainerFrameChange() throws {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 900, height: 600))
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 2)
+        XCTAssertEqual(
+            try XCTUnwrap(delegate.snapshots.last?.containerFrame),
+            PixelRect(x: 10, y: 20, width: 900, height: 600)
+        )
+    }
+
+    @MainActor
+    func testGeometryDedupCacheResetsForNewDelegate() {
+        let controller = BonsplitController()
+        let firstDelegate = GeometryDelegateSpy()
+        let secondDelegate = GeometryDelegateSpy()
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.delegate = firstDelegate
+        controller.notifyGeometryChange()
+        controller.delegate = firstDelegate
+        controller.notifyGeometryChange()
+        XCTAssertEqual(
+            firstDelegate.snapshots.count,
+            1,
+            "Reassigning the same delegate must preserve deduplication"
+        )
+
+        controller.delegate = nil
+        controller.notifyGeometryChange()
+        controller.delegate = secondDelegate
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(firstDelegate.snapshots.count, 1)
+        XCTAssertEqual(secondDelegate.snapshots.count, 1)
+    }
+
+    @MainActor
+    func testGeometryDedupCachesBeforeReentrantDelegateCallback() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        delegate.reenterOnFirstGeometryChange = true
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 1)
     }
 
     @MainActor
