@@ -36,7 +36,13 @@ public final class BonsplitController {
     // MARK: - Delegate
 
     /// Delegate for receiving callbacks about tab bar events
-    public weak var delegate: BonsplitDelegate?
+    public weak var delegate: BonsplitDelegate? {
+        didSet {
+            if oldValue !== delegate {
+                lastDeliveredGeometrySnapshot = nil
+            }
+        }
+    }
 
     // MARK: - Configuration
 
@@ -111,6 +117,7 @@ public final class BonsplitController {
     // MARK: - Internal State
 
     internal var internalController: SplitViewController
+    @ObservationIgnored private var lastDeliveredGeometrySnapshot: LayoutSnapshot?
 
     // MARK: - Initialization
 
@@ -1007,8 +1014,11 @@ public final class BonsplitController {
             internalController.lastGeometryNotificationTime = now
         }
 
+        guard let delegate else { return }
         let snapshot = layoutSnapshot()
-        delegate?.splitTabBar(self, didChangeGeometry: snapshot)
+        guard lastDeliveredGeometrySnapshot?.hasSameLayout(as: snapshot) != true else { return }
+        lastDeliveredGeometrySnapshot = snapshot
+        delegate.splitTabBar(self, didChangeGeometry: snapshot)
     }
 
     // MARK: - Private Helpers

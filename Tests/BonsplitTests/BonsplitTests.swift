@@ -200,6 +200,140 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testLayoutEquivalenceCoversEveryOverlayInput() {
+        let containerFrame = PixelRect(x: 10, y: 20, width: 800, height: 600)
+        let firstPane = PaneGeometry(
+            paneId: "pane-a",
+            frame: PixelRect(x: 10, y: 20, width: 400, height: 600),
+            selectedTabId: "tab-a",
+            tabIds: ["tab-a", "tab-b"]
+        )
+        let secondPane = PaneGeometry(
+            paneId: "pane-b",
+            frame: PixelRect(x: 410, y: 20, width: 400, height: 600),
+            selectedTabId: "tab-c",
+            tabIds: ["tab-c"]
+        )
+        let base = LayoutSnapshot(
+            containerFrame: containerFrame,
+            panes: [firstPane, secondPane],
+            focusedPaneId: "pane-a",
+            timestamp: 100
+        )
+        let timestampOnlyChange = LayoutSnapshot(
+            containerFrame: containerFrame,
+            panes: [firstPane, secondPane],
+            focusedPaneId: "pane-a",
+            timestamp: 200
+        )
+
+        XCTAssertTrue(base.hasSameLayout(as: timestampOnlyChange))
+        XCTAssertNotEqual(base, timestampOnlyChange, "Equatable must remain timestamp-sensitive")
+
+        let changedFirstPaneId = PaneGeometry(
+            paneId: "pane-z",
+            frame: firstPane.frame,
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneFrame = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: PixelRect(x: 10, y: 20, width: 450, height: 600),
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneSelection = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: firstPane.frame,
+            selectedTabId: "tab-b",
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneTabOrder = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: firstPane.frame,
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: ["tab-b", "tab-a"]
+        )
+        let variants: [(String, LayoutSnapshot)] = [
+            (
+                "container frame",
+                LayoutSnapshot(
+                    containerFrame: PixelRect(x: 10, y: 20, width: 900, height: 600),
+                    panes: [firstPane, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane id",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneId, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane frame",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneFrame, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "selected tab",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneSelection, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "tab order",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneTabOrder, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane order",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [secondPane, firstPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane membership",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [firstPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "focused pane",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [firstPane, secondPane],
+                    focusedPaneId: "pane-b",
+                    timestamp: 100
+                )
+            ),
+        ]
+
+        for (label, variant) in variants {
+            XCTAssertFalse(base.hasSameLayout(as: variant), label)
+        }
+    }
+
     @MainActor
     func testGeometryDedupCacheResetsForNewDelegate() {
         let controller = BonsplitController()
