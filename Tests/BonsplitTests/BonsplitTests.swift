@@ -374,6 +374,55 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testGeometryDedupDeliversZoomStateChange() throws {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        let zoomedPane = try XCTUnwrap(
+            controller.splitPane(orientation: .horizontal)
+        )
+        let deliveryCountBeforeZoom = delegate.snapshots.count
+
+        XCTAssertTrue(controller.togglePaneZoom(inPane: zoomedPane))
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeZoom + 1)
+    }
+
+    @MainActor
+    func testGeometryDedupDeliversTabBarVisibilityChange() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        controller.notifyGeometryChange()
+        let deliveryCountBeforeVisibilityChange = delegate.snapshots.count
+
+        controller.configuration.tabBarVisibility = .multipleTabs
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeVisibilityChange + 1)
+    }
+
+    @MainActor
+    func testGeometryDedupDeliversDividerThicknessChange() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        controller.notifyGeometryChange()
+        let deliveryCountBeforeThicknessChange = delegate.snapshots.count
+
+        controller.configuration.appearance.dividerThickness = 4
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeThicknessChange + 1)
+    }
+
+    @MainActor
     func testTabCreation() {
         let controller = BonsplitController()
         let tabId = controller.createTab(title: "Test Tab", icon: "doc")
