@@ -139,6 +139,10 @@ private final class DebugSplitView: ThemedSplitView {
 struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Bindable var splitState: SplitState
     let controller: SplitViewController
+    /// Currently zoomed pane, threaded down from SplitViewContainer as a plain
+    /// value so every split on the zoom path deterministically re-runs
+    /// updateNSView when zoom toggles.
+    var zoomedPaneId: PaneID?
     let appearance: BonsplitConfiguration.Appearance
     let dividerPositionRange: ClosedRange<CGFloat>
     let contentBuilder: (TabItem, PaneID) -> Content
@@ -211,6 +215,23 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         context.coordinator.splitView = splitView
 
+        // Apply zoom collapse synchronously when the controller's zoom state
+        // changes, without waiting for SwiftUI to re-thread zoomedPaneId through
+        // every nested hosting controller (each nesting level costs a
+        // display-paced update pass). updateNSView re-applies the same state
+        // idempotently as a backstop.
+        context.coordinator.zoomRegistrationController = controller
+        let coordinatorKey = ObjectIdentifier(context.coordinator)
+        controller.registerZoomCollapseApplier(key: coordinatorKey) { [weak coordinator = context.coordinator, weak splitView] zoomedPaneId in
+            guard let coordinator, let splitView else { return }
+            let hiddenIndex: Int? = zoomedPaneId.flatMap { zoomId in
+                if coordinator.splitState.first.findPane(zoomId) != nil { return 1 }
+                if coordinator.splitState.second.findPane(zoomId) != nil { return 0 }
+                return nil
+            }
+            coordinator.applyZoomCollapse(hiddenIndex, in: splitView)
+        }
+
         // Capture animation origin before it gets cleared
         let animationOrigin = splitState.animationOrigin
 #if DEBUG
@@ -248,6 +269,18 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // Apply the initial divider position once after initial layout scheduling.
         func applyInitialDividerPosition() {
             if context.coordinator.didApplyInitialDividerPosition {
+                return
+            }
+
+            // A split materialized while pane zoom is collapsing this view keeps
+            // its collapsed layout; the zoom-restore pass re-applies the model
+            // ratio, so don't fight it here.
+            if context.coordinator.zoomHiddenIndex != nil {
+                context.coordinator.didApplyInitialDividerPosition = true
+                if splitState.animationOrigin != nil {
+                    splitState.animationOrigin = nil
+                    context.coordinator.isAnimating = false
+                }
                 return
             }
 
@@ -365,6 +398,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         return splitView
     }
 
+    static func dismantleNSView(_ nsView: NSSplitView, coordinator: Coordinator) {
+        coordinator.zoomRegistrationController?.unregisterZoomCollapseApplier(
+            key: ObjectIdentifier(coordinator)
+        )
+        coordinator.zoomRegistrationController = nil
+    }
+
     func updateNSView(_ splitView: NSSplitView, context: Context) {
         // SwiftUI may reuse the same NSSplitView/Coordinator instance while the underlying SplitState
         // object changes (e.g., during split tree restructuring). Keep the coordinator pointed at
@@ -431,10 +471,34 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             context.coordinator.secondNodeType = secondType
         }
 
-        // Access dividerPosition to ensure SwiftUI tracks this dependency
-        // Then sync if the position changed externally
-        let currentPosition = splitState.dividerPosition
-        context.coordinator.syncPosition(currentPosition, in: splitView)
+        // Zoom: collapse the side of this split that does not contain the
+        // zoomed pane. Hidden arranged subviews are excluded from NSSplitView
+        // tiling, so the zoom-path side expands to the full container while
+        // every pane keeps its live AppKit hierarchy (no teardown/rebuild).
+        //
+        // Read the live controller state, not the threaded `zoomedPaneId`
+        // property: updateNSView can run with a stale value view after the
+        // synchronous zoom-collapse applier already ran (the threaded property
+        // only exists to guarantee an update pass reaches every nested split).
+        // Acting on the stale value would briefly restore and re-collapse the
+        // split, flashing the old layout and resizing terminals twice.
+        let liveZoomedPaneId = controller.zoomedPaneId
+        let zoomHiddenIndex: Int? = liveZoomedPaneId.flatMap { zoomId in
+            if splitState.first.findPane(zoomId) != nil { return 1 }
+            if splitState.second.findPane(zoomId) != nil { return 0 }
+            return nil
+        }
+        context.coordinator.applyZoomCollapse(zoomHiddenIndex, in: splitView)
+
+        // Divider position deliberately NOT read here: reading it would make
+        // SwiftUI invalidate this representable on every model divider change
+        // (external resize commands, restored layouts, equalize), which cascades
+        // through updateHostedContent's rootView reassignment into a full
+        // pane-subtree diff (tab bars and all) per divider tick. Model divider
+        // changes are applied straight to the NSSplitView by the coordinator's
+        // Observation-based watcher instead; SwiftUI stays responsible only for
+        // structural updates.
+        context.coordinator.armDividerModelObservation(in: splitView)
 
         // A pure divider-thickness change doesn't move the model divider
         // position, so `syncPosition` early-returns and AppKit keeps the cached
@@ -529,6 +593,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             SplitContainerView(
                 splitState: nestedSplitState,
                 controller: controller,
+                zoomedPaneId: zoomedPaneId,
                 appearance: appearance,
                 dividerPositionRange: dividerPositionRange,
                 contentBuilder: contentBuilder,
@@ -567,6 +632,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// Track child node types to detect structural changes
         var firstNodeType: SplitNode.NodeType
         var secondNodeType: SplitNode.NodeType
+        /// Arranged-subview index currently collapsed for pane zoom (nil = not zoomed
+        /// through this split). While set, divider syncing/persistence is suspended so
+        /// the temporary full-size layout never overwrites the model's divider ratio.
+        var zoomHiddenIndex: Int?
+        /// Controller this coordinator registered its zoom-collapse applier with,
+        /// kept so dismantleNSView can unregister.
+        weak var zoomRegistrationController: SplitViewController?
         /// Retain hosting controllers so SwiftUI content stays alive
         var firstHostingController: NonDraggableHostingController<AnyView>?
         var secondHostingController: NonDraggableHostingController<AnyView>?
@@ -716,6 +788,95 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
+        /// Superseded-arm guard for the divider model watcher below.
+        private var dividerObservationGeneration: UInt64 = 0
+
+        /// Watch the model's dividerPosition with Observation and apply changes
+        /// straight to the NSSplitView, outside SwiftUI. Reading dividerPosition
+        /// during updateNSView would re-invalidate the representable per divider
+        /// tick and cascade a full pane-subtree diff through the hosted
+        /// rootViews; this path keeps divider syncing O(one setPosition).
+        ///
+        /// Arming is deferred one runloop turn so the tracked read is not
+        /// captured by SwiftUI's own observation scope around updateNSView.
+        func armDividerModelObservation(in splitView: NSSplitView) {
+            dividerObservationGeneration &+= 1
+            let generation = dividerObservationGeneration
+            DispatchQueue.main.async { [weak self, weak splitView] in
+                guard let self, let splitView else { return }
+                guard generation == self.dividerObservationGeneration else { return }
+                self.syncPosition(self.splitState.dividerPosition, in: splitView)
+                self.observeDividerModel(generation: generation, in: splitView)
+            }
+        }
+
+        private func observeDividerModel(generation: UInt64, in splitView: NSSplitView) {
+            guard generation == dividerObservationGeneration else { return }
+            let observedState = splitState
+            withObservationTracking {
+                _ = observedState.dividerPosition
+            } onChange: { [weak self, weak splitView] in
+                Task { @MainActor [weak self, weak splitView] in
+                    guard let self, let splitView else { return }
+                    guard generation == self.dividerObservationGeneration else { return }
+                    self.syncPosition(self.splitState.dividerPosition, in: splitView)
+                    self.observeDividerModel(generation: generation, in: splitView)
+                }
+            }
+        }
+
+        /// Collapse or restore one side of the split for pane zoom.
+        ///
+        /// Hiding an arranged subview removes it from NSSplitView tiling, so the
+        /// remaining side takes the full container. Both sides stay in the view
+        /// hierarchy: pane content (hosting controllers, portal-hosted terminal
+        /// placeholders) is preserved, making zoom toggles O(1) instead of a full
+        /// subtree teardown/rebuild that scales with pane count.
+        func applyZoomCollapse(_ hiddenIndex: Int?, in splitView: NSSplitView) {
+            guard zoomHiddenIndex != hiddenIndex else { return }
+            let arranged = splitView.arrangedSubviews
+            guard arranged.count >= 2 else { return }
+            zoomHiddenIndex = hiddenIndex
+
+            isSyncingProgrammatically = true
+            splitContainerProgrammaticSyncDepth += 1
+            defer {
+                isSyncingProgrammatically = false
+                splitContainerProgrammaticSyncDepth = max(0, splitContainerProgrammaticSyncDepth - 1)
+            }
+
+            // Note: no layoutSubtreeIfNeeded here. adjustSubviews()/setPosition()
+            // update arranged-subview frames directly; forcing a full recursive
+            // layout per split multiplies into one full-depth pass per split on
+            // the zoom path (hundreds of ms on deep trees). AppKit coalesces the
+            // remaining work into the next layout pass.
+            if let hiddenIndex {
+                arranged[hiddenIndex].isHidden = true
+                arranged[1 - hiddenIndex].isHidden = false
+                splitView.adjustSubviews()
+#if DEBUG
+                dlog("split.zoomCollapse split=\(splitState.id.uuidString.prefix(5)) hidden=\(hiddenIndex) view=\(Unmanaged.passUnretained(splitView).toOpaque()) window=\(splitView.window?.windowNumber ?? -1)")
+#endif
+            } else {
+                arranged[0].isHidden = false
+                arranged[1].isHidden = false
+                splitView.adjustSubviews()
+                // Restore the model's divider ratio; the collapse pass left the
+                // visible side at full size.
+                let available = splitAvailableSize(in: splitView)
+                if available > 0 {
+                    let bounds = normalizedDividerBounds(in: splitView)
+                    let normalized = max(bounds.lowerBound, min(bounds.upperBound, splitState.dividerPosition))
+                    let clamped = clampedDividerPosition(available * normalized, in: splitView)
+                    splitView.setPosition(clamped, ofDividerAt: 0)
+                    lastAppliedPosition = normalized
+                }
+#if DEBUG
+                dlog("split.zoomRestore split=\(splitState.id.uuidString.prefix(5)) ratio=\(String(format: "%.3f", splitState.dividerPosition)) view=\(Unmanaged.passUnretained(splitView).toOpaque()) window=\(splitView.window?.windowNumber ?? -1)")
+#endif
+            }
+        }
+
         /// Re-divide the split using the model's current fractional position so a
         /// runtime change to `dividerThickness` takes effect immediately.
         ///
@@ -724,6 +885,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// the stored fraction preserves the user's split ratio while widening
         /// (or narrowing) the gap to match the new thickness.
         func reapplyDividerForThicknessChange(in splitView: NSSplitView) {
+            guard zoomHiddenIndex == nil else { return }
             guard splitView.arrangedSubviews.count >= 2 else { return }
             let available = splitAvailableSize(in: splitView)
             guard available > 0 else { return }
@@ -737,6 +899,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             guard !isAnimating else { return }
             guard !isSyncingProgrammatically else { return }
             guard splitContainerProgrammaticSyncDepth == 0 else { return }
+            // While zoom-collapsed, the visible side intentionally fills the
+            // container; don't fight it by re-applying the model ratio.
+            guard zoomHiddenIndex == nil else { return }
 
             guard splitView.arrangedSubviews.count >= 2 else {
                 // Structural updates can temporarily remove an arranged subview.
@@ -777,7 +942,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
 
             let pixelPosition = availableSize * clampedStatePosition
-            setPositionSafely(pixelPosition, in: splitView, layout: true)
+            // No forced layoutSubtreeIfNeeded here: setPosition updates the
+            // arranged-subview frames immediately and marks descendant layout
+            // dirty; AppKit coalesces the recursive pass into the current
+            // display cycle. Forcing a synchronous full-subtree flush per sync
+            // cost ~30% of the main thread under an external resize storm
+            // (socket resize-pane at high rate on nested splits), because every
+            // divider tick re-laid-out the whole hosting-view subtree.
+            setPositionSafely(pixelPosition, in: splitView, layout: false)
             lastAppliedPosition = clampedStatePosition
         }
 
@@ -903,6 +1075,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             dlog("split.didResize split=\(splitState.id.uuidString.prefix(5)) orient=\(splitState.orientation == .horizontal ? "H" : "V") container=\(Int(splitView.frame.width))x\(Int(splitView.frame.height)) subs=[\(subframes)] anim=\(isAnimating ? 1 : 0) sync=\(isSyncingProgrammatically ? 1 : 0)")
 #endif
             if isSyncingProgrammatically || splitContainerProgrammaticSyncDepth > 0 {
+                return
+            }
+            // Zoom-collapsed layouts are transient full-size states; never persist
+            // them into the model's divider ratio (and never re-assert the model
+            // ratio against them).
+            if zoomHiddenIndex != nil {
                 return
             }
             // Prevent stale drag state from persisting through programmatic/async resizes.
