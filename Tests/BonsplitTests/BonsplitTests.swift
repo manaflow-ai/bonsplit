@@ -146,6 +146,19 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    @MainActor
+    private final class GeometryDelegateSpy: BonsplitDelegate {
+        var snapshots: [LayoutSnapshot] = []
+        var reenterOnFirstGeometryChange = false
+
+        func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {
+            snapshots.append(snapshot)
+            if reenterOnFirstGeometryChange, snapshots.count == 1 {
+                controller.notifyGeometryChange()
+            }
+        }
+    }
+
     private final class ObservationInvalidationFlag: @unchecked Sendable {
         var didInvalidate = false
     }
@@ -154,6 +167,259 @@ final class BonsplitTests: XCTestCase {
     func testControllerCreation() {
         let controller = BonsplitController()
         XCTAssertNotNil(controller.focusedPaneId)
+    }
+
+    @MainActor
+    func testNotifyGeometryChangeSuppressesTimestampOnlyDuplicate() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 1)
+    }
+
+    @MainActor
+    func testNotifyGeometryChangeDeliversContainerFrameChange() throws {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 900, height: 600))
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 2)
+        XCTAssertEqual(
+            try XCTUnwrap(delegate.snapshots.last?.containerFrame),
+            PixelRect(x: 10, y: 20, width: 900, height: 600)
+        )
+    }
+
+    func testLayoutEquivalenceCoversEveryOverlayInput() {
+        let containerFrame = PixelRect(x: 10, y: 20, width: 800, height: 600)
+        let firstPane = PaneGeometry(
+            paneId: "pane-a",
+            frame: PixelRect(x: 10, y: 20, width: 400, height: 600),
+            selectedTabId: "tab-a",
+            tabIds: ["tab-a", "tab-b"]
+        )
+        let secondPane = PaneGeometry(
+            paneId: "pane-b",
+            frame: PixelRect(x: 410, y: 20, width: 400, height: 600),
+            selectedTabId: "tab-c",
+            tabIds: ["tab-c"]
+        )
+        let base = LayoutSnapshot(
+            containerFrame: containerFrame,
+            panes: [firstPane, secondPane],
+            focusedPaneId: "pane-a",
+            timestamp: 100
+        )
+        let timestampOnlyChange = LayoutSnapshot(
+            containerFrame: containerFrame,
+            panes: [firstPane, secondPane],
+            focusedPaneId: "pane-a",
+            timestamp: 200
+        )
+
+        XCTAssertTrue(base.hasSameLayout(as: timestampOnlyChange))
+        XCTAssertNotEqual(base, timestampOnlyChange, "Equatable must remain timestamp-sensitive")
+
+        let changedFirstPaneId = PaneGeometry(
+            paneId: "pane-z",
+            frame: firstPane.frame,
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneFrame = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: PixelRect(x: 10, y: 20, width: 450, height: 600),
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneSelection = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: firstPane.frame,
+            selectedTabId: "tab-b",
+            tabIds: firstPane.tabIds
+        )
+        let changedFirstPaneTabOrder = PaneGeometry(
+            paneId: firstPane.paneId,
+            frame: firstPane.frame,
+            selectedTabId: firstPane.selectedTabId,
+            tabIds: ["tab-b", "tab-a"]
+        )
+        let variants: [(String, LayoutSnapshot)] = [
+            (
+                "container frame",
+                LayoutSnapshot(
+                    containerFrame: PixelRect(x: 10, y: 20, width: 900, height: 600),
+                    panes: [firstPane, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane id",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneId, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane frame",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneFrame, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "selected tab",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneSelection, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "tab order",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [changedFirstPaneTabOrder, secondPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane order",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [secondPane, firstPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "pane membership",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [firstPane],
+                    focusedPaneId: "pane-a",
+                    timestamp: 100
+                )
+            ),
+            (
+                "focused pane",
+                LayoutSnapshot(
+                    containerFrame: containerFrame,
+                    panes: [firstPane, secondPane],
+                    focusedPaneId: "pane-b",
+                    timestamp: 100
+                )
+            ),
+        ]
+
+        for (label, variant) in variants {
+            XCTAssertFalse(base.hasSameLayout(as: variant), label)
+        }
+    }
+
+    @MainActor
+    func testGeometryDedupCacheResetsForNewDelegate() {
+        let controller = BonsplitController()
+        let firstDelegate = GeometryDelegateSpy()
+        let secondDelegate = GeometryDelegateSpy()
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.delegate = firstDelegate
+        controller.notifyGeometryChange()
+        controller.delegate = firstDelegate
+        controller.notifyGeometryChange()
+        XCTAssertEqual(
+            firstDelegate.snapshots.count,
+            1,
+            "Reassigning the same delegate must preserve deduplication"
+        )
+
+        controller.delegate = nil
+        controller.notifyGeometryChange()
+        controller.delegate = secondDelegate
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(firstDelegate.snapshots.count, 1)
+        XCTAssertEqual(secondDelegate.snapshots.count, 1)
+    }
+
+    @MainActor
+    func testGeometryDedupCachesBeforeReentrantDelegateCallback() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        delegate.reenterOnFirstGeometryChange = true
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, 1)
+    }
+
+    @MainActor
+    func testGeometryDedupDeliversZoomStateChange() throws {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        let zoomedPane = try XCTUnwrap(
+            controller.splitPane(orientation: .horizontal)
+        )
+        let deliveryCountBeforeZoom = delegate.snapshots.count
+
+        XCTAssertTrue(controller.togglePaneZoom(inPane: zoomedPane))
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeZoom + 1)
+    }
+
+    @MainActor
+    func testGeometryDedupDeliversTabBarVisibilityChange() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        controller.notifyGeometryChange()
+        let deliveryCountBeforeVisibilityChange = delegate.snapshots.count
+
+        controller.configuration.tabBarVisibility = .multipleTabs
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeVisibilityChange + 1)
+    }
+
+    @MainActor
+    func testGeometryDedupDeliversDividerThicknessChange() {
+        let controller = BonsplitController()
+        let delegate = GeometryDelegateSpy()
+        controller.delegate = delegate
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        controller.notifyGeometryChange()
+        let deliveryCountBeforeThicknessChange = delegate.snapshots.count
+
+        controller.configuration.appearance.dividerThickness = 4
+        controller.notifyGeometryChange()
+        controller.notifyGeometryChange()
+
+        XCTAssertEqual(delegate.snapshots.count, deliveryCountBeforeThicknessChange + 1)
     }
 
     @MainActor

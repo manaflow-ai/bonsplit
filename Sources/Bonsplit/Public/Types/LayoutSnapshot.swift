@@ -56,6 +56,17 @@ public struct LayoutSnapshot: Codable, Sendable, Equatable {
         self.focusedPaneId = focusedPaneId
         self.timestamp = timestamp
     }
+
+    /// Returns whether two snapshots describe the same rendered layout.
+    ///
+    /// `timestamp` records when a snapshot was captured, not a layout input, so
+    /// it is intentionally excluded. The existing `Equatable` conformance stays
+    /// timestamp-sensitive for callers comparing complete captured snapshots.
+    public func hasSameLayout(as other: LayoutSnapshot) -> Bool {
+        containerFrame == other.containerFrame &&
+            panes == other.panes &&
+            focusedPaneId == other.focusedPaneId
+    }
 }
 
 // MARK: - External Tree Representation
