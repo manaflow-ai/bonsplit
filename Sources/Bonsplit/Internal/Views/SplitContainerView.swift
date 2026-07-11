@@ -479,10 +479,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
         context.coordinator.applyZoomCollapse(zoomHiddenIndex, in: splitView)
 
-        // Access dividerPosition to ensure SwiftUI tracks this dependency
-        // Then sync if the position changed externally
-        let currentPosition = splitState.dividerPosition
-        context.coordinator.syncPosition(currentPosition, in: splitView)
+        // Divider position deliberately NOT read here: reading it would make
+        // SwiftUI invalidate this representable on every model divider change
+        // (external resize commands, restored layouts, equalize), which cascades
+        // through updateHostedContent's rootView reassignment into a full
+        // pane-subtree diff (tab bars and all) per divider tick. Model divider
+        // changes are applied straight to the NSSplitView by the coordinator's
+        // Observation-based watcher instead; SwiftUI stays responsible only for
+        // structural updates.
+        context.coordinator.armDividerModelObservation(in: splitView)
 
         // A pure divider-thickness change doesn't move the model divider
         // position, so `syncPosition` early-returns and AppKit keeps the cached
@@ -772,6 +777,43 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
+        /// Superseded-arm guard for the divider model watcher below.
+        private var dividerObservationGeneration: UInt64 = 0
+
+        /// Watch the model's dividerPosition with Observation and apply changes
+        /// straight to the NSSplitView, outside SwiftUI. Reading dividerPosition
+        /// during updateNSView would re-invalidate the representable per divider
+        /// tick and cascade a full pane-subtree diff through the hosted
+        /// rootViews; this path keeps divider syncing O(one setPosition).
+        ///
+        /// Arming is deferred one runloop turn so the tracked read is not
+        /// captured by SwiftUI's own observation scope around updateNSView.
+        func armDividerModelObservation(in splitView: NSSplitView) {
+            dividerObservationGeneration &+= 1
+            let generation = dividerObservationGeneration
+            DispatchQueue.main.async { [weak self, weak splitView] in
+                guard let self, let splitView else { return }
+                guard generation == self.dividerObservationGeneration else { return }
+                self.syncPosition(self.splitState.dividerPosition, in: splitView)
+                self.observeDividerModel(generation: generation, in: splitView)
+            }
+        }
+
+        private func observeDividerModel(generation: UInt64, in splitView: NSSplitView) {
+            guard generation == dividerObservationGeneration else { return }
+            let observedState = splitState
+            withObservationTracking {
+                _ = observedState.dividerPosition
+            } onChange: { [weak self, weak splitView] in
+                Task { @MainActor [weak self, weak splitView] in
+                    guard let self, let splitView else { return }
+                    guard generation == self.dividerObservationGeneration else { return }
+                    self.syncPosition(self.splitState.dividerPosition, in: splitView)
+                    self.observeDividerModel(generation: generation, in: splitView)
+                }
+            }
+        }
+
         /// Collapse or restore one side of the split for pane zoom.
         ///
         /// Hiding an arranged subview removes it from NSSplitView tiling, so the
@@ -889,7 +931,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
 
             let pixelPosition = availableSize * clampedStatePosition
-            setPositionSafely(pixelPosition, in: splitView, layout: true)
+            // No forced layoutSubtreeIfNeeded here: setPosition updates the
+            // arranged-subview frames immediately and marks descendant layout
+            // dirty; AppKit coalesces the recursive pass into the current
+            // display cycle. Forcing a synchronous full-subtree flush per sync
+            // cost ~30% of the main thread under an external resize storm
+            // (socket resize-pane at high rate on nested splits), because every
+            // divider tick re-laid-out the whole hosting-view subtree.
+            setPositionSafely(pixelPosition, in: splitView, layout: false)
             lastAppliedPosition = clampedStatePosition
         }
 
