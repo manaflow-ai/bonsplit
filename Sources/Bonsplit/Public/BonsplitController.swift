@@ -39,7 +39,7 @@ public final class BonsplitController {
     public weak var delegate: BonsplitDelegate? {
         didSet {
             if oldValue !== delegate {
-                lastDeliveredGeometrySnapshot = nil
+                lastDeliveredGeometryState = nil
             }
         }
     }
@@ -117,7 +117,24 @@ public final class BonsplitController {
     // MARK: - Internal State
 
     internal var internalController: SplitViewController
-    @ObservationIgnored private var lastDeliveredGeometrySnapshot: LayoutSnapshot?
+
+    private struct GeometryDeliveryState {
+        let snapshot: LayoutSnapshot
+        let zoomedPaneId: PaneID?
+        let tabBarVisibility: TabBarVisibility
+        let tabBarHeight: CGFloat
+        let dividerThickness: CGFloat
+
+        func hasSameGeometry(as other: GeometryDeliveryState) -> Bool {
+            snapshot.hasSameLayout(as: other.snapshot) &&
+                zoomedPaneId == other.zoomedPaneId &&
+                tabBarVisibility == other.tabBarVisibility &&
+                tabBarHeight == other.tabBarHeight &&
+                dividerThickness == other.dividerThickness
+        }
+    }
+
+    @ObservationIgnored private var lastDeliveredGeometryState: GeometryDeliveryState?
 
     // MARK: - Initialization
 
@@ -1017,8 +1034,15 @@ public final class BonsplitController {
 
         guard let delegate else { return }
         let snapshot = layoutSnapshot()
-        guard lastDeliveredGeometrySnapshot?.hasSameLayout(as: snapshot) != true else { return }
-        lastDeliveredGeometrySnapshot = snapshot
+        let deliveryState = GeometryDeliveryState(
+            snapshot: snapshot,
+            zoomedPaneId: zoomedPaneId,
+            tabBarVisibility: configuration.tabBarVisibility,
+            tabBarHeight: configuration.appearance.tabBarHeight,
+            dividerThickness: configuration.appearance.dividerThickness
+        )
+        guard lastDeliveredGeometryState?.hasSameGeometry(as: deliveryState) != true else { return }
+        lastDeliveredGeometryState = deliveryState
         delegate.splitTabBar(self, didChangeGeometry: snapshot)
     }
 
