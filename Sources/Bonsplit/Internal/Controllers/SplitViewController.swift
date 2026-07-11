@@ -5,6 +5,10 @@ import SwiftUI
 @Observable
 @MainActor
 final class SplitViewController {
+    /// The public wrapper that owns this controller, for identity lookups
+    /// from managed AppKit views (see `BonsplitManagedSplitView`).
+    weak var publicController: BonsplitController?
+
     /// The root node of the split tree
     var rootNode: SplitNode
 

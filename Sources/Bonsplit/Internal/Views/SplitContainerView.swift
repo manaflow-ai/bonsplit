@@ -3,8 +3,15 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView {
+private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor?
+
+    /// Identity for external drag coordination (see BonsplitManagedSplitView).
+    weak var stampedInternalController: SplitViewController?
+    var stampedSplitId: UUID?
+
+    var bonsplitController: BonsplitController? { stampedInternalController?.publicController }
+    var bonsplitSplitId: UUID? { stampedSplitId }
 
     /// Host-configured divider thickness in points. When `nil` the split view
     /// uses AppKit's default thickness for its `dividerStyle`.
@@ -168,6 +175,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
         splitView.customDividerThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         splitView.customDividerHitExpansion = appearance.dividerHitExpansion
+        splitView.stampedInternalController = controller
+        splitView.stampedSplitId = splitState.id
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
         splitView.delegate = context.coordinator
@@ -381,6 +390,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let dividerThicknessChanged = (splitView as? ThemedSplitView)?.customDividerThickness != resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerThickness = resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerHitExpansion = appearance.dividerHitExpansion
+        (splitView as? ThemedSplitView)?.stampedInternalController = controller
+        (splitView as? ThemedSplitView)?.stampedSplitId = splitState.id
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
