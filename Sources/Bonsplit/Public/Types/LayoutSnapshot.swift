@@ -91,13 +91,24 @@ public struct ExternalSplitNode: Codable, Sendable, Equatable {
     public let id: String
     public let orientation: String  // "horizontal" or "vertical"
     public let dividerPosition: Double  // 0.0-1.0
+    /// The exact first-child extent imposed on this split in points, if any
+    /// (`BonsplitController.setImposedFirstExtent(_:forSplit:)`).
+    public let imposedFirstExtent: Double?
     public let first: ExternalTreeNode
     public let second: ExternalTreeNode
 
-    public init(id: String, orientation: String, dividerPosition: Double, first: ExternalTreeNode, second: ExternalTreeNode) {
+    public init(
+        id: String,
+        orientation: String,
+        dividerPosition: Double,
+        imposedFirstExtent: Double? = nil,
+        first: ExternalTreeNode,
+        second: ExternalTreeNode
+    ) {
         self.id = id
         self.orientation = orientation
         self.dividerPosition = dividerPosition
+        self.imposedFirstExtent = imposedFirstExtent
         self.first = first
         self.second = second
     }

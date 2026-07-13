@@ -187,6 +187,18 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         )
     }
 
+    // A split tree is space-filling: it renders in whatever space its
+    // container gives it and has no meaningful size of its own. Without
+    // this, SwiftUI answers an unspecified proposal with AppKit's
+    // fittingSize — the sum of the current subview frames — so any
+    // container that sizes itself from its content adopts the tree's own
+    // layout as its ideal and then hands that back as the new bounds.
+    // With absolute divider positions in the tree, each round trip grows
+    // the sum, and the container inflates without bound.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSSplitView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     func makeNSView(context: Context) -> NSSplitView {
 #if DEBUG
         let splitView: ThemedSplitView = {
@@ -320,6 +332,24 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             context.coordinator.didApplyInitialDividerPosition = true
             context.coordinator.initialDividerApplyAttempts = 0
 
+            // A fresh view initializes from the strongest authority, same
+            // rule syncPosition applies on every pass: an imposed extent is
+            // exact points and wins over the mirrored-back fraction, which
+            // reconstructs those points only approximately (clamping and a
+            // changed available size skew it). Initializing from the
+            // fraction seeded a divider a half-cell or more off its imposed
+            // target, and every subsequent pass fought over the difference.
+            if splitState.imposedFirstExtent != nil {
+                if animationOrigin != nil, shouldAnimate {
+                    context.coordinator.isAnimating = false
+                }
+                context.coordinator.syncPosition(splitState.dividerPosition, in: splitView)
+                if animationOrigin != nil, shouldAnimate {
+                    splitView.arrangedSubviews.indices.forEach { splitView.arrangedSubviews[$0].isHidden = false }
+                }
+                return
+            }
+
             if animationOrigin != nil {
                 let targetDividerPosition = min(
                     max(splitState.dividerPosition, dividerPositionRange.lowerBound),
@@ -353,9 +383,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                             duration: duration
                         ) {
                             context.coordinator.isAnimating = false
-                            // Re-assert the target ratio to prevent pixel-rounding drift.
-                            splitState.dividerPosition = targetDividerPosition
-                            context.coordinator.lastAppliedPosition = targetDividerPosition
+                            if splitState.imposedFirstExtent != nil {
+                                // An imposition requested during the entry animation
+                                // remains authoritative in the model; apply it now that
+                                // the animation guard no longer blocks synchronization.
+                                context.coordinator.syncPosition(splitState.dividerPosition, in: splitView)
+                            } else {
+                                // Re-assert the target ratio to prevent pixel-rounding drift.
+                                splitState.dividerPosition = targetDividerPosition
+                                context.coordinator.lastAppliedPosition = targetDividerPosition
+                            }
 #if DEBUG
                             dlog(
                                 "split.entry.complete split=\(splitDebugToken) orientation=\(orientationToken) " +
@@ -456,8 +493,34 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             context.coordinator.secondNodeType = secondType
         }
 
-        // Access dividerPosition to ensure SwiftUI tracks this dependency
-        // Then sync if the position changed externally
+        // Access dividerPosition (and the imposed extent) so SwiftUI tracks
+        // them as dependencies, then sync if either changed externally. The
+        // epoch must be read too so a changed target invalidates the view even
+        // when observation coalesces the extent write with adjacent updates.
+        _ = splitState.imposedFirstExtent
+        _ = splitState.imposedEpoch
+        // Imperative imposition path: the controller calls this the moment
+        // an extent is imposed, so a split whose ONLY change is the imposed
+        // extent applies immediately instead of waiting for a SwiftUI
+        // update that may never come (representables are not reliably
+        // re-updated for observation-only changes).
+        splitState.syncDividerNow = { [weak coordinator = context.coordinator, weak splitView] in
+            guard let coordinator else { return }
+            // One coalesced apply on the NEXT runloop turn. Synchronous
+            // application from inside the caller's plan pass re-enters
+            // layout (impose -> layout -> geometry callback -> replan ->
+            // impose ...) and can pin the main thread; a deferred turn
+            // breaks the cycle while keeping the apply immediate enough
+            // that no settle poll ever sees a stale divider.
+            guard !coordinator.imposedApplyPending else { return }
+            coordinator.imposedApplyPending = true
+            DispatchQueue.main.async { [weak coordinator, weak splitView] in
+                guard let coordinator else { return }
+                coordinator.imposedApplyPending = false
+                guard let splitView else { return }
+                coordinator.syncPosition(coordinator.splitState.dividerPosition, in: splitView)
+            }
+        }
         let currentPosition = splitState.dividerPosition
         context.coordinator.syncPosition(currentPosition, in: splitView)
 
@@ -585,6 +648,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var onGeometryChange: ((_ isDragging: Bool) -> Void)?
         /// Track last applied position to detect external changes
         var lastAppliedPosition: CGFloat = 0.5
+        /// The imposed-extent memo: the last target we asked AppKit for and
+        /// the position it actually produced. Re-apply only when the target
+        /// changes or the divider moved away from that outcome — never in a
+        /// loop against a target AppKit's constraints refuse to reach.
+        var lastImposedTarget: CGFloat?
+        var lastImposedOutcome: CGFloat?
+        var lastImposedEpoch: Int?
+        var imposedRetryBudget = 0
+        var imposedApplyPending = false
+        weak var imposedRetrySplitView: NSSplitView?
         // Guard programmatic `setPosition` re-entrancy from resize callbacks.
         var isSyncingProgrammatically = false
         /// Track if user is actively dragging the divider
@@ -632,6 +705,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 splitStateId = newState.id
                 splitState = newState
                 lastAppliedPosition = newState.dividerPosition
+                lastImposedTarget = nil
+                lastImposedOutcome = nil
+                lastImposedEpoch = nil
+                imposedRetryBudget = 0
                 didApplyInitialDividerPosition = false
                 initialDividerApplyAttempts = 0
                 isAnimating = false
@@ -727,7 +804,76 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 #endif
         /// Apply external position changes to the NSSplitView
+        /// One deferred retry per runloop turn for an imposed target AppKit
+        /// refused (see the imposed path in `syncPosition`). Deliberately
+        /// NOT measurement-driven layout-pass re-assertion — that spins the
+        /// main thread when a target is unreachable; this runs at most
+        /// `imposedRetryBudget` times per imposition and stops the moment
+        /// the outcome matches.
+        private func scheduleImposedRetry() {
+            DispatchQueue.main.async { [weak self] in
+                self?.retryImposedIfStillShort()
+            }
+        }
+
+        private func mirrorImposedOutcome(_ outcome: CGFloat, in splitView: NSSplitView) {
+            let available = splitAvailableSize(in: splitView)
+            guard available > 0 else { return }
+            let mirrored = outcome / available
+            if abs(splitState.dividerPosition - mirrored) > 0.000_1 {
+                splitState.dividerPosition = mirrored
+            }
+            lastAppliedPosition = mirrored
+        }
+
+        private func retryImposedIfStillShort() {
+            guard imposedRetryBudget > 0,
+                  let splitView = imposedRetrySplitView,
+                  let imposed = splitState.imposedFirstExtent,
+                  splitView.arrangedSubviews.count >= 2
+            else { return }
+            imposedRetryBudget -= 1
+            let target = clampedDividerPosition(imposed, in: splitView)
+            let current = splitState.orientation == .horizontal
+                ? splitView.arrangedSubviews[0].frame.width
+                : splitView.arrangedSubviews[0].frame.height
+            guard abs(current - target) > 0.01 else {
+                imposedRetryBudget = 0
+                mirrorImposedOutcome(current, in: splitView)
+                return
+            }
+            setPositionSafely(target, in: splitView, layout: true)
+            lastImposedOutcome = splitState.orientation == .horizontal
+                ? splitView.arrangedSubviews[0].frame.width
+                : splitView.arrangedSubviews[0].frame.height
+            mirrorImposedOutcome(lastImposedOutcome ?? current, in: splitView)
+#if DEBUG
+            dlog(
+                "bonsplit.impose.retry split=\(String(splitState.id.uuidString.prefix(5)))"
+                    + " target=\(Int(target)) outcome=\(Int(lastImposedOutcome ?? -1))"
+                    + " budget=\(imposedRetryBudget)"
+            )
+#endif
+            if abs((lastImposedOutcome ?? target) - target) > 0.01 {
+                scheduleImposedRetry()
+            }
+        }
+
         func setPositionSafely(_ position: CGFloat, in splitView: NSSplitView, layout: Bool = true) {
+#if DEBUG
+            // Wobble hunt: name every divider write while an imposition is
+            // active. The imposed target and a fraction-derived recompute
+            // disagree by ~half a cell, and two writers alternating is a
+            // divider flapping every frame at settle.
+            if splitState.imposedFirstExtent != nil {
+                let caller = Thread.callStackSymbols.dropFirst(1).prefix(3).joined(separator: " | ")
+                dlog(
+                    "split.setPosition split=\(String(splitState.id.uuidString.prefix(5)))"
+                        + " px=\(Int(position)) imposed=\(Int(splitState.imposedFirstExtent ?? -1))"
+                        + " \(caller)"
+                )
+            }
+#endif
             isSyncingProgrammatically = true
             splitContainerProgrammaticSyncDepth += 1
             defer {
@@ -752,6 +898,24 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             guard splitView.arrangedSubviews.count >= 2 else { return }
             let available = splitAvailableSize(in: splitView)
             guard available > 0 else { return }
+            if let imposed = splitState.imposedFirstExtent {
+                let target = clampedDividerPosition(imposed, in: splitView)
+                setPositionSafely(target, in: splitView, layout: true)
+                lastImposedTarget = target
+                lastImposedEpoch = splitState.imposedEpoch
+                lastImposedOutcome = splitState.orientation == .horizontal
+                    ? splitView.arrangedSubviews[0].frame.width
+                    : splitView.arrangedSubviews[0].frame.height
+                mirrorImposedOutcome(lastImposedOutcome ?? target, in: splitView)
+                if abs((lastImposedOutcome ?? target) - target) > 0.01 {
+                    imposedRetryBudget = 5
+                    imposedRetrySplitView = splitView
+                    scheduleImposedRetry()
+                } else {
+                    imposedRetryBudget = 0
+                }
+                return
+            }
             let bounds = normalizedDividerBounds(in: splitView)
             let normalized = max(bounds.lowerBound, min(bounds.upperBound, splitState.dividerPosition))
             setPositionSafely(available * normalized, in: splitView, layout: true)
@@ -762,6 +926,81 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             guard !isAnimating else { return }
             guard !isSyncingProgrammatically else { return }
             guard splitContainerProgrammaticSyncDepth == 0 else { return }
+
+            // An imposed extent bypasses the normalized-fraction path below
+            // entirely: the fraction comparisons use ~1% deadbands to damp
+            // pixel-rounding drift, and 1% of a large container is many
+            // points — far more than a terminal cell. Imposed layout applies
+            // exact points and mirrors the resulting fraction back into the
+            // model for readers.
+            if let imposed = splitState.imposedFirstExtent {
+                guard splitView.arrangedSubviews.count >= 2 else { return }
+                let available = splitAvailableSize(in: splitView)
+                guard available > 0 else { return }
+                let target = clampedDividerPosition(imposed, in: splitView)
+                let current = splitState.orientation == .horizontal
+                    ? splitView.arrangedSubviews[0].frame.width
+                    : splitView.arrangedSubviews[0].frame.height
+                // Convergence is memo-based, not measurement-based: apply once
+                // per distinct (target, outcome), remembering what the apply
+                // actually achieved. AppKit can refuse the exact target (its
+                // own pane-minimum constraints), and re-asserting whenever
+                // `current != target` then re-layouts on every pass — a
+                // main-thread spin. Re-apply only when the target changed or
+                // something ELSE moved the divider off our last outcome.
+                let moved = abs(current - (lastImposedOutcome ?? .infinity)) > 0.01
+                let retargeted = abs(target - (lastImposedTarget ?? .infinity)) > 0.01
+                // A fresh imposition call re-arms one apply attempt even for
+                // an identical target: AppKit may have refused this exact
+                // target earlier (transient pane minimums mid-churn), and
+                // with neither target nor divider moving since, nothing else
+                // would ever retry — panes would sit wedged at the refused
+                // layout. Bounded by explicit calls, so it cannot spin.
+                let renudged = lastImposedEpoch != splitState.imposedEpoch
+                // Never apply when the divider already sits at the target:
+                // a same-position setPosition still runs a layout pass,
+                // which re-applies surface sizes, which re-imposes — a
+                // sustained once-per-turn churn loop at full CPU. Renudge
+                // and retarget only bypass the refusal memo; distance from
+                // the target is what justifies touching AppKit.
+                if abs(current - target) <= 0.01 {
+                    lastImposedTarget = target
+                    lastImposedEpoch = splitState.imposedEpoch
+                    lastImposedOutcome = current
+                    imposedRetryBudget = 0
+                } else if renudged || retargeted || moved {
+                    setPositionSafely(target, in: splitView, layout: true)
+                    lastImposedTarget = target
+                    lastImposedEpoch = splitState.imposedEpoch
+                    lastImposedOutcome = splitState.orientation == .horizontal
+                        ? splitView.arrangedSubviews[0].frame.width
+                        : splitView.arrangedSubviews[0].frame.height
+#if DEBUG
+                    dlog(
+                        "bonsplit.impose split=\(String(splitState.id.uuidString.prefix(5)))"
+                            + " target=\(Int(target)) outcome=\(Int(lastImposedOutcome ?? -1))"
+                            + " avail=\(Int(available)) renudged=\(renudged ? 1 : 0)"
+                            + " retargeted=\(retargeted ? 1 : 0) moved=\(moved ? 1 : 0)"
+                    )
+#endif
+                    // A refused apply (AppKit clamped against constraints
+                    // that are usually stale mid-churn bounds) gets a few
+                    // deferred retries, one per runloop turn: a turn later
+                    // AppKit has finished the layout pass that made the
+                    // target feasible. The budget makes it finite when the
+                    // target genuinely cannot fit; every fresh imposition
+                    // resets it.
+                    if abs((lastImposedOutcome ?? target) - target) > 0.01 {
+                        imposedRetryBudget = 5
+                        imposedRetrySplitView = splitView
+                        scheduleImposedRetry()
+                    } else {
+                        imposedRetryBudget = 0
+                    }
+                }
+                mirrorImposedOutcome(lastImposedOutcome ?? current, in: splitView)
+                return
+            }
 
             guard splitView.arrangedSubviews.count >= 2 else {
                 // Structural updates can temporarily remove an arranged subview.
@@ -1010,6 +1249,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     "divider.dragUpdate split=\(splitState.id.uuidString.prefix(5)) normalized=\(String(format: "%.3f", normalizedPosition)) px=\(Int(dividerPosition.rounded())) available=\(Int(availableSize.rounded()))"
                 )
 #endif
+                self.splitState.imposedFirstExtent = nil
                 self.splitState.dividerPosition = normalizedPosition
                 self.lastAppliedPosition = normalizedPosition
                 // Notify geometry change with drag state

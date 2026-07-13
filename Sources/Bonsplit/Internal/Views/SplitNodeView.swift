@@ -113,6 +113,15 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             contentViewLifecycle: contentViewLifecycle
         )
         let hostingController = NonDraggableHostingController(rootView: paneView)
+        if #available(macOS 13.0, *) {
+            // Panes are space-filling: without this, the hosting controller
+            // publishes its SwiftUI content's ideal size as intrinsic-size
+            // constraints, and that pressure propagates up the fitting-size
+            // chain to whatever sizes itself from content — including a
+            // window that tracks its content's ideal. (Same reasoning as
+            // makeHostingController in SplitContainerView.)
+            hostingController.sizingOptions = []
+        }
         hostingController.view.translatesAutoresizingMaskIntoConstraints = false
 
         let containerView = PaneDragContainerView()
@@ -133,6 +142,13 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
         context.coordinator.hostingController = hostingController
 
         return containerView
+    }
+
+    // Space-filling, like SplitContainerView: a pane renders in whatever
+    // space its container gives it and must never answer an unspecified
+    // proposal with a content-derived size.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {

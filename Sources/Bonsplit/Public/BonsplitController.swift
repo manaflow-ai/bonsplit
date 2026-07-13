@@ -962,6 +962,7 @@ public final class BonsplitController {
                 id: splitState.id.uuidString,
                 orientation: splitState.orientation == .horizontal ? "horizontal" : "vertical",
                 dividerPosition: Double(splitState.dividerPosition),
+                imposedFirstExtent: splitState.imposedFirstExtent.map(Double.init),
                 first: buildExternalTree(from: splitState.first, containerFrame: containerFrame, bounds: firstBounds),
                 second: buildExternalTree(from: splitState.second, containerFrame: containerFrame, bounds: secondBounds)
             )
@@ -976,7 +977,8 @@ public final class BonsplitController {
 
     // MARK: - Geometry Update API
 
-    /// Set divider position for a split node (0.0-1.0)
+    /// Set divider position for a split node (0.0-1.0), clearing any exact
+    /// imposed extent so fraction-based callers take ownership of the divider.
     /// - Parameters:
     ///   - position: The new divider position (clamped to the configured range)
     ///   - splitId: The UUID of the split to update
@@ -992,7 +994,15 @@ public final class BonsplitController {
 
         let range = configuration.dividerPositionRange
         let clampedPosition = min(max(position, range.lowerBound), range.upperBound)
+        let clearedImposition = split.imposedFirstExtent != nil
+        if clearedImposition {
+            split.imposedFirstExtent = nil
+            split.imposedEpoch &+= 1
+        }
         split.dividerPosition = clampedPosition
+        if clearedImposition {
+            split.syncDividerNow?()
+        }
 
         if fromExternal {
             // Use a slight delay to allow the UI to update before re-enabling notifications
@@ -1001,6 +1011,52 @@ public final class BonsplitController {
             }
         }
 
+        return true
+    }
+
+    /// Imposes an exact first-child extent, in points, on a split — or
+    /// clears it with nil. While imposed, layout places the divider at
+    /// exactly this many points (clamped to pane minimums) instead of
+    /// scaling `dividerPosition`, and the mirrored fraction is kept coherent
+    /// for readers. A user divider drag clears the imposition and returns
+    /// the split to fraction semantics. Use this when pane contents are
+    /// grid-quantized (terminal cells) and a normalized fraction cannot
+    /// express the required pixel size losslessly. Repeating the same extent
+    /// is idempotent; after an external constraint change, use
+    /// `retryImposedFirstExtent(forSplit:)` to request one fresh bounded apply.
+    public func setImposedFirstExtent(
+        _ extent: CGFloat?, forSplit splitId: UUID, fromExternal: Bool = false
+    ) -> Bool {
+        guard let split = internalController.findSplit(splitId) else { return false }
+        if fromExternal {
+            internalController.isExternalUpdateInProgress = true
+        }
+        let normalizedExtent = extent.map { max(0, $0) }
+        if split.imposedFirstExtent != normalizedExtent {
+            split.imposedFirstExtent = normalizedExtent
+            split.imposedEpoch &+= 1
+        }
+        split.syncDividerNow?()
+        if fromExternal {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.internalController.isExternalUpdateInProgress = false
+            }
+        }
+        return true
+    }
+
+    /// Requests one fresh apply of a split's current imposed extent.
+    ///
+    /// Use this only after constraints that previously prevented the extent
+    /// have changed. Normal layout planning should keep calling
+    /// `setImposedFirstExtent(_:forSplit:fromExternal:)`, whose identical
+    /// updates are intentionally idempotent.
+    public func retryImposedFirstExtent(forSplit splitId: UUID) -> Bool {
+        guard let split = internalController.findSplit(splitId),
+              split.imposedFirstExtent != nil
+        else { return false }
+        split.imposedEpoch &+= 1
+        split.syncDividerNow?()
         return true
     }
 
