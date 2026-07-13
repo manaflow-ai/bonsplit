@@ -1397,7 +1397,6 @@ struct TabBarView: View {
         .frame(height: tabBarHeight)
         .coordinateSpace(name: "tabBar")
         .background(tabBarSurface)
-        .overlay(maskedSelectedTabIndicatorChrome)
         .overlay(alignment: .trailing) {
             splitButtonBackdropChrome
                 .opacity(shouldShowSplitButtons ? 1 : 0)
@@ -2088,34 +2087,11 @@ struct TabBarView: View {
     }
 
     @ViewBuilder
-    private var maskedSelectedTabIndicatorChrome: some View {
-        GeometryReader { geometry in
-            selectedTabIndicator(totalWidth: geometry.size.width)
-                .frame(width: geometry.size.width, height: tabBarHeight, alignment: .topLeading)
-                .mask(combinedMask)
-        }
-        .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
     private var maskedTabBarBottomSeparatorChrome: some View {
         GeometryReader { geometry in
             tabBarBottomSeparator(totalWidth: geometry.size.width)
         }
         .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
-    private func selectedTabIndicator(totalWidth: CGFloat) -> some View {
-        if let frame = selectedIndicatorFrame(totalWidth: totalWidth) {
-            Rectangle()
-                .fill(TabBarColors.activeIndicator(saturation: tabBarSaturation))
-                .frame(width: frame.width, height: TabBarMetrics.activeIndicatorHeight)
-                .offset(x: frame.minX)
-                .transaction { transaction in
-                    transaction.animation = nil
-                }
-        }
     }
 
     @ViewBuilder
@@ -2143,12 +2119,6 @@ struct TabBarView: View {
         }
     }
 
-    private func selectedIndicatorFrame(totalWidth: CGFloat) -> CGRect? {
-        tabBarLayout.selectedIndicatorFrame(
-            selectedTabFrame: selectedTabFrameInBar,
-            totalWidth: totalWidth
-        )
-    }
 }
 
 private struct TabBarLayerBackedColor: NSViewRepresentable {
