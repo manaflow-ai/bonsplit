@@ -118,6 +118,30 @@ public final class BonsplitController {
     public init(configuration: BonsplitConfiguration = .default) {
         self.configuration = configuration
         self.internalController = SplitViewController()
+        internalController.onDividerDragSessionChange = { [weak self] active in
+            guard let self else { return }
+            if active {
+                self.delegate?.splitTabBarDividerDragDidBegin(self)
+            } else {
+                self.delegate?.splitTabBarDividerDragDidEnd(self)
+            }
+        }
+    }
+
+    /// True while the user is dragging a divider anywhere in this tree.
+    /// Sessions bracket the divider's mouse-tracking lifecycle, so this is
+    /// authoritative — not inferred from resize callbacks. While true,
+    /// external sizing must not impose extents: the drag owns geometry.
+    public var isDividerDragActive: Bool {
+        internalController.activeDividerDragSessions > 0
+    }
+
+    /// Brackets a divider drag session from outside the built-in divider
+    /// tracking — for hosts with custom drag surfaces, and for tests that
+    /// need the session state without synthesizing mouse events. Balanced
+    /// begin/end pairs are the caller's responsibility.
+    public func noteDividerDragSession(_ active: Bool) {
+        internalController.noteDividerDragSession(active)
     }
 
     // MARK: - Tab Operations

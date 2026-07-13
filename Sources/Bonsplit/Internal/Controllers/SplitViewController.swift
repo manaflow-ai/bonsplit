@@ -62,6 +62,18 @@ final class SplitViewController {
     /// Callback for geometry changes
     var onGeometryChange: (() -> Void)?
 
+    /// Live divider drag sessions across every split in this tree (0 or 1 in
+    /// practice — AppKit tracks one divider at a time). Sessions bracket the
+    /// divider's mouse-tracking lifecycle, so external sizing can consult
+    /// this before writing geometry: mid-drag the user owns the divider.
+    @ObservationIgnored private(set) var activeDividerDragSessions = 0
+    @ObservationIgnored var onDividerDragSessionChange: ((Bool) -> Void)?
+
+    func noteDividerDragSession(_ active: Bool) {
+        activeDividerDragSessions = max(0, activeDividerDragSessions + (active ? 1 : -1))
+        onDividerDragSessionChange?(active)
+    }
+
     init(rootNode: SplitNode? = nil) {
         if let rootNode {
             self.rootNode = rootNode
