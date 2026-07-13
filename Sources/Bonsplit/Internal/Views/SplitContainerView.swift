@@ -74,36 +74,21 @@ private class ThemedSplitView: NSSplitView {
     /// drag-pause-release, where no resize coincides with the mouseUp).
     var onDividerDragSession: ((Bool) -> Void)?
 
-    private func dividerSessionHitRect() -> NSRect? {
-        // No minimum-size guards here, deliberately: a pane parked at its
-        // 1pt minimum is exactly the pane a user grabs the divider to
-        // restore, and AppKit still tracks that drag (the delegate's
-        // effectiveRect has no such guard either). A session that fails to
-        // arm there would let sizing passes impose over the live drag.
-        guard arrangedSubviews.count >= 2 else { return nil }
-        let a = arrangedSubviews[0].frame
-        let thickness = dividerThickness
-        let rect: NSRect
-        if isVertical {
-            rect = NSRect(x: max(0, a.maxX), y: 0, width: thickness, height: bounds.height)
-        } else {
-            rect = NSRect(x: 0, y: max(0, a.maxY), width: bounds.width, height: thickness)
-        }
-        return rect.insetBy(dx: -resolvedDividerHitExpansion, dy: -resolvedDividerHitExpansion)
-    }
-
     override func mouseDown(with event: NSEvent) {
-        let location = convert(event.locationInWindow, from: nil)
-        // Max-edge INCLUSIVE, matching the delegate's dividerHitRectContains:
-        // AppKit can report a point exactly on the divider boundary, and an
-        // exclusive contains() would miss the session while NSSplitView still
-        // tracks the drag.
-        let inDivider = dividerSessionHitRect().map { rect in
-            location.x >= rect.minX && location.x <= rect.maxX
-                && location.y >= rect.minY && location.y <= rect.maxY
-        } == true
+        // Any mouseDown that reaches the split view itself is a divider
+        // interaction: arranged subviews cover all pane content, so content
+        // clicks never route here, and reconstructing AppKit's exact
+        // effective divider rect (drawn rect grown by the delegate's
+        // expansion, UNIONED with AppKit's own proposal) cannot be done
+        // faithfully from here — a rect test narrower than AppKit's would
+        // let AppKit track a drag with no session, and sizing would impose
+        // under the pointer. A session around a click that AppKit does not
+        // turn into a drag is harmless: begin and end fire back to back and
+        // the host's drag-end sync finds nothing changed.
+        let inDivider = arrangedSubviews.count >= 2
 #if DEBUG
         if inDivider {
+            let location = convert(event.locationInWindow, from: nil)
             dlog("divider.session.mouseDown loc=\(Int(location.x)),\(Int(location.y))")
         }
 #endif

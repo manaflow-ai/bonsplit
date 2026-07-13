@@ -70,8 +70,16 @@ final class SplitViewController {
     @ObservationIgnored var onDividerDragSessionChange: ((Bool) -> Void)?
 
     func noteDividerDragSession(_ active: Bool) {
+        // Notify only when the count crosses zero: with overlapping sessions
+        // (a host-bracketed custom drag alongside the built-in tracking),
+        // ending one must not announce "drag over" while the other still
+        // owns the divider — a host would resume imposing under the pointer.
+        let wasActive = activeDividerDragSessions > 0
         activeDividerDragSessions = max(0, activeDividerDragSessions + (active ? 1 : -1))
-        onDividerDragSessionChange?(active)
+        let isActive = activeDividerDragSessions > 0
+        if wasActive != isActive {
+            onDividerDragSessionChange?(isActive)
+        }
     }
 
     init(rootNode: SplitNode? = nil) {
