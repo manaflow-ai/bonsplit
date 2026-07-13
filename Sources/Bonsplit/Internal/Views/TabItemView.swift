@@ -1019,12 +1019,14 @@ struct TabItemView: View {
             // the tab makes the indicator survive continuous split resizing;
             // parent preference geometry may be transient while SwiftUI is
             // laying out a new width, but selection itself is stable.
-            if isSelected {
-                Rectangle()
-                    .fill(TabBarColors.activeIndicator(saturation: saturation))
-                    .frame(height: TabBarMetrics.activeIndicatorHeight)
-                    .padding(.trailing, TabBarMetrics.activeIndicatorTrailingInset)
-            }
+            Rectangle()
+                .fill(TabBarColors.activeIndicator(saturation: saturation))
+                .frame(height: TabBarMetrics.activeIndicatorHeight)
+                .padding(.trailing, TabBarMetrics.activeIndicatorTrailingInset)
+                .opacity(isSelected ? 1 : 0)
+                .transaction { transaction in
+                    transaction.animation = nil
+                }
         }
     }
 
