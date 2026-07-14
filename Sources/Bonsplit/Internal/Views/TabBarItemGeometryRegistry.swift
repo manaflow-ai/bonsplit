@@ -149,11 +149,15 @@ struct TabItemHitRegionView: NSViewRepresentable {
             registerGeometryIfVisible()
         }
 
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+            super.viewWillMove(toWindow: newWindow)
+        }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             syncHitBounds()
             BonsplitTabItemHitRegionRegistry.unregister(self)
-            BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
             if window != nil {
                 BonsplitTabItemHitRegionRegistry.register(self)
                 BonsplitTabBarInteractiveHitRegionRegistry.register(self)

@@ -1070,6 +1070,51 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabItemInteractiveRegionNotifiesOldWindowWhenMoved() {
+        let oldWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer {
+            oldWindow.orderOut(nil)
+            newWindow.orderOut(nil)
+        }
+        guard let oldContentView = oldWindow.contentView,
+              let newContentView = newWindow.contentView else {
+            XCTFail("Expected content views")
+            return
+        }
+
+        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 20, y: 20, width: 80, height: 24))
+        oldContentView.addSubview(region)
+        var oldWindowNotifications = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: BonsplitTabBarInteractiveHitRegionRegistry.didChangeNotification,
+            object: oldWindow,
+            queue: .main
+        ) { _ in
+            oldWindowNotifications += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        newContentView.addSubview(region)
+
+        XCTAssertGreaterThan(
+            oldWindowNotifications,
+            0,
+            "Moving a tab marker must invalidate cursor exclusions in its old window."
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
