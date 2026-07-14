@@ -1006,6 +1006,38 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarInteractiveHitRegionRegistryTracksExactControlBounds() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let action = NSView(frame: NSRect(x: 220, y: 132, width: 24, height: 24))
+        contentView.addSubview(action)
+        BonsplitTabBarInteractiveHitRegionRegistry.register(action)
+        defer { BonsplitTabBarInteractiveHitRegionRegistry.unregister(action) }
+
+        let actionPoint = action.convert(NSPoint(x: 12, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(actionPoint, in: window),
+            "The registry should expose the action control's real window-space bounds"
+        )
+
+        let neighboringChromePoint = action.convert(NSPoint(x: -8, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(neighboringChromePoint, in: window),
+            "Empty tab-bar chrome beside an action must remain available to divider hit testing"
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
