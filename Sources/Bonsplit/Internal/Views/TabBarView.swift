@@ -50,6 +50,7 @@ public enum BonsplitTabBarHitRegionRegistry {
 /// Exact window-space regions occupied by interactive tab-bar controls.
 /// Portal hosts use these regions to keep split-divider hit bands from
 /// covering buttons rendered underneath them.
+@MainActor
 public enum BonsplitTabBarInteractiveHitRegionRegistry {
     public static let didChangeNotification = Notification.Name(
         "BonsplitTabBarInteractiveHitRegionsDidChange"
@@ -1860,9 +1861,13 @@ struct TabBarView: View {
             ForEach(buttons.indices, id: \.self) { index in
                 let button = buttons[index]
                 splitActionButton(button, tooltips: tooltips)
-                .background(SplitActionHitRegionView())
-                .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
-                .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
+                    .background {
+                        if shouldShowSplitButtons {
+                            SplitActionHitRegionView()
+                        }
+                    }
+                    .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
+                    .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
             }
         }
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
@@ -2199,10 +2204,6 @@ private struct SplitActionHitRegionView: NSViewRepresentable {
 
 private final class SplitActionHitRegionNSView: NSView {
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-    deinit {
-        BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
-    }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
         BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
