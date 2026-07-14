@@ -141,9 +141,27 @@ public enum BonsplitTabBarInteractiveHitRegionRegistry {
         return snapshot().flatMap { view -> [NSRect] in
             guard view.window === window, isVisibleInHierarchy(view) else { return [] }
             if let provider = view as? BonsplitTabBarInteractiveRectProviding {
+                let visibleBounds = view.visibleRect.intersection(view.bounds)
+                guard !visibleBounds.isNull,
+                      visibleBounds.width > 0,
+                      visibleBounds.height > 0 else { return [] }
                 return provider.bonsplitTabBarInteractiveHitRects().compactMap { localRect in
                     guard !localRect.isNull, localRect.width > 0, localRect.height > 0 else { return nil }
-                    return view.convert(localRect, to: nil).insetBy(dx: -epsilon, dy: -epsilon)
+                    let leftSlop = max(0, view.bounds.minX - localRect.minX)
+                    let rightSlop = max(0, localRect.maxX - view.bounds.maxX)
+                    let bottomSlop = max(0, view.bounds.minY - localRect.minY)
+                    let topSlop = max(0, localRect.maxY - view.bounds.maxY)
+                    let visibleHitBounds = NSRect(
+                        x: visibleBounds.minX - leftSlop,
+                        y: visibleBounds.minY - bottomSlop,
+                        width: visibleBounds.width + leftSlop + rightSlop,
+                        height: visibleBounds.height + bottomSlop + topSlop
+                    )
+                    let clippedRect = localRect.intersection(visibleHitBounds)
+                    guard !clippedRect.isNull,
+                          clippedRect.width > 0,
+                          clippedRect.height > 0 else { return nil }
+                    return view.convert(clippedRect, to: nil).insetBy(dx: -epsilon, dy: -epsilon)
                 }
             }
             let visibleBounds = view.visibleRect.intersection(view.bounds)

@@ -1130,12 +1130,19 @@ final class BonsplitTests: XCTestCase {
 
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 120, width: 240, height: 40))
         let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 40))
-        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 300, y: 8, width: 80, height: 24))
+        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 260, y: 8, width: 80, height: 24))
         let secondRegion = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 400, y: 8, width: 80, height: 24))
         documentView.addSubview(region)
         documentView.addSubview(secondRegion)
         scrollView.documentView = documentView
         contentView.addSubview(scrollView)
+
+        let offscreenPoint = region.convert(NSPoint(x: 40, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabBarInteractiveHitRegionRegistry.windowRects(in: window)
+                .contains { $0.contains(offscreenPoint) },
+            "A tab outside the scroll viewport must not create a cursor exclusion."
+        )
 
         var notifications = 0
         let observer = NotificationCenter.default.addObserver(
@@ -1149,6 +1156,13 @@ final class BonsplitTests: XCTestCase {
 
         scrollView.contentView.scroll(to: NSPoint(x: 120, y: 0))
         scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        let visiblePoint = region.convert(NSPoint(x: 40, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.windowRects(in: window)
+                .contains { $0.contains(visiblePoint) },
+            "A tab scrolled into view must create a cursor exclusion."
+        )
 
         XCTAssertGreaterThan(
             notifications,
