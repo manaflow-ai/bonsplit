@@ -1006,6 +1006,183 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarInteractiveHitRegionRegistryTracksExactControlBounds() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let action = NSView(frame: NSRect(x: 220, y: 132, width: 24, height: 24))
+        contentView.addSubview(action)
+        BonsplitTabBarInteractiveHitRegionRegistry.register(action)
+        defer { BonsplitTabBarInteractiveHitRegionRegistry.unregister(action) }
+
+        let actionPoint = action.convert(NSPoint(x: 12, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(actionPoint, in: window),
+            "The registry should expose the action control's real window-space bounds"
+        )
+
+        let neighboringChromePoint = action.convert(NSPoint(x: -8, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(neighboringChromePoint, in: window),
+            "Empty tab-bar chrome beside an action must remain available to divider hit testing"
+        )
+    }
+
+    @MainActor
+    func testTabBarInteractiveHitRegionRegistryUsesProviderRects() {
+        final class TabRegionView: NSView, BonsplitTabBarInteractiveRectProviding {
+            func bonsplitTabBarInteractiveHitRects() -> [NSRect] {
+                [bounds.insetBy(dx: -10, dy: -6)]
+            }
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tab = TabRegionView(frame: NSRect(x: 100, y: 132, width: 80, height: 24))
+        contentView.addSubview(tab)
+        BonsplitTabBarInteractiveHitRegionRegistry.register(tab)
+        defer { BonsplitTabBarInteractiveHitRegionRegistry.unregister(tab) }
+
+        let slopPoint = tab.convert(NSPoint(x: -5, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(slopPoint, in: window),
+            "Cursor exclusions must cover the same expanded hit rect as the tab item."
+        )
+    }
+
+    @MainActor
+    func testTabItemInteractiveRegionNotifiesOldWindowWhenMoved() {
+        let oldWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let newWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer {
+            oldWindow.orderOut(nil)
+            newWindow.orderOut(nil)
+        }
+        guard let oldContentView = oldWindow.contentView,
+              let newContentView = newWindow.contentView else {
+            XCTFail("Expected content views")
+            return
+        }
+
+        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 20, y: 20, width: 80, height: 24))
+        oldContentView.addSubview(region)
+        var oldWindowNotifications = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: BonsplitTabBarInteractiveHitRegionRegistry.didChangeNotification,
+            object: oldWindow,
+            queue: .main
+        ) { _ in
+            oldWindowNotifications += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        newContentView.addSubview(region)
+
+        XCTAssertGreaterThan(
+            oldWindowNotifications,
+            0,
+            "Moving a tab marker must invalidate cursor exclusions in its old window."
+        )
+    }
+
+    @MainActor
+    func testTabItemInteractiveRegionNotifiesWhenScrollBoundsMove() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 120, width: 240, height: 40))
+        let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 40))
+        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 260, y: 8, width: 80, height: 24))
+        let secondRegion = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 400, y: 8, width: 80, height: 24))
+        documentView.addSubview(region)
+        documentView.addSubview(secondRegion)
+        scrollView.documentView = documentView
+        contentView.addSubview(scrollView)
+
+        let offscreenPoint = region.convert(NSPoint(x: 40, y: 12), to: nil)
+        XCTAssertFalse(
+            BonsplitTabBarInteractiveHitRegionRegistry.windowRects(in: window)
+                .contains { $0.contains(offscreenPoint) },
+            "A tab outside the scroll viewport must not create a cursor exclusion."
+        )
+
+        var notifications = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: BonsplitTabBarInteractiveHitRegionRegistry.didChangeNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            notifications += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        scrollView.contentView.scroll(to: NSPoint(x: 120, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        let visiblePoint = region.convert(NSPoint(x: 40, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.windowRects(in: window)
+                .contains { $0.contains(visiblePoint) },
+            "A tab scrolled into view must create a cursor exclusion."
+        )
+
+        XCTAssertGreaterThan(
+            notifications,
+            0,
+            "Scrolling a tab marker must invalidate its window-space cursor exclusion."
+        )
+
+        notifications = 0
+        NotificationCenter.default.post(
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
+        XCTAssertEqual(
+            notifications,
+            1,
+            "One clip-view scroll event must coalesce to one cursor-region invalidation."
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),

@@ -47,6 +47,139 @@ public enum BonsplitTabBarHitRegionRegistry {
     }
 }
 
+/// Exact window-space regions occupied by interactive tab-bar controls.
+/// Portal hosts use these regions to keep split-divider hit bands from
+/// covering buttons rendered underneath them.
+@MainActor
+protocol BonsplitTabBarInteractiveRectProviding: AnyObject {
+    func bonsplitTabBarInteractiveHitRects() -> [NSRect]
+}
+
+@MainActor
+public enum BonsplitTabBarInteractiveHitRegionRegistry {
+    public static let didChangeNotification = Notification.Name(
+        "BonsplitTabBarInteractiveHitRegionsDidChange"
+    )
+
+    private static let lock = NSLock()
+    private static let registeredViews = NSHashTable<NSView>.weakObjects()
+    private static let clipViewObserverAssociationToken = NSObject()
+
+    @MainActor
+    private final class ClipViewBoundsObserver {
+        private var boundsObserver: NSObjectProtocol?
+
+        init(clipView: NSClipView) {
+            clipView.postsBoundsChangedNotifications = true
+            boundsObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak clipView] _ in
+                MainActor.assumeIsolated {
+                    notifyChanged(in: clipView?.window)
+                }
+            }
+        }
+
+        deinit {
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+        }
+    }
+
+    static func register(_ view: NSView) {
+        lock.lock()
+        registeredViews.add(view)
+        lock.unlock()
+        notifyChanged(in: view.window)
+    }
+
+    static func unregister(_ view: NSView) {
+        let oldWindow = view.window
+        lock.lock()
+        registeredViews.remove(view)
+        lock.unlock()
+        notifyChanged(in: oldWindow)
+    }
+
+    static func geometryDidChange(_ view: NSView) {
+        notifyChanged(in: view.window)
+    }
+
+    static func observeScrolling(for view: NSView) {
+        guard let clipView = view.enclosingScrollView?.contentView else { return }
+        let key = UnsafeRawPointer(Unmanaged.passUnretained(clipViewObserverAssociationToken).toOpaque())
+        guard objc_getAssociatedObject(clipView, key) == nil else { return }
+        objc_setAssociatedObject(
+            clipView,
+            key,
+            ClipViewBoundsObserver(clipView: clipView),
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+    }
+
+    private static func snapshot() -> [NSView] {
+        lock.lock()
+        let views = registeredViews.allObjects
+        lock.unlock()
+        return views
+    }
+
+    private static func isVisibleInHierarchy(_ view: NSView) -> Bool {
+        var current: NSView? = view
+        while let candidate = current {
+            guard !candidate.isHidden, candidate.alphaValue > 0 else { return false }
+            current = candidate.superview
+        }
+        return true
+    }
+
+    public static func windowRects(in window: NSWindow) -> [NSRect] {
+        let epsilon = max(0.5, 1.0 / max(1.0, window.backingScaleFactor))
+        return snapshot().flatMap { view -> [NSRect] in
+            guard view.window === window, isVisibleInHierarchy(view) else { return [] }
+            if let provider = view as? BonsplitTabBarInteractiveRectProviding {
+                let visibleBounds = view.visibleRect.intersection(view.bounds)
+                guard !visibleBounds.isNull,
+                      visibleBounds.width > 0,
+                      visibleBounds.height > 0 else { return [] }
+                return provider.bonsplitTabBarInteractiveHitRects().compactMap { localRect in
+                    guard !localRect.isNull, localRect.width > 0, localRect.height > 0 else { return nil }
+                    let leftSlop = max(0, view.bounds.minX - localRect.minX)
+                    let rightSlop = max(0, localRect.maxX - view.bounds.maxX)
+                    let bottomSlop = max(0, view.bounds.minY - localRect.minY)
+                    let topSlop = max(0, localRect.maxY - view.bounds.maxY)
+                    let visibleHitBounds = NSRect(
+                        x: visibleBounds.minX - leftSlop,
+                        y: visibleBounds.minY - bottomSlop,
+                        width: visibleBounds.width + leftSlop + rightSlop,
+                        height: visibleBounds.height + bottomSlop + topSlop
+                    )
+                    let clippedRect = localRect.intersection(visibleHitBounds)
+                    guard !clippedRect.isNull,
+                          clippedRect.width > 0,
+                          clippedRect.height > 0 else { return nil }
+                    return view.convert(clippedRect, to: nil).insetBy(dx: -epsilon, dy: -epsilon)
+                }
+            }
+            let visibleBounds = view.visibleRect.intersection(view.bounds)
+            guard !visibleBounds.isNull, visibleBounds.width > 0, visibleBounds.height > 0 else { return [] }
+            return [view.convert(visibleBounds, to: nil).insetBy(dx: -epsilon, dy: -epsilon)]
+        }
+    }
+
+    public static func containsWindowPoint(_ windowPoint: CGPoint, in window: NSWindow) -> Bool {
+        windowRects(in: window).contains { $0.contains(windowPoint) }
+    }
+
+    private static func notifyChanged(in window: NSWindow?) {
+        guard let window else { return }
+        NotificationCenter.default.post(name: didChangeNotification, object: window)
+    }
+}
+
 public protocol BonsplitTabItemHitRegionProviding: AnyObject {
     func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool
 }
@@ -1794,8 +1927,13 @@ struct TabBarView: View {
             ForEach(buttons.indices, id: \.self) { index in
                 let button = buttons[index]
                 splitActionButton(button, tooltips: tooltips)
-                .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
-                .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
+                    .background {
+                        if shouldShowSplitButtons {
+                            SplitActionHitRegionView()
+                        }
+                    }
+                    .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
+                    .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
             }
         }
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
@@ -2117,6 +2255,58 @@ private final class SplitActionMouseDownNSView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         onMouseDown?()
+    }
+}
+
+private struct SplitActionHitRegionView: NSViewRepresentable {
+    func makeNSView(context: Context) -> SplitActionHitRegionNSView {
+        SplitActionHitRegionNSView()
+    }
+
+    func updateNSView(_ nsView: SplitActionHitRegionNSView, context: Context) {
+        BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: nsView)
+    }
+}
+
+private final class SplitActionHitRegionNSView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+        super.viewWillMove(toWindow: newWindow)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if window != nil {
+            BonsplitTabBarInteractiveHitRegionRegistry.register(self)
+            BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: self)
+        }
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        if superview == nil {
+            BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+        } else {
+            BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: self)
+        }
+    }
+
+    override func setFrameOrigin(_ newOrigin: NSPoint) {
+        let changed = frame.origin != newOrigin
+        super.setFrameOrigin(newOrigin)
+        if changed {
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
+        }
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        let changed = frame.size != newSize
+        super.setFrameSize(newSize)
+        if changed {
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
+        }
     }
 }
 

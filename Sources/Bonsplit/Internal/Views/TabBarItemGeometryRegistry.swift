@@ -125,7 +125,10 @@ struct TabItemHitRegionView: NSViewRepresentable {
         nsView.configure(tabId: tabId, geometryRegistry: geometryRegistry)
     }
 
-    final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
+    final class RegionNSView: NSView,
+        BonsplitTabItemHitRegionProviding,
+        BonsplitTabBarInteractiveRectProviding
+    {
         nonisolated(unsafe) private var hitBounds: NSRect = .zero
         private var tabId: UUID?
         private weak var geometryRegistry: TabBarItemGeometryRegistry?
@@ -144,6 +147,12 @@ struct TabItemHitRegionView: NSViewRepresentable {
                 self.geometryRegistry = geometryRegistry
             }
             registerGeometryIfVisible()
+            BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: self)
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+            super.viewWillMove(toWindow: newWindow)
         }
 
         override func viewDidMoveToWindow() {
@@ -152,6 +161,8 @@ struct TabItemHitRegionView: NSViewRepresentable {
             BonsplitTabItemHitRegionRegistry.unregister(self)
             if window != nil {
                 BonsplitTabItemHitRegionRegistry.register(self)
+                BonsplitTabBarInteractiveHitRegionRegistry.register(self)
+                BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: self)
             }
             registerGeometryIfVisible()
         }
@@ -161,8 +172,10 @@ struct TabItemHitRegionView: NSViewRepresentable {
             if superview == nil {
                 unregisterGeometry()
                 BonsplitTabItemHitRegionRegistry.unregister(self)
+                BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
             } else {
                 registerGeometryIfVisible()
+                BonsplitTabBarInteractiveHitRegionRegistry.observeScrolling(for: self)
             }
         }
 
@@ -170,24 +183,36 @@ struct TabItemHitRegionView: NSViewRepresentable {
             super.layout()
             syncHitBounds()
             geometryRegistry?.geometryDidChange()
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
         }
 
         override func setFrameSize(_ newSize: NSSize) {
             super.setFrameSize(newSize)
             syncHitBounds()
             geometryRegistry?.geometryDidChange()
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
         }
 
         override func setBoundsSize(_ newSize: NSSize) {
             super.setBoundsSize(newSize)
             syncHitBounds()
             geometryRegistry?.geometryDidChange()
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
         }
 
         override func setBoundsOrigin(_ newOrigin: NSPoint) {
             super.setBoundsOrigin(newOrigin)
             syncHitBounds()
             geometryRegistry?.geometryDidChange()
+            BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
+        }
+
+        override func setFrameOrigin(_ newOrigin: NSPoint) {
+            let changed = frame.origin != newOrigin
+            super.setFrameOrigin(newOrigin)
+            if changed {
+                BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(self)
+            }
         }
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
@@ -197,6 +222,13 @@ struct TabItemHitRegionView: NSViewRepresentable {
                     dy: -BonsplitTabItemHitTesting.verticalSlop
                 )
                 .contains(localPoint)
+        }
+
+        func bonsplitTabBarInteractiveHitRects() -> [NSRect] {
+            [hitBounds.insetBy(
+                dx: -BonsplitTabItemHitTesting.horizontalSlop,
+                dy: -BonsplitTabItemHitTesting.verticalSlop
+            )]
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
