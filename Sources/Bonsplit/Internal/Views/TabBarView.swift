@@ -125,6 +125,48 @@ public enum BonsplitTabBarInteractiveHitRegionRegistry {
     }
 }
 
+@MainActor
+final class BonsplitTabBarInteractiveScrollObserver {
+    private weak var regionView: NSView?
+    private weak var clipView: NSClipView?
+    private var boundsObserver: NSObjectProtocol?
+
+    func refresh(for view: NSView) {
+        let nextClipView = view.enclosingScrollView?.contentView
+        guard nextClipView !== clipView else { return }
+        stop()
+        regionView = view
+        guard let nextClipView else { return }
+        clipView = nextClipView
+        nextClipView.postsBoundsChangedNotifications = true
+        boundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: nextClipView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let view = self?.regionView else { return }
+                BonsplitTabBarInteractiveHitRegionRegistry.geometryDidChange(view)
+            }
+        }
+    }
+
+    func stop() {
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+        boundsObserver = nil
+        clipView = nil
+        regionView = nil
+    }
+
+    deinit {
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+    }
+}
+
 public protocol BonsplitTabItemHitRegionProviding: AnyObject {
     func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool
 }
@@ -2209,11 +2251,13 @@ private struct SplitActionHitRegionView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: SplitActionHitRegionNSView, context: Context) {
-        // AppKit frame callbacks below publish geometry changes.
+        nsView.refreshScrollObservation()
     }
 }
 
 private final class SplitActionHitRegionNSView: NSView {
+    private let scrollObserver = BonsplitTabBarInteractiveScrollObserver()
+
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
     override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -2225,6 +2269,9 @@ private final class SplitActionHitRegionNSView: NSView {
         super.viewDidMoveToWindow()
         if window != nil {
             BonsplitTabBarInteractiveHitRegionRegistry.register(self)
+            refreshScrollObservation()
+        } else {
+            scrollObserver.stop()
         }
     }
 
@@ -2232,7 +2279,14 @@ private final class SplitActionHitRegionNSView: NSView {
         super.viewDidMoveToSuperview()
         if superview == nil {
             BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+            scrollObserver.stop()
+        } else {
+            refreshScrollObservation()
         }
+    }
+
+    func refreshScrollObservation() {
+        scrollObserver.refresh(for: self)
     }
 
     override func setFrameOrigin(_ newOrigin: NSPoint) {

@@ -132,6 +132,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
         nonisolated(unsafe) private var hitBounds: NSRect = .zero
         private var tabId: UUID?
         private weak var geometryRegistry: TabBarItemGeometryRegistry?
+        private let interactiveScrollObserver = BonsplitTabBarInteractiveScrollObserver()
 
         override var mouseDownCanMoveWindow: Bool { false }
 
@@ -147,6 +148,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
                 self.geometryRegistry = geometryRegistry
             }
             registerGeometryIfVisible()
+            interactiveScrollObserver.refresh(for: self)
         }
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
@@ -161,6 +163,9 @@ struct TabItemHitRegionView: NSViewRepresentable {
             if window != nil {
                 BonsplitTabItemHitRegionRegistry.register(self)
                 BonsplitTabBarInteractiveHitRegionRegistry.register(self)
+                interactiveScrollObserver.refresh(for: self)
+            } else {
+                interactiveScrollObserver.stop()
             }
             registerGeometryIfVisible()
         }
@@ -171,8 +176,10 @@ struct TabItemHitRegionView: NSViewRepresentable {
                 unregisterGeometry()
                 BonsplitTabItemHitRegionRegistry.unregister(self)
                 BonsplitTabBarInteractiveHitRegionRegistry.unregister(self)
+                interactiveScrollObserver.stop()
             } else {
                 registerGeometryIfVisible()
+                interactiveScrollObserver.refresh(for: self)
             }
         }
 

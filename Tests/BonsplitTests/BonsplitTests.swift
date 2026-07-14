@@ -1115,6 +1115,47 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabItemInteractiveRegionNotifiesWhenScrollBoundsMove() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let scrollView = NSScrollView(frame: NSRect(x: 0, y: 120, width: 240, height: 40))
+        let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 40))
+        let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 300, y: 8, width: 80, height: 24))
+        documentView.addSubview(region)
+        scrollView.documentView = documentView
+        contentView.addSubview(scrollView)
+
+        var notifications = 0
+        let observer = NotificationCenter.default.addObserver(
+            forName: BonsplitTabBarInteractiveHitRegionRegistry.didChangeNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            notifications += 1
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        scrollView.contentView.scroll(to: NSPoint(x: 120, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        XCTAssertGreaterThan(
+            notifications,
+            0,
+            "Scrolling a tab marker must invalidate its window-space cursor exclusion."
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
