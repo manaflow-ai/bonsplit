@@ -1131,7 +1131,9 @@ final class BonsplitTests: XCTestCase {
         let scrollView = NSScrollView(frame: NSRect(x: 0, y: 120, width: 240, height: 40))
         let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 640, height: 40))
         let region = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 300, y: 8, width: 80, height: 24))
+        let secondRegion = TabItemHitRegionView.RegionNSView(frame: NSRect(x: 400, y: 8, width: 80, height: 24))
         documentView.addSubview(region)
+        documentView.addSubview(secondRegion)
         scrollView.documentView = documentView
         contentView.addSubview(scrollView)
 
@@ -1152,6 +1154,17 @@ final class BonsplitTests: XCTestCase {
             notifications,
             0,
             "Scrolling a tab marker must invalidate its window-space cursor exclusion."
+        )
+
+        notifications = 0
+        NotificationCenter.default.post(
+            name: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView
+        )
+        XCTAssertEqual(
+            notifications,
+            1,
+            "One clip-view scroll event must coalesce to one cursor-region invalidation."
         )
     }
 
