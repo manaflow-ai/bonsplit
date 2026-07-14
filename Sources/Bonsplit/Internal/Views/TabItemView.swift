@@ -1014,19 +1014,6 @@ struct TabItemView: View {
                     .frame(width: 1)
                     .padding(.bottom, max(0, trailingSeparatorBottomInset))
             }
-
-            // The selected tab owns its focus indicator. Keeping this inside
-            // the tab makes the indicator survive continuous split resizing;
-            // parent preference geometry may be transient while SwiftUI is
-            // laying out a new width, but selection itself is stable.
-            Rectangle()
-                .fill(TabBarColors.activeIndicator(saturation: saturation))
-                .frame(height: TabBarMetrics.activeIndicatorHeight)
-                .padding(.trailing, TabBarMetrics.activeIndicatorTrailingInset)
-                .opacity(isSelected ? 1 : 0)
-                .transaction { transaction in
-                    transaction.animation = nil
-                }
         }
     }
 

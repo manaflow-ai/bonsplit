@@ -118,85 +118,6 @@ enum BonsplitTabItemHitTesting {
     }
 }
 
-private struct TabItemHitRegionView: NSViewRepresentable {
-    func makeNSView(context: Context) -> RegionNSView {
-        RegionNSView()
-    }
-
-    func updateNSView(_ nsView: RegionNSView, context: Context) {}
-
-    final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
-        nonisolated(unsafe) private var hitBounds: NSRect = .zero
-
-        override var mouseDownCanMoveWindow: Bool { false }
-
-        deinit {
-            BonsplitTabItemHitRegionRegistry.unregister(self)
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            syncHitBounds()
-            BonsplitTabItemHitRegionRegistry.unregister(self)
-            if window != nil {
-                BonsplitTabItemHitRegionRegistry.register(self)
-            }
-        }
-
-        override func viewDidMoveToSuperview() {
-            super.viewDidMoveToSuperview()
-            if superview == nil {
-                BonsplitTabItemHitRegionRegistry.unregister(self)
-            }
-        }
-
-        override func layout() {
-            super.layout()
-            syncHitBounds()
-        }
-
-        override func setFrameSize(_ newSize: NSSize) {
-            super.setFrameSize(newSize)
-            syncHitBounds()
-        }
-
-        override func setBoundsSize(_ newSize: NSSize) {
-            super.setBoundsSize(newSize)
-            syncHitBounds()
-        }
-
-        override func setBoundsOrigin(_ newOrigin: NSPoint) {
-            super.setBoundsOrigin(newOrigin)
-            syncHitBounds()
-        }
-
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            hitBounds
-                .insetBy(
-                    dx: -BonsplitTabItemHitTesting.horizontalSlop,
-                    dy: -BonsplitTabItemHitTesting.verticalSlop
-                )
-                .contains(localPoint)
-        }
-
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            nil
-        }
-
-        private func syncHitBounds() {
-            hitBounds = bounds
-        }
-    }
-}
-
-private struct TabFramePreferenceKey: PreferenceKey {
-    static let defaultValue: [UUID: CGRect] = [:]
-
-    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
-        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
-    }
-}
-
 private struct SplitButtonLaneWidthPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
 
@@ -1094,13 +1015,13 @@ struct TabBarView: View {
     @State private var contentWidth: CGFloat = 0
     @State private var tabContentWidthExcludingSplitButtonLane: CGFloat?
     @State private var containerWidth: CGFloat = 0
-    @State private var tabFramesInBar: [UUID: CGRect] = [:]
     @State private var measuredSplitButtonLaneWidth: CGFloat = 0
     @State private var splitButtonScrollOffset: CGFloat = 0
     @State private var splitButtonContentWidth: CGFloat = 0
     @State private var splitButtonViewportWidth: CGFloat = 0
     @State private var controlKeyMonitor = TabControlShortcutKeyMonitor()
     @State private var scrollViewBridge = TabBarScrollViewBridge()
+    @State private var tabItemGeometryRegistry = TabBarItemGeometryRegistry()
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -1200,13 +1121,6 @@ struct TabBarView: View {
         tabBarLayout.trailingTabContentInset
     }
 
-    private var selectedTabFrameInBar: CGRect? {
-        TabBarStyling.selectedTabFrame(
-            selectedTabId: pane.selectedTabId,
-            tabFrames: tabFramesInBar
-        )
-    }
-
     private var leadingScrollAnchorId: String {
         "tab-bar-leading-\(pane.id.id.uuidString)"
     }
@@ -1223,6 +1137,37 @@ struct TabBarView: View {
         )
     }
 
+    private var selectionChromeMask: TabBarSelectionChromeMask {
+        let fadeWidth: CGFloat = 24
+        let snapshot = chromeSnapshot
+        if snapshot.masksTabContentUnderActionLane {
+            return TabBarSelectionChromeMask(
+                leftFadeWidth: canScrollLeft ? fadeWidth : 0,
+                rightFadeWidth: snapshot.contentFadeWidth,
+                rightOcclusionWidth: snapshot.contentOcclusionWidth,
+                actionLaneSeparatorFadeWidth: snapshot.drawsActionLaneSeparator
+                    ? snapshot.actionLaneGeometry.separatorFadeWidth
+                    : 0,
+                actionLaneSeparatorSolidWidth: snapshot.drawsActionLaneSeparator
+                    ? snapshot.actionLaneGeometry.backgroundSolidWidth
+                    : 0,
+                actionLaneSeparatorFadeRampStartFraction: snapshot.backdropFadeRampStartFraction
+            )
+        }
+        return TabBarSelectionChromeMask(
+            leftFadeWidth: canScrollLeft ? fadeWidth : 0,
+            rightFadeWidth: canScrollRight ? fadeWidth : 0,
+            rightOcclusionWidth: 0,
+            actionLaneSeparatorFadeWidth: snapshot.drawsActionLaneSeparator
+                ? snapshot.actionLaneGeometry.separatorFadeWidth
+                : 0,
+            actionLaneSeparatorSolidWidth: snapshot.drawsActionLaneSeparator
+                ? snapshot.actionLaneGeometry.backgroundSolidWidth
+                : 0,
+            actionLaneSeparatorFadeRampStartFraction: snapshot.backdropFadeRampStartFraction
+        )
+    }
+
     private var visibleTabEntries: [(index: Int, tab: TabItem)] {
         if isFullWidthTabMode {
             let selectedTab = pane.selectedTab ?? pane.tabs.first
@@ -1234,6 +1179,65 @@ struct TabBarView: View {
 
         return pane.tabs.enumerated().map { index, tab in
             (index, tab)
+        }
+    }
+
+    private var tabIds: [UUID] {
+        pane.tabs.map(\.id)
+    }
+
+    @ViewBuilder
+    private var selectionChrome: some View {
+        TabBarSelectionChromeView(
+            selectedTabId: pane.selectedTabId,
+            geometryRegistry: tabItemGeometryRegistry,
+            indicatorColor: TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
+            separatorColor: TabBarColors.nsColorSeparator(for: appearance),
+            mask: selectionChromeMask
+        )
+        .allowsHitTesting(false)
+    }
+
+    @ViewBuilder
+    private var trailingEmptyChromeDragZone: some View {
+        TabBarDragZoneView(
+            hitRegion: .registeredTrailingEmptyChrome(
+                geometryRegistry: tabItemGeometryRegistry,
+                tabIds: tabIds,
+                reservedTrailingWidth: shouldRenderSplitButtons ? splitButtonsBackdropWidth : 0
+            ),
+            isMinimalMode: isMinimalMode,
+            isFocusedPane: isFocused,
+            onSingleClick: focusPaneFromTabBarChrome
+        ) {
+            performNewTerminalSplitButtonAction()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var dragAndHoverBackground: some View {
+        TabBarDragAndHoverView(
+            isMinimalMode: isMinimalMode,
+            geometryRegistry: tabItemGeometryRegistry,
+            tabIds: tabIds,
+            onDoubleClick: {
+                performNewTerminalSplitButtonAction()
+            },
+            onHoverChanged: { updateTabBarHover($0) }
+        )
+    }
+
+    @ViewBuilder
+    private var manualReorderTracker: some View {
+        if controller.configuration.allowTabReordering {
+            TabBarManualReorderTrackingView(
+                pane: pane,
+                bonsplitController: controller,
+                splitViewController: splitViewController,
+                geometryRegistry: tabItemGeometryRegistry,
+                dropTargetIndex: $dropTargetIndex,
+                dropLifecycle: $dropLifecycle
+            )
         }
     }
 
@@ -1341,6 +1345,7 @@ struct TabBarView: View {
                     .background(
                         TabBarScrollViewResolver { scrollView in
                             scrollViewBridge.attach(scrollView)
+                            tabItemGeometryRegistry.attachScrollView(scrollView)
                         }
                         .frame(width: 0, height: 0)
                     )
@@ -1403,21 +1408,8 @@ struct TabBarView: View {
                 .allowsHitTesting(false)
                 .tabBarButtonAnimationsDisabled()
         }
-        .overlay(maskedTabBarBottomSeparatorChrome)
-        .overlay {
-            TabBarDragZoneView(
-                hitRegion: .trailingEmptyChrome(
-                    tabFrames: Array(tabFramesInBar.values),
-                    reservedTrailingWidth: shouldRenderSplitButtons ? splitButtonsBackdropWidth : 0
-                ),
-                isMinimalMode: isMinimalMode,
-                isFocusedPane: isFocused,
-                onSingleClick: focusPaneFromTabBarChrome
-            ) {
-                performNewTerminalSplitButtonAction()
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+        .overlay(selectionChrome)
+        .overlay(trailingEmptyChromeDragZone)
         .overlay(alignment: .trailing) {
             splitButtonChrome
                 .frame(width: splitButtonsBackdropWidth, height: tabBarHeight, alignment: .trailing)
@@ -1427,29 +1419,11 @@ struct TabBarView: View {
                 }
                 .clipped()
         }
-        .background(TabBarDragAndHoverView(
-            isMinimalMode: isMinimalMode,
-            tabFrames: Array(tabFramesInBar.values),
-            onDoubleClick: {
-                performNewTerminalSplitButtonAction()
-            },
-            onHoverChanged: { updateTabBarHover($0) }
-        ))
+        .background(dragAndHoverBackground)
         .overlay(
             TabBarHoverTrackingView { updateTabBarHover($0) }
         )
-        .overlay {
-            if controller.configuration.allowTabReordering {
-                TabBarManualReorderTrackingView(
-                    pane: pane,
-                    bonsplitController: controller,
-                    splitViewController: splitViewController,
-                    tabFrames: tabFramesInBar,
-                    dropTargetIndex: $dropTargetIndex,
-                    dropLifecycle: $dropLifecycle
-                )
-            }
-        }
+        .overlay(manualReorderTracker)
         .background {
             if splitViewController.tabShortcutHintsEnabled {
                 TabBarHostWindowReader { window in
@@ -1482,11 +1456,6 @@ struct TabBarView: View {
                 controlKeyMonitor.start()
             } else {
                 controlKeyMonitor.stop()
-            }
-        }
-        .onPreferenceChange(TabFramePreferenceKey.self) { frames in
-            withTransaction(Transaction(animation: nil)) {
-                tabFramesInBar = frames
             }
         }
         .onPreferenceChange(SplitButtonLaneWidthPreferenceKey.self) { width in
@@ -1569,17 +1538,10 @@ struct TabBarView: View {
             }
         )
         .background(
-            TabItemHitRegionView()
-        )
-        .background(
-            GeometryReader { geometry in
-                let frame = geometry.frame(in: .named("tabBar"))
-                Color.clear
-                    .preference(
-                        key: TabFramePreferenceKey.self,
-                        value: [tab.id: frame]
-                    )
-            }
+            TabItemHitRegionView(
+                tabId: tab.id,
+                geometryRegistry: tabItemGeometryRegistry
+            )
         )
         .onDrag {
             createItemProvider(for: tab)
@@ -1708,8 +1670,6 @@ struct TabBarView: View {
                     if snapshot.paintsActionLaneSurface {
                         splitButtonBackdropSurface(snapshot: snapshot, totalWidth: geometry.size.width)
                     }
-
-                    splitButtonFallbackSeparator(snapshot: snapshot, totalWidth: geometry.size.width)
                 }
                 .frame(width: geometry.size.width, height: tabBarHeight, alignment: .topLeading)
             }
@@ -1745,57 +1705,6 @@ struct TabBarView: View {
                 .init(color: Color(nsColor: snapshot.backdropLeadingColor), location: 0),
                 .init(color: Color(nsColor: snapshot.backdropLeadingColor), location: rampStart),
                 .init(color: Color(nsColor: snapshot.backdropTrailingColor), location: 1)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
-
-    @ViewBuilder
-    private func splitButtonFallbackSeparator(snapshot: TabBarChromeSnapshot, totalWidth: CGFloat) -> some View {
-        let geometry = snapshot.actionLaneGeometry
-        let selectedGap = tabBarLayout.selectedSeparatorGap(
-            selectedTabFrame: selectedTabFrameInBar,
-            totalWidth: totalWidth
-        )
-        if let maskFrame = geometry.fallbackSeparatorMaskFrame(
-            totalWidth: totalWidth,
-            height: tabBarHeight,
-            selectedSeparatorGap: selectedGap
-        ) {
-            ZStack(alignment: .topLeading) {
-                let fadeFrame = geometry.separatorFadeFrame(totalWidth: totalWidth, height: tabBarHeight)
-                if fadeFrame.width > 0 {
-                    splitButtonSeparatorFadeSegment(snapshot: snapshot)
-                        .frame(width: fadeFrame.width, height: fadeFrame.height)
-                        .offset(x: fadeFrame.minX, y: fadeFrame.minY)
-                }
-                let solidFrame = geometry.separatorSolidFrame(totalWidth: totalWidth, height: tabBarHeight)
-                if solidFrame.width > 0 {
-                    Rectangle()
-                        .fill(TabBarColors.separator(for: appearance))
-                        .frame(width: solidFrame.width, height: solidFrame.height)
-                        .offset(x: solidFrame.minX, y: solidFrame.minY)
-                }
-            }
-            .frame(width: totalWidth, height: tabBarHeight, alignment: .topLeading)
-            .mask(alignment: .topLeading) {
-                Rectangle()
-                    .frame(width: maskFrame.width, height: maskFrame.height)
-                    .offset(x: maskFrame.minX, y: maskFrame.minY)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func splitButtonSeparatorFadeSegment(snapshot: TabBarChromeSnapshot) -> some View {
-        let separator = TabBarColors.separator(for: appearance)
-        let rampStart = snapshot.backdropFadeRampStartFraction
-        LinearGradient(
-            stops: [
-                .init(color: separator.opacity(0), location: 0),
-                .init(color: separator.opacity(0), location: rampStart),
-                .init(color: separator, location: 1)
             ],
             startPoint: .leading,
             endPoint: .trailing
@@ -2086,39 +1995,6 @@ struct TabBarView: View {
             .frame(height: tabBarHeight)
     }
 
-    @ViewBuilder
-    private var maskedTabBarBottomSeparatorChrome: some View {
-        GeometryReader { geometry in
-            tabBarBottomSeparator(totalWidth: geometry.size.width)
-        }
-        .allowsHitTesting(false)
-    }
-
-    @ViewBuilder
-    private func tabBarBottomSeparator(totalWidth: CGFloat) -> some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                let separator = TabBarColors.separator(for: appearance)
-                let gapRange = tabBarLayout.selectedSeparatorGap(
-                    selectedTabFrame: selectedTabFrameInBar,
-                    totalWidth: totalWidth
-                )
-                let segments = TabBarStyling.separatorSegments(
-                    totalWidth: totalWidth,
-                    gap: gapRange
-                )
-                Rectangle()
-                    .fill(separator)
-                    .frame(width: segments.left, height: 1)
-                Spacer(minLength: 0)
-                Rectangle()
-                    .fill(separator)
-                    .frame(width: segments.right, height: 1)
-            }
-        }
-    }
-
 }
 
 private struct TabBarLayerBackedColor: NSViewRepresentable {
@@ -2362,7 +2238,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
     let pane: PaneState
     let bonsplitController: BonsplitController
     let splitViewController: SplitViewController
-    let tabFrames: [UUID: CGRect]
+    let geometryRegistry: TabBarItemGeometryRegistry
     @Binding var dropTargetIndex: Int?
     @Binding var dropLifecycle: TabDropLifecycle
 
@@ -2380,7 +2256,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
         view.pane = pane
         view.bonsplitController = bonsplitController
         view.splitViewController = splitViewController
-        view.tabFrames = tabFrames
+        view.geometryRegistry = geometryRegistry
         view.onDropStateChanged = { targetIndex, lifecycle in
             dropTargetIndex = targetIndex
             dropLifecycle = lifecycle
@@ -2391,7 +2267,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
         weak var pane: PaneState?
         weak var bonsplitController: BonsplitController?
         weak var splitViewController: SplitViewController?
-        var tabFrames: [UUID: CGRect] = [:]
+        weak var geometryRegistry: TabBarItemGeometryRegistry?
         var onDropStateChanged: ((Int?, TabDropLifecycle) -> Void)?
 
         private var localMouseMonitor: Any?
@@ -2572,7 +2448,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
 
         private func tab(at point: NSPoint, in pane: PaneState) -> TabItem? {
             for tab in pane.tabs {
-                guard let frame = tabFrames[tab.id] else { continue }
+                guard let frame = geometryRegistry?.frame(for: tab.id, in: self) else { continue }
                 if point.x >= frame.minX, point.x <= frame.maxX {
                     return tab
                 }
@@ -2589,7 +2465,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
 
             var lastFrame: CGRect?
             for (index, tab) in pane.tabs.enumerated() {
-                guard let frame = tabFrames[tab.id] else { continue }
+                guard let frame = geometryRegistry?.frame(for: tab.id, in: self) else { continue }
                 lastFrame = frame
                 if point.x < frame.midX {
                     return index
@@ -2627,14 +2503,16 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
 /// this view only receives hits in truly empty space.
 private struct TabBarDragAndHoverView: NSViewRepresentable {
     let isMinimalMode: Bool
-    let tabFrames: [CGRect]
+    let geometryRegistry: TabBarItemGeometryRegistry
+    let tabIds: [UUID]
     let onDoubleClick: () -> Bool
     let onHoverChanged: (Bool) -> Void
 
     func makeNSView(context: Context) -> TabBarBackgroundNSView {
         let view = TabBarBackgroundNSView()
         view.isMinimalMode = isMinimalMode
-        view.tabFrames = tabFrames
+        view.geometryRegistry = geometryRegistry
+        view.tabIds = tabIds
         view.onDoubleClick = onDoubleClick
         view.onHoverChanged = onHoverChanged
         return view
@@ -2642,14 +2520,16 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
     func updateNSView(_ nsView: TabBarBackgroundNSView, context: Context) {
         nsView.isMinimalMode = isMinimalMode
-        nsView.tabFrames = tabFrames
+        nsView.geometryRegistry = geometryRegistry
+        nsView.tabIds = tabIds
         nsView.onDoubleClick = onDoubleClick
         nsView.onHoverChanged = onHoverChanged
     }
 
     final class TabBarBackgroundNSView: NSView, BonsplitTabItemHitRegionProviding {
         var isMinimalMode = false
-        nonisolated(unsafe) var tabFrames: [CGRect] = []
+        nonisolated(unsafe) var tabIds: [UUID] = []
+        weak var geometryRegistry: TabBarItemGeometryRegistry?
         var onDoubleClick: (() -> Bool)?
         var onHoverChanged: ((Bool) -> Void)?
         private var hoverTrackingArea: NSTrackingArea?
@@ -2694,11 +2574,14 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         }
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            BonsplitTabItemHitTesting.containsTabLaneHit(
-                localPoint: localPoint,
-                tabFrames: tabFrames,
-                bounds: bounds
-            )
+            MainActor.assumeIsolated {
+                let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
+                return BonsplitTabItemHitTesting.containsTabLaneHit(
+                    localPoint: localPoint,
+                    tabFrames: frames,
+                    bounds: bounds
+                )
+            }
         }
 
         override func updateTrackingAreas() {
@@ -2849,6 +2732,11 @@ struct TabBarDragZoneView: NSViewRepresentable {
     enum HitRegion {
         case entireBounds
         case trailingEmptyChrome(tabFrames: [CGRect], reservedTrailingWidth: CGFloat)
+        case registeredTrailingEmptyChrome(
+            geometryRegistry: TabBarItemGeometryRegistry,
+            tabIds: [UUID],
+            reservedTrailingWidth: CGFloat
+        )
     }
 
     var hitRegion: HitRegion = .entireBounds
@@ -2877,9 +2765,13 @@ struct TabBarDragZoneView: NSViewRepresentable {
         nsView.onDoubleClick = onDoubleClick
     }
 
-    final class DragNSView: NSView {
+    final class DragNSView: NSView, TabBarItemGeometryObserving {
         var hitRegion = HitRegion.entireBounds {
-            didSet { invalidateWindowDragCursorRects() }
+            didSet {
+                unregisterGeometryObserver(from: oldValue)
+                registerGeometryObserver(from: hitRegion)
+                invalidateWindowDragCursorRects()
+            }
         }
         var hitTestEventTypeOverride: NSEvent.EventType?
         var isMinimalMode = false {
@@ -2894,6 +2786,10 @@ struct TabBarDragZoneView: NSViewRepresentable {
 
         private static let windowDragStartDistanceSquared: CGFloat = 16
 
+        deinit {
+            unregisterGeometryObserver(from: hitRegion)
+        }
+
         // Must stay false so AppKit does not intercept mouseUp as part of its
         // own window-drag tracking. When AppKit steals mouseUp from the first
         // click, the second click of a double-click is registered as a fresh
@@ -2905,6 +2801,15 @@ struct TabBarDragZoneView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            invalidateWindowDragCursorRects()
+        }
+
+        override func layout() {
+            super.layout()
+            invalidateWindowDragCursorRects()
+        }
+
+        func tabBarItemGeometryDidChange() {
             invalidateWindowDragCursorRects()
         }
 
@@ -3001,15 +2906,34 @@ struct TabBarDragZoneView: NSViewRepresentable {
                 return true
             case .trailingEmptyChrome(let tabFrames, let reservedTrailingWidth):
                 guard isMouseDownOrDragCandidate else { return false }
-                let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
-                guard point.x < trailingLimit else { return false }
-                let paddedFrames = tabFrames.map {
-                    $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
-                }
-                guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
-                let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
-                return point.x >= startX
+                return shouldCaptureTrailingEmptyChrome(
+                    at: point,
+                    tabFrames: tabFrames,
+                    reservedTrailingWidth: reservedTrailingWidth
+                )
+            case .registeredTrailingEmptyChrome(let geometryRegistry, let tabIds, let reservedTrailingWidth):
+                guard isMouseDownOrDragCandidate else { return false }
+                return shouldCaptureTrailingEmptyChrome(
+                    at: point,
+                    tabFrames: geometryRegistry.frames(for: tabIds, in: self).values.map { $0 },
+                    reservedTrailingWidth: reservedTrailingWidth
+                )
             }
+        }
+
+        private func shouldCaptureTrailingEmptyChrome(
+            at point: NSPoint,
+            tabFrames: [CGRect],
+            reservedTrailingWidth: CGFloat
+        ) -> Bool {
+            let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
+            guard point.x < trailingLimit else { return false }
+            let paddedFrames = tabFrames.map {
+                $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+            }
+            guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
+            let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
+            return point.x >= startX
         }
 
         func windowDragCursorRectsForCurrentState() -> [NSRect] {
@@ -3019,29 +2943,54 @@ struct TabBarDragZoneView: NSViewRepresentable {
             case .entireBounds:
                 return [bounds]
             case .trailingEmptyChrome(let tabFrames, let reservedTrailingWidth):
-                let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
-                guard trailingLimit > bounds.minX else { return [] }
-
-                let paddedFrames = tabFrames.map {
-                    $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
-                }
-                let startX = max(bounds.minX, paddedFrames.map(\.maxX).max() ?? bounds.minX)
-                guard trailingLimit > startX else { return [] }
-
-                return [
-                    NSRect(
-                        x: startX,
-                        y: bounds.minY,
-                        width: trailingLimit - startX,
-                        height: bounds.height
-                    )
-                ]
+                return trailingEmptyChromeCursorRects(
+                    tabFrames: tabFrames,
+                    reservedTrailingWidth: reservedTrailingWidth
+                )
+            case .registeredTrailingEmptyChrome(let geometryRegistry, let tabIds, let reservedTrailingWidth):
+                return trailingEmptyChromeCursorRects(
+                    tabFrames: geometryRegistry.frames(for: tabIds, in: self).values.map { $0 },
+                    reservedTrailingWidth: reservedTrailingWidth
+                )
             }
+        }
+
+        private func trailingEmptyChromeCursorRects(
+            tabFrames: [CGRect],
+            reservedTrailingWidth: CGFloat
+        ) -> [NSRect] {
+            let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
+            guard trailingLimit > bounds.minX else { return [] }
+
+            let paddedFrames = tabFrames.map {
+                $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+            }
+            let startX = max(bounds.minX, paddedFrames.map(\.maxX).max() ?? bounds.minX)
+            guard trailingLimit > startX else { return [] }
+
+            return [
+                NSRect(
+                    x: startX,
+                    y: bounds.minY,
+                    width: trailingLimit - startX,
+                    height: bounds.height
+                )
+            ]
         }
 
         private func invalidateWindowDragCursorRects() {
             guard let window else { return }
             window.invalidateCursorRects(for: self)
+        }
+
+        private func registerGeometryObserver(from hitRegion: HitRegion) {
+            guard case .registeredTrailingEmptyChrome(let registry, _, _) = hitRegion else { return }
+            registry.registerObserver(self)
+        }
+
+        private func unregisterGeometryObserver(from hitRegion: HitRegion) {
+            guard case .registeredTrailingEmptyChrome(let registry, _, _) = hitRegion else { return }
+            registry.unregisterObserver(self)
         }
 
         private var isMouseDownOrDragCandidate: Bool {
