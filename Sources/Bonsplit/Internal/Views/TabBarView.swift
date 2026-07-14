@@ -51,6 +51,11 @@ public enum BonsplitTabBarHitRegionRegistry {
 /// Portal hosts use these regions to keep split-divider hit bands from
 /// covering buttons rendered underneath them.
 @MainActor
+protocol BonsplitTabBarInteractiveRectProviding: AnyObject {
+    func bonsplitTabBarInteractiveHitRects() -> [NSRect]
+}
+
+@MainActor
 public enum BonsplitTabBarInteractiveHitRegionRegistry {
     public static let didChangeNotification = Notification.Name(
         "BonsplitTabBarInteractiveHitRegionsDidChange"
@@ -96,11 +101,17 @@ public enum BonsplitTabBarInteractiveHitRegionRegistry {
 
     public static func windowRects(in window: NSWindow) -> [NSRect] {
         let epsilon = max(0.5, 1.0 / max(1.0, window.backingScaleFactor))
-        return snapshot().compactMap { view in
-            guard view.window === window, isVisibleInHierarchy(view) else { return nil }
+        return snapshot().flatMap { view -> [NSRect] in
+            guard view.window === window, isVisibleInHierarchy(view) else { return [] }
+            if let provider = view as? BonsplitTabBarInteractiveRectProviding {
+                return provider.bonsplitTabBarInteractiveHitRects().compactMap { localRect in
+                    guard !localRect.isNull, localRect.width > 0, localRect.height > 0 else { return nil }
+                    return view.convert(localRect, to: nil).insetBy(dx: -epsilon, dy: -epsilon)
+                }
+            }
             let visibleBounds = view.visibleRect.intersection(view.bounds)
-            guard !visibleBounds.isNull, visibleBounds.width > 0, visibleBounds.height > 0 else { return nil }
-            return view.convert(visibleBounds, to: nil).insetBy(dx: -epsilon, dy: -epsilon)
+            guard !visibleBounds.isNull, visibleBounds.width > 0, visibleBounds.height > 0 else { return [] }
+            return [view.convert(visibleBounds, to: nil).insetBy(dx: -epsilon, dy: -epsilon)]
         }
     }
 

@@ -1038,6 +1038,38 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarInteractiveHitRegionRegistryUsesProviderRects() {
+        final class TabRegionView: NSView, BonsplitTabBarInteractiveRectProviding {
+            func bonsplitTabBarInteractiveHitRects() -> [NSRect] {
+                [bounds.insetBy(dx: -10, dy: -6)]
+            }
+        }
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        let tab = TabRegionView(frame: NSRect(x: 100, y: 132, width: 80, height: 24))
+        contentView.addSubview(tab)
+        BonsplitTabBarInteractiveHitRegionRegistry.register(tab)
+        defer { BonsplitTabBarInteractiveHitRegionRegistry.unregister(tab) }
+
+        let slopPoint = tab.convert(NSPoint(x: -5, y: 12), to: nil)
+        XCTAssertTrue(
+            BonsplitTabBarInteractiveHitRegionRegistry.containsWindowPoint(slopPoint, in: window),
+            "Cursor exclusions must cover the same expanded hit rect as the tab item."
+        )
+    }
+
+    @MainActor
     func testTabItemHitRegionRegistryTracksOnlyRealTabFrames() {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
