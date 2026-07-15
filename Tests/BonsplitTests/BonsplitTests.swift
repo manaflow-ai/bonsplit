@@ -2045,7 +2045,7 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Left" })
         target.performContextAction(forkItem)
         XCTAssertEqual(selectedAction, .forkConversation)
 
@@ -2092,7 +2092,7 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Left" })
         let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
         let destinationItems = try XCTUnwrap(forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem })
 
