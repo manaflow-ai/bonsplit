@@ -1731,7 +1731,28 @@ enum TabContextMenuBuilder {
                 "tabContext.forkConversation.default.right",
                 defaultValue: "Fork Conversation to the Right"
             )
-        default:
+        case .rename,
+             .clearName,
+             .copyIdentifiers,
+             .closeToLeft,
+             .closeToRight,
+             .closeOthers,
+             .move,
+             .moveToNewWorkspace,
+             .moveToLeftPane,
+             .moveToRightPane,
+             .newTerminalToRight,
+             .newBrowserToRight,
+             .reload,
+             .duplicate,
+             .toggleAudioMute,
+             .togglePin,
+             .markAsRead,
+             .markAsUnread,
+             .toggleZoom,
+             .toggleFullWidthTab,
+             .disconnectRemote:
+            assertionFailure("Non-fork action cannot be the default fork destination: \(action)")
             return localized(
                 "tabContext.forkConversation.default.right",
                 defaultValue: "Fork Conversation to the Right"
