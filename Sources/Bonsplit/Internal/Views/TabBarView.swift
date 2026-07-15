@@ -685,6 +685,7 @@ struct TabContextMenuState {
     let isAudioMuted: Bool
     let isTerminal: Bool
     let hasCustomTitle: Bool
+    let canCloseCurrent: Bool
     let canCloseToLeft: Bool
     let canCloseToRight: Bool
     let canCloseOthers: Bool
@@ -713,6 +714,7 @@ struct TabContextMenuState {
         isAudioMuted: Bool,
         isTerminal: Bool,
         hasCustomTitle: Bool,
+        canCloseCurrent: Bool = true,
         canCloseToLeft: Bool,
         canCloseToRight: Bool,
         canCloseOthers: Bool,
@@ -732,6 +734,7 @@ struct TabContextMenuState {
         self.isAudioMuted = isAudioMuted
         self.isTerminal = isTerminal
         self.hasCustomTitle = hasCustomTitle
+        self.canCloseCurrent = canCloseCurrent
         self.canCloseToLeft = canCloseToLeft
         self.canCloseToRight = canCloseToRight
         self.canCloseOthers = canCloseOthers
@@ -774,6 +777,7 @@ struct TabContextMenuState {
             isAudioMuted: tab.isAudioMuted,
             isTerminal: tab.kind == "terminal",
             hasCustomTitle: tab.hasCustomTitle,
+            canCloseCurrent: allowsCloseTabs && !tab.isPinned,
             canCloseToLeft: canCloseToLeft,
             canCloseToRight: canCloseToRight,
             canCloseOthers: canCloseOthers,
@@ -1257,15 +1261,10 @@ struct TabBarView: View {
                 }
             },
             onClose: { source in
-                guard !tab.isPinned else { return }
-                // Close should be instant (no fade-out/removal animation).
 #if DEBUG
                 dlog("tab.close pane=\(pane.id.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
 #endif
-                withTransaction(Transaction(animation: nil)) {
-                    controller.onTabCloseRequest?(TabID(id: tab.id), pane.id, source)
-                    _ = controller.closeTab(TabID(id: tab.id), inPane: pane.id)
-                }
+                _ = controller.requestTabClose(TabID(id: tab.id), inPane: pane.id, source: source)
             },
             onZoomToggle: {
                 _ = controller.requestTabZoomToggle(for: TabID(id: tab.id), inPane: pane.id)

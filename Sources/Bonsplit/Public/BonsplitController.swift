@@ -262,6 +262,11 @@ public final class BonsplitController {
 
     /// Request the delegate to handle a tab context-menu action.
     public func requestTabContextAction(_ action: TabContextAction, for tabId: TabID, inPane pane: PaneID) {
+        if action == .close {
+            _ = requestTabClose(tabId, inPane: pane, source: .contextMenu)
+            return
+        }
+
         if action == .toggleFullWidthTab {
             _ = requestTabFullWidthToggle(for: tabId, inPane: pane)
             return
@@ -269,6 +274,26 @@ public final class BonsplitController {
 
         guard let tab = tab(tabId) else { return }
         delegate?.splitTabBar(self, didRequestTabContextAction: action, for: tab, inPane: pane)
+    }
+
+    /// Close a tab through the shared user-request path used by every tab-strip entrypoint.
+    @discardableResult
+    public func requestTabClose(
+        _ tabId: TabID,
+        inPane paneId: PaneID,
+        source: TabCloseRequestSource
+    ) -> Bool {
+        guard configuration.allowCloseTabs,
+              self.paneId(containing: tabId) == paneId,
+              let tab = tab(tabId),
+              !tab.isPinned else {
+            return false
+        }
+
+        return withTransaction(Transaction(animation: nil)) {
+            onTabCloseRequest?(tabId, paneId, source)
+            return closeTab(tabId, inPane: paneId)
+        }
     }
 
     /// Request the delegate to move a tab to a host-provided destination.

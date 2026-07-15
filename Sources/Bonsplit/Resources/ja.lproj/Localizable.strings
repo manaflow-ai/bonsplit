@@ -5,6 +5,7 @@
 "command.moveTabToRightPane.title" = "右のペインへ移動";
 "tabContext.renameTab" = "タブ名を変更…";
 "tabContext.removeCustomTabName" = "カスタムタブ名を削除";
+"tabContext.closeTab" = "タブを閉じる";
 "tabContext.closeTabsToLeft" = "左側のタブを閉じる";
 "tabContext.closeTabsToRight" = "右側のタブを閉じる";
 "tabContext.closeOtherTabs" = "他のタブを閉じる";

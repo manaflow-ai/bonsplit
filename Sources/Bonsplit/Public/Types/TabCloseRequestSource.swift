@@ -4,4 +4,5 @@ import Foundation
 public enum TabCloseRequestSource: Sendable, Equatable {
     case closeButton
     case middleClick
+    case contextMenu
 }

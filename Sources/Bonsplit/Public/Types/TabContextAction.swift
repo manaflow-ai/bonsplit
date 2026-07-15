@@ -11,6 +11,7 @@ public enum TabContextForkConversationAvailability: Sendable {
 public enum TabContextAction: String, CaseIterable, Sendable {
     case rename
     case clearName
+    case close
     case copyIdentifiers
     case closeToLeft
     case closeToRight

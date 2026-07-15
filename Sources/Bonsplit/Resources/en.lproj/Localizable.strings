@@ -5,6 +5,7 @@
 "command.moveTabToRightPane.title" = "Move to Right Pane";
 "tabContext.renameTab" = "Rename Tab…";
 "tabContext.removeCustomTabName" = "Remove Custom Tab Name";
+"tabContext.closeTab" = "Close Tab";
 "tabContext.closeTabsToLeft" = "Close Tabs to Left";
 "tabContext.closeTabsToRight" = "Close Tabs to Right";
 "tabContext.closeOtherTabs" = "Close Other Tabs";

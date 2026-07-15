@@ -1397,189 +1397,197 @@ enum TabContextMenuBuilder {
             )
         }
 
-        menu.addItem(.separator())
-
         addAction(
-            title: localized("tabContext.closeTabsToLeft", defaultValue: "Close Tabs to Left"),
-            action: .closeToLeft,
-            enabled: state.canCloseToLeft,
-            state: state,
-            target: target,
-            to: menu
-        )
-        addAction(
-            title: localized("tabContext.closeTabsToRight", defaultValue: "Close Tabs to Right"),
-            action: .closeToRight,
-            enabled: state.canCloseToRight,
-            state: state,
-            target: target,
-            to: menu
-        )
-        addAction(
-            title: localized("tabContext.closeOtherTabs", defaultValue: "Close Other Tabs"),
-            action: .closeOthers,
-            enabled: state.canCloseOthers,
+            title: localized("tabContext.closeTab", defaultValue: "Close Tab"),
+            action: .close,
+            enabled: state.canCloseCurrent,
             state: state,
             target: target,
             to: menu
         )
 
-        menu.addItem(moveSubmenuItem(snapshot: snapshot, target: target))
-
-        if state.isTerminal {
+        addSection(to: menu) {
             addAction(
-                title: localized("command.moveTabToLeftPane.title", defaultValue: "Move to Left Pane"),
-                action: .moveToLeftPane,
-                enabled: state.canMoveToLeftPane,
+                title: localized("tabContext.newTerminalTabToRight", defaultValue: "New Terminal Tab to Right"),
+                action: .newTerminalToRight,
                 state: state,
                 target: target,
                 to: menu
             )
             addAction(
-                title: localized("command.moveTabToRightPane.title", defaultValue: "Move to Right Pane"),
-                action: .moveToRightPane,
-                enabled: state.canMoveToRightPane,
+                title: localized("tabContext.newBrowserTabToRight", defaultValue: "New Browser Tab to Right"),
+                action: .newBrowserToRight,
                 state: state,
                 target: target,
                 to: menu
             )
         }
 
-        if forkConversationAvailability != .hidden {
-            menu.addItem(.separator())
+        addSection(to: menu) {
+            menu.addItem(moveSubmenuItem(snapshot: snapshot, target: target))
+
+            if state.isTerminal {
+                addAction(
+                    title: localized("command.moveTabToLeftPane.title", defaultValue: "Move to Left Pane"),
+                    action: .moveToLeftPane,
+                    enabled: state.canMoveToLeftPane,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+                addAction(
+                    title: localized("command.moveTabToRightPane.title", defaultValue: "Move to Right Pane"),
+                    action: .moveToRightPane,
+                    enabled: state.canMoveToRightPane,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            }
+
             addAction(
-                title: forkConversationDefaultTitle(for: state.forkConversationDefaultAction),
-                action: .forkConversation,
-                enabled: forkConversationEnabled,
-                state: state,
-                target: target,
-                to: menu
-            )
-            menu.addItem(forkConversationSubmenuItem(
-                state: state,
-                target: target,
-                enabled: forkConversationEnabled
-            ))
-        }
-
-        menu.addItem(.separator())
-
-        addAction(
-            title: localized("tabContext.newTerminalTabToRight", defaultValue: "New Terminal Tab to Right"),
-            action: .newTerminalToRight,
-            state: state,
-            target: target,
-            to: menu
-        )
-        addAction(
-            title: localized("tabContext.newBrowserTabToRight", defaultValue: "New Browser Tab to Right"),
-            action: .newBrowserToRight,
-            state: state,
-            target: target,
-            to: menu
-        )
-
-        if state.isBrowser {
-            menu.addItem(.separator())
-            addAction(
-                title: state.isAudioMuted
-                    ? localized("tabContext.unmuteTab", defaultValue: "Unmute Tab")
-                    : localized("tabContext.muteTab", defaultValue: "Mute Tab"),
-                action: .toggleAudioMute,
+                title: localized("tabContext.closeTabsToLeft", defaultValue: "Close Tabs to Left"),
+                action: .closeToLeft,
+                enabled: state.canCloseToLeft,
                 state: state,
                 target: target,
                 to: menu
             )
             addAction(
-                title: localized("tabContext.reloadTab", defaultValue: "Reload Tab"),
-                action: .reload,
+                title: localized("tabContext.closeTabsToRight", defaultValue: "Close Tabs to Right"),
+                action: .closeToRight,
+                enabled: state.canCloseToRight,
                 state: state,
                 target: target,
                 to: menu
             )
             addAction(
-                title: localized("tabContext.duplicateTab", defaultValue: "Duplicate Tab"),
-                action: .duplicate,
+                title: localized("tabContext.closeOtherTabs", defaultValue: "Close Other Tabs"),
+                action: .closeOthers,
+                enabled: state.canCloseOthers,
                 state: state,
                 target: target,
                 to: menu
             )
         }
 
-        if state.canDisconnectRemote {
-            menu.addItem(.separator())
+        addSection(to: menu) {
+            if forkConversationAvailability != .hidden {
+                addAction(
+                    title: forkConversationDefaultTitle(for: state.forkConversationDefaultAction),
+                    action: .forkConversation,
+                    enabled: forkConversationEnabled,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+                menu.addItem(forkConversationSubmenuItem(
+                    state: state,
+                    target: target,
+                    enabled: forkConversationEnabled
+                ))
+            }
+
+            if state.isBrowser {
+                addAction(
+                    title: localized("tabContext.reloadTab", defaultValue: "Reload Tab"),
+                    action: .reload,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+                addAction(
+                    title: localized("tabContext.duplicateTab", defaultValue: "Duplicate Tab"),
+                    action: .duplicate,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+                addAction(
+                    title: state.isAudioMuted
+                        ? localized("tabContext.unmuteTab", defaultValue: "Unmute Tab")
+                        : localized("tabContext.muteTab", defaultValue: "Mute Tab"),
+                    action: .toggleAudioMute,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            }
+
+            if state.canDisconnectRemote {
+                addAction(
+                    title: localized("tabContext.disconnectRemote", defaultValue: "Disconnect SSH"),
+                    action: .disconnectRemote,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            }
+        }
+
+        addSection(to: menu) {
+            if state.hasSplits {
+                addAction(
+                    title: state.isZoomed
+                        ? localized("tabContext.exitZoom", defaultValue: "Exit Zoom")
+                        : localized("tabContext.zoomPane", defaultValue: "Zoom Pane"),
+                    action: .toggleZoom,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            }
+
             addAction(
-                title: localized("tabContext.disconnectRemote", defaultValue: "Disconnect SSH"),
-                action: .disconnectRemote,
+                title: state.isFullWidthTabMode
+                    ? localized("tabContext.exitFullWidthTab", defaultValue: "Exit Full Width Tab")
+                    : localized("tabContext.enterFullWidthTab", defaultValue: "Full Width Tab"),
+                action: .toggleFullWidthTab,
+                state: state,
+                target: target,
+                to: menu
+            )
+
+            addAction(
+                title: state.isPinned
+                    ? localized("tabContext.unpinTab", defaultValue: "Unpin Tab")
+                    : localized("tabContext.pinTab", defaultValue: "Pin Tab"),
+                action: .togglePin,
+                state: state,
+                target: target,
+                to: menu
+            )
+
+            if state.isUnread {
+                addAction(
+                    title: localized("tabContext.markTabAsRead", defaultValue: "Mark Tab as Read"),
+                    action: .markAsRead,
+                    enabled: state.canMarkAsRead,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            } else {
+                addAction(
+                    title: localized("tabContext.markTabAsUnread", defaultValue: "Mark Tab as Unread"),
+                    action: .markAsUnread,
+                    enabled: state.canMarkAsUnread,
+                    state: state,
+                    target: target,
+                    to: menu
+                )
+            }
+        }
+
+        addSection(to: menu) {
+            addAction(
+                title: localized("command.copyIdentifiers.title", defaultValue: "Copy IDs"),
+                action: .copyIdentifiers,
                 state: state,
                 target: target,
                 to: menu
             )
         }
-
-        menu.addItem(.separator())
-
-        if state.hasSplits {
-            addAction(
-                title: state.isZoomed
-                    ? localized("tabContext.exitZoom", defaultValue: "Exit Zoom")
-                    : localized("tabContext.zoomPane", defaultValue: "Zoom Pane"),
-                action: .toggleZoom,
-                state: state,
-                target: target,
-                to: menu
-            )
-        }
-
-        addAction(
-            title: state.isFullWidthTabMode
-                ? localized("tabContext.exitFullWidthTab", defaultValue: "Exit Full Width Tab")
-                : localized("tabContext.enterFullWidthTab", defaultValue: "Full Width Tab"),
-            action: .toggleFullWidthTab,
-            state: state,
-            target: target,
-            to: menu
-        )
-
-        addAction(
-            title: state.isPinned
-                ? localized("tabContext.unpinTab", defaultValue: "Unpin Tab")
-                : localized("tabContext.pinTab", defaultValue: "Pin Tab"),
-            action: .togglePin,
-            state: state,
-            target: target,
-            to: menu
-        )
-
-        if state.isUnread {
-            addAction(
-                title: localized("tabContext.markTabAsRead", defaultValue: "Mark Tab as Read"),
-                action: .markAsRead,
-                enabled: state.canMarkAsRead,
-                state: state,
-                target: target,
-                to: menu
-            )
-        } else {
-            addAction(
-                title: localized("tabContext.markTabAsUnread", defaultValue: "Mark Tab as Unread"),
-                action: .markAsUnread,
-                enabled: state.canMarkAsUnread,
-                state: state,
-                target: target,
-                to: menu
-            )
-        }
-
-        menu.addItem(.separator())
-
-        addAction(
-            title: localized("command.copyIdentifiers.title", defaultValue: "Copy IDs"),
-            action: .copyIdentifiers,
-            state: state,
-            target: target,
-            to: menu
-        )
 
         return menu
     }
@@ -1733,6 +1741,7 @@ enum TabContextMenuBuilder {
             )
         case .rename,
              .clearName,
+             .close,
              .copyIdentifiers,
              .closeToLeft,
              .closeToRight,
@@ -1757,6 +1766,18 @@ enum TabContextMenuBuilder {
                 "tabContext.forkConversation.default.right",
                 defaultValue: "Fork Conversation to the Right"
             )
+        }
+    }
+
+    private static func addSection(to menu: NSMenu, content: () -> Void) {
+        let separatorIndex = menu.items.count
+        if separatorIndex > 0 {
+            menu.addItem(.separator())
+        }
+        let firstContentIndex = menu.items.count
+        content()
+        if menu.items.count == firstContentIndex, separatorIndex > 0 {
+            menu.removeItem(at: separatorIndex)
         }
     }
 
