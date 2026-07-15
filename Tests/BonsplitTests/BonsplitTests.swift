@@ -1831,7 +1831,6 @@ final class BonsplitTests: XCTestCase {
             canMoveToNewWorkspace: true,
             canMoveToLeftPane: false,
             canMoveToRightPane: true,
-            canForkConversation: false,
             forkConversationDefaultAction: .forkConversationRight,
             isZoomed: false,
             hasSplits: true,
@@ -1847,7 +1846,7 @@ final class BonsplitTests: XCTestCase {
                     TabContextMoveDestination(id: "workspace:abc", title: "Workspace A", isEnabled: false)
                 ]
             },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .hidden }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1888,14 +1887,13 @@ final class BonsplitTests: XCTestCase {
                 canMoveToNewWorkspace: false,
                 canMoveToLeftPane: false,
                 canMoveToRightPane: false,
-                canForkConversation: false,
                 forkConversationDefaultAction: .forkConversationRight,
                 isZoomed: false,
                 hasSplits: false,
                 shortcuts: [:]
             ),
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .hidden }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1923,14 +1921,13 @@ final class BonsplitTests: XCTestCase {
                 canMoveToNewWorkspace: false,
                 canMoveToLeftPane: false,
                 canMoveToRightPane: false,
-                canForkConversation: false,
                 forkConversationDefaultAction: .forkConversationRight,
                 isZoomed: false,
                 hasSplits: false,
                 shortcuts: [:]
             ),
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .hidden }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1959,7 +1956,6 @@ final class BonsplitTests: XCTestCase {
                 canMoveToNewWorkspace: false,
                 canMoveToLeftPane: false,
                 canMoveToRightPane: false,
-                canForkConversation: false,
                 forkConversationDefaultAction: .forkConversationRight,
                 isZoomed: false,
                 isFullWidthTabMode: false,
@@ -1967,7 +1963,7 @@ final class BonsplitTests: XCTestCase {
                 shortcuts: [:]
             ),
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .hidden }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -1996,7 +1992,6 @@ final class BonsplitTests: XCTestCase {
                 canMoveToNewWorkspace: false,
                 canMoveToLeftPane: false,
                 canMoveToRightPane: false,
-                canForkConversation: false,
                 forkConversationDefaultAction: .forkConversationRight,
                 isZoomed: false,
                 isFullWidthTabMode: true,
@@ -2004,7 +1999,7 @@ final class BonsplitTests: XCTestCase {
                 shortcuts: [:]
             ),
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .hidden }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -2031,7 +2026,6 @@ final class BonsplitTests: XCTestCase {
             canMoveToNewWorkspace: false,
             canMoveToLeftPane: false,
             canMoveToRightPane: false,
-            canForkConversation: true,
             forkConversationDefaultAction: .forkConversationLeft,
             isZoomed: false,
             hasSplits: false,
@@ -2041,7 +2035,7 @@ final class BonsplitTests: XCTestCase {
             tabId: UUID(),
             state: state,
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { nil }
+            forkConversationAvailabilityProvider: { .available }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -2078,7 +2072,6 @@ final class BonsplitTests: XCTestCase {
             canMoveToNewWorkspace: false,
             canMoveToLeftPane: false,
             canMoveToRightPane: false,
-            canForkConversation: false,
             forkConversationDefaultAction: .forkConversationLeft,
             isZoomed: false,
             hasSplits: false,
@@ -2088,7 +2081,7 @@ final class BonsplitTests: XCTestCase {
             tabId: UUID(),
             state: state,
             moveDestinationsProvider: { [] },
-            forkConversationOpenAvailabilityProvider: { false }
+            forkConversationAvailabilityProvider: { .refreshing }
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
@@ -2120,7 +2113,6 @@ final class BonsplitTests: XCTestCase {
                 canMoveToNewWorkspace: false,
                 canMoveToLeftPane: false,
                 canMoveToRightPane: false,
-                canForkConversation: false,
                 forkConversationDefaultAction: .forkConversationRight,
                 isZoomed: false,
                 hasSplits: false,
@@ -2134,7 +2126,7 @@ final class BonsplitTests: XCTestCase {
                 tabId: UUID(),
                 state: makeState(canDisconnectRemote: false),
                 moveDestinationsProvider: { [] },
-                forkConversationOpenAvailabilityProvider: { true }
+                forkConversationAvailabilityProvider: { .available }
             ),
             target: target
         )
@@ -2145,7 +2137,7 @@ final class BonsplitTests: XCTestCase {
                 tabId: UUID(),
                 state: makeState(canDisconnectRemote: true),
                 moveDestinationsProvider: { [] },
-                forkConversationOpenAvailabilityProvider: { true }
+                forkConversationAvailabilityProvider: { .available }
             ),
             target: target
         )

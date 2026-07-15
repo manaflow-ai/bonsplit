@@ -691,7 +691,6 @@ struct TabContextMenuState {
     let canMoveToNewWorkspace: Bool
     let canMoveToLeftPane: Bool
     let canMoveToRightPane: Bool
-    var canForkConversation: Bool
     let forkConversationDefaultAction: TabContextAction
     let isZoomed: Bool
     let isFullWidthTabMode: Bool
@@ -720,7 +719,6 @@ struct TabContextMenuState {
         canMoveToNewWorkspace: Bool,
         canMoveToLeftPane: Bool,
         canMoveToRightPane: Bool,
-        canForkConversation: Bool,
         forkConversationDefaultAction: TabContextAction,
         isZoomed: Bool,
         isFullWidthTabMode: Bool = false,
@@ -740,7 +738,6 @@ struct TabContextMenuState {
         self.canMoveToNewWorkspace = canMoveToNewWorkspace
         self.canMoveToLeftPane = canMoveToLeftPane
         self.canMoveToRightPane = canMoveToRightPane
-        self.canForkConversation = canForkConversation
         self.forkConversationDefaultAction = forkConversationDefaultAction
         self.isZoomed = isZoomed
         self.isFullWidthTabMode = isFullWidthTabMode
@@ -783,7 +780,6 @@ struct TabContextMenuState {
             canMoveToNewWorkspace: controller.allTabIds.count > 1,
             canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
             canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
-            canForkConversation: controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false,
             forkConversationDefaultAction: controller.tabContextForkConversationDefaultActionProvider?(TabID(id: tab.id), pane.id) ?? .defaultForkConversationDestination,
             isZoomed: splitViewController.zoomedPaneId == pane.id,
             isFullWidthTabMode: pane.isFullWidthTabMode,
@@ -1245,8 +1241,8 @@ struct TabBarView: View {
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },
-            forkConversationOpenAvailabilityProvider: {
-                controller.tabContextForkConversationOpenAvailabilityProvider?(TabID(id: tab.id), pane.id)
+            forkConversationAvailabilityProvider: {
+                controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? .hidden
             },
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane

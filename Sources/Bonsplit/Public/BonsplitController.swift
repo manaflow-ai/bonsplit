@@ -77,13 +77,9 @@ public final class BonsplitController {
     /// Host-provided destinations for the tab context menu's Move Tab submenu.
     @ObservationIgnored public var tabContextMoveDestinationsProvider: ((TabID, PaneID) -> [TabContextMoveDestination])?
 
-    /// Host-provided synchronous check that decides whether the tab context menu should
-    /// surface a "Fork Conversation" action for the tab (e.g. an active forkable agent
-    /// session). Return `true` to enable the item, `false` (or omit the provider) to hide it.
-    @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> Bool)?
-
-    /// Host-provided check evaluated only when the tab context menu is opening.
-    @ObservationIgnored public var tabContextForkConversationOpenAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+    /// Host-provided state evaluated when the tab context menu opens. Refreshing actions
+    /// remain visible but disabled; hidden actions are omitted.
+    @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> TabContextForkConversationAvailability)?
 
     /// Host-provided default destination for the tab context menu's primary "Fork
     /// Conversation" action. Return a destination-specific fork action; invalid values

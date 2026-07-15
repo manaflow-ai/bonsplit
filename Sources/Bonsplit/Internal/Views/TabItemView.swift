@@ -285,7 +285,7 @@ struct TabItemView: View {
     let allowsContextMenu: Bool
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
-    let forkConversationOpenAvailabilityProvider: () -> Bool?
+    let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let onSelect: () -> Void
     let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
@@ -351,7 +351,7 @@ struct TabItemView: View {
                         tabId: tab.id,
                         state: contextMenuState,
                         moveDestinationsProvider: moveDestinationsProvider,
-                        forkConversationOpenAvailabilityProvider: forkConversationOpenAvailabilityProvider
+                        forkConversationAvailabilityProvider: forkConversationAvailabilityProvider
                     ),
                     onContextAction: onContextAction,
                     onMoveDestination: onMoveDestination
@@ -1347,7 +1347,7 @@ struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
-    let forkConversationOpenAvailabilityProvider: () -> Bool?
+    let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
 }
 
 final class TabContextMenuActionTarget: NSObject {
@@ -1373,10 +1373,9 @@ enum TabContextMenuBuilder {
         snapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
     ) -> NSMenu {
-        var state = snapshot.state
-        let canForkConversationAtOpen = snapshot.forkConversationOpenAvailabilityProvider()
-        let forkConversationEnabled = canForkConversationAtOpen ?? state.canForkConversation
-        state.canForkConversation = state.canForkConversation || forkConversationEnabled
+        let state = snapshot.state
+        let forkConversationAvailability = snapshot.forkConversationAvailabilityProvider()
+        let forkConversationEnabled = forkConversationAvailability == .available
         let menu = NSMenu()
         menu.autoenablesItems = false
 
@@ -1446,7 +1445,7 @@ enum TabContextMenuBuilder {
             )
         }
 
-        if state.canForkConversation {
+        if forkConversationAvailability != .hidden {
             menu.addItem(.separator())
             addAction(
                 title: forkConversationDefaultTitle(for: state.forkConversationDefaultAction),
