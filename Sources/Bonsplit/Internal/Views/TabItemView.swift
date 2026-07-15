@@ -1449,7 +1449,7 @@ enum TabContextMenuBuilder {
         if state.canForkConversation {
             menu.addItem(.separator())
             addAction(
-                title: localized("tabContext.forkConversation", defaultValue: "Fork Conversation"),
+                title: forkConversationDefaultTitle(for: state.forkConversationDefaultAction),
                 action: .forkConversation,
                 enabled: forkConversationEnabled,
                 state: state,
@@ -1697,6 +1697,47 @@ enum TabContextMenuBuilder {
         item.submenu = submenu
         item.isEnabled = enabled
         return item
+    }
+
+    private static func forkConversationDefaultTitle(for action: TabContextAction) -> String {
+        switch action {
+        case .forkConversationLeft:
+            return localized(
+                "tabContext.forkConversation.default.left",
+                defaultValue: "Fork Conversation to the Left"
+            )
+        case .forkConversationTop:
+            return localized(
+                "tabContext.forkConversation.default.top",
+                defaultValue: "Fork Conversation to the Top"
+            )
+        case .forkConversationBottom:
+            return localized(
+                "tabContext.forkConversation.default.bottom",
+                defaultValue: "Fork Conversation to the Bottom"
+            )
+        case .forkConversationNewTab:
+            return localized(
+                "tabContext.forkConversation.default.newTab",
+                defaultValue: "Fork Conversation to New Tab"
+            )
+        case .forkConversationNewWorkspace:
+            return localized(
+                "tabContext.forkConversation.default.newWorkspace",
+                defaultValue: "Fork Conversation to New Workspace"
+            )
+        case .forkConversationRight,
+             .forkConversation:
+            return localized(
+                "tabContext.forkConversation.default.right",
+                defaultValue: "Fork Conversation to the Right"
+            )
+        default:
+            return localized(
+                "tabContext.forkConversation.default.right",
+                defaultValue: "Fork Conversation to the Right"
+            )
+        }
     }
 
     @discardableResult

@@ -26,6 +26,12 @@
 "tabContext.markTabAsRead" = "タブを既読にする";
 "tabContext.markTabAsUnread" = "タブを未読にする";
 "tabContext.forkConversation" = "会話をフォーク";
+"tabContext.forkConversation.default.right" = "会話を右にフォーク";
+"tabContext.forkConversation.default.left" = "会話を左にフォーク";
+"tabContext.forkConversation.default.top" = "会話を上にフォーク";
+"tabContext.forkConversation.default.bottom" = "会話を下にフォーク";
+"tabContext.forkConversation.default.newTab" = "会話を新しいタブにフォーク";
+"tabContext.forkConversation.default.newWorkspace" = "会話を新しいワークスペースにフォーク";
 "tabContext.forkConversationTo" = "会話のフォーク先";
 "tabContext.forkConversation.right" = "右分割";
 "tabContext.forkConversation.left" = "左分割";

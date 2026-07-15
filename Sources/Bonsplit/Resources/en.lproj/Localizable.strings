@@ -26,6 +26,12 @@
 "tabContext.markTabAsRead" = "Mark Tab as Read";
 "tabContext.markTabAsUnread" = "Mark Tab as Unread";
 "tabContext.forkConversation" = "Fork Conversation";
+"tabContext.forkConversation.default.right" = "Fork Conversation to the Right";
+"tabContext.forkConversation.default.left" = "Fork Conversation to the Left";
+"tabContext.forkConversation.default.top" = "Fork Conversation to the Top";
+"tabContext.forkConversation.default.bottom" = "Fork Conversation to the Bottom";
+"tabContext.forkConversation.default.newTab" = "Fork Conversation to New Tab";
+"tabContext.forkConversation.default.newWorkspace" = "Fork Conversation to New Workspace";
 "tabContext.forkConversationTo" = "Fork Conversation To";
 "tabContext.forkConversation.right" = "Right Split";
 "tabContext.forkConversation.left" = "Left Split";
