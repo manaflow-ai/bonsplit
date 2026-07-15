@@ -1006,19 +1006,6 @@ struct TabItemView: View {
                 Color.clear
             }
 
-            // Right border separator. Height is hard-capped to the tab
-            // height: the background fills whatever the item is proposed, and
-            // an oversized proposal during relayout used to paint the
-            // separator down into the pane content below the bar.
-            HStack {
-                Spacer()
-                Rectangle()
-                    .fill(TabBarColors.separator(for: appearance))
-                    .frame(width: 1)
-                    .frame(maxHeight: TabBarMetrics.tabHeight)
-                    .padding(.bottom, max(0, trailingSeparatorBottomInset))
-            }
-            .frame(maxHeight: TabBarMetrics.tabHeight, alignment: .top)
         }
     }
 
