@@ -3,7 +3,10 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
+/// Internal rather than private so the test target can drive `layout()` directly and
+/// prove the initial divider position waits for a layout pass. See
+/// SplitEntryLayoutEdgeTests.
+class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor?
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
