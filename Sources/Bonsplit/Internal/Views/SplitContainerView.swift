@@ -364,6 +364,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // alive through its own property — a leak for any split torn down before a
         // layout pass arrives.
         func applyInitialDividerPosition(_ splitView: ThemedSplitView) {
+            // Every entry point here captured THIS split's state: the initial
+            // main-queue probe and each retry parked on afterNextLayout. The
+            // coordinator-reuse reset clears the parked hook, but it cannot
+            // cancel an async probe already in flight — and that probe would
+            // apply the dead split's position AND mark the reused coordinator's
+            // NEW lifecycle applied. Identity, not the applied flag, decides.
+            guard context.coordinator.splitState.id == splitState.id else { return }
             if context.coordinator.didApplyInitialDividerPosition {
                 return
             }
