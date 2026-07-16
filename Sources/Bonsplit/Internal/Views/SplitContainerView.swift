@@ -427,7 +427,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                         "split.entry.fallback split=\(splitDebugToken) orientation=\(orientationToken) " +
                         "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) " +
                         "attempts=\(context.coordinator.initialDividerApplyAttempts) " +
-                        "shown=1 animationAbandoned=1 stillObserving=1"
+                        "shown=\(shouldAnimate ? 1 : 0) animationAbandoned=1 stillObserving=1"
                     )
 #endif
                 }
