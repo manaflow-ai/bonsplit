@@ -48,6 +48,7 @@ public enum BonsplitTabBarHitRegionRegistry {
 }
 
 public protocol BonsplitTabItemHitRegionProviding: AnyObject {
+    @MainActor
     func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool
 }
 
@@ -83,6 +84,7 @@ public enum BonsplitTabItemHitRegionRegistry {
         return true
     }
 
+    @MainActor
     public static func containsWindowPoint(_ windowPoint: CGPoint, in window: NSWindow) -> Bool {
         for view in snapshot() {
             guard view.window === window,
@@ -2313,15 +2315,13 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             }
         }
 
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            MainActor.assumeIsolated {
-                let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
-                return BonsplitTabItemHitTesting.containsTabLaneHit(
-                    localPoint: localPoint,
-                    tabFrames: frames,
-                    bounds: bounds
-                )
-            }
+        func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
+            return BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: localPoint,
+                tabFrames: frames,
+                bounds: bounds
+            )
         }
 
         override func updateTrackingAreas() {

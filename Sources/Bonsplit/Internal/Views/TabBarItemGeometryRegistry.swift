@@ -111,7 +111,7 @@ final class TabBarItemGeometryRegistry {
             object: clipView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            Task { @MainActor [weak self] in
                 self?.scrollBoundsDidChange()
             }
         }
@@ -120,7 +120,7 @@ final class TabBarItemGeometryRegistry {
             object: scrollView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            Task { @MainActor [weak self] in
                 self?.userWillScroll()
             }
         }
@@ -266,7 +266,7 @@ final class TabBarItemGeometryRegistry {
             object: documentView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            Task { @MainActor [weak self] in
                 self?.documentGeometryDidChange()
             }
         }
@@ -413,7 +413,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
     }
 
     final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
-        nonisolated(unsafe) private var hitBounds: NSRect = .zero
+        private var hitBounds: NSRect = .zero
         private var tabId: UUID?
         private weak var geometryRegistry: TabBarItemGeometryRegistry?
         private var containerFrameObserver: NSObjectProtocol?
@@ -481,7 +481,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
             notifyGeometryDidChange()
         }
 
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+        func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             hitBounds
                 .insetBy(
                     dx: -BonsplitTabItemHitTesting.horizontalSlop,
@@ -529,7 +529,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
                 object: containerView,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated {
+                Task { @MainActor [weak self] in
                     self?.notifyGeometryDidChange()
                 }
             }
