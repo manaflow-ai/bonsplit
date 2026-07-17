@@ -979,7 +979,10 @@ struct TabBarView: View {
         TabBarSelectionChromeView(
             selectedTabId: pane.selectedTabId,
             geometryRegistry: tabItemGeometryRegistry,
-            indicatorColor: TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
+            indicatorColor: TabBarColors.nsColorActiveIndicator(
+                for: appearance,
+                saturation: tabBarSaturation
+            ),
             separatorColor: TabBarColors.nsColorSeparator(for: appearance),
             mask: selectionChromeMask
         )
