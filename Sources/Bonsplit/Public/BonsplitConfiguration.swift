@@ -489,18 +489,24 @@ extension BonsplitConfiguration {
             /// When unset, Bonsplit derives separators from the chrome background.
             public var borderHex: String?
 
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for SF Symbol tab icons.
+            /// Raster favicons and asset icons retain their original colors.
+            public var iconHex: String?
+
             public init(
                 backgroundHex: String? = nil,
                 tabBarBackgroundHex: String? = nil,
                 splitButtonBackdropHex: String? = nil,
                 paneBackgroundHex: String? = nil,
-                borderHex: String? = nil
+                borderHex: String? = nil,
+                iconHex: String? = nil
             ) {
                 self.backgroundHex = backgroundHex
                 self.tabBarBackgroundHex = tabBarBackgroundHex
                 self.splitButtonBackdropHex = splitButtonBackdropHex
                 self.paneBackgroundHex = paneBackgroundHex
                 self.borderHex = borderHex
+                self.iconHex = iconHex
             }
         }
 

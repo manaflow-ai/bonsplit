@@ -227,6 +227,19 @@ enum TabBarColors {
         effectiveTextColor(for: appearance, secondary: true)
     }
 
+    static func nsColorTabIcon(
+        for appearance: BonsplitConfiguration.Appearance,
+        isSelected: Bool
+    ) -> NSColor {
+        if let iconHex = appearance.chromeColors.iconHex,
+           let color = NSColor(bonsplitHex: iconHex) {
+            return isSelected ? color : color.withAlphaComponent(color.alphaComponent * 0.72)
+        }
+        return isSelected
+            ? nsColorActiveText(for: appearance)
+            : nsColorInactiveText(for: appearance)
+    }
+
     static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
         Color(nsColor: nsColorSplitActionIcon(for: appearance, isPressed: isPressed))
     }

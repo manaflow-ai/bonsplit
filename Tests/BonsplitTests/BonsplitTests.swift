@@ -1434,6 +1434,19 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(pressedAlpha, idleAlpha)
     }
 
+    func testTabIconColorUsesConfiguredTintAndDimsInactiveIcons() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(iconHex: "#8844CC")
+        )
+        let active = TabBarColors.nsColorTabIcon(for: appearance, isSelected: true).usingColorSpace(.sRGB)!
+        let inactive = TabBarColors.nsColorTabIcon(for: appearance, isSelected: false).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(active.redComponent, 0x88 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.greenComponent, 0x44 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.blueComponent, 0xCC / 255.0, accuracy: 0.001)
+        XCTAssertEqual(inactive.alphaComponent, active.alphaComponent * 0.72, accuracy: 0.001)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")

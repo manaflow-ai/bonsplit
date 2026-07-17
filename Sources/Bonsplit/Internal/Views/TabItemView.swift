@@ -690,9 +690,10 @@ struct TabItemView: View {
     @ViewBuilder
     private var leadingIcon: some View {
         let iconSlotSize = scaledIconSize
-        let iconTintColor = isSelected
-            ? TabBarColors.nsColorActiveText(for: appearance)
-            : TabBarColors.nsColorInactiveText(for: appearance)
+        let iconTintColor = TabBarColors.nsColorTabIcon(
+            for: appearance,
+            isSelected: isSelected
+        )
         let iconTint = Color(nsColor: iconTintColor)
         let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
 
