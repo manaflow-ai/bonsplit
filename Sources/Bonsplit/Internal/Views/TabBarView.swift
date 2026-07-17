@@ -2,6 +2,28 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
+/// Invoke a `@MainActor` closure from a context that is KNOWN to already be
+/// running on the main thread, WITHOUT `MainActor.assumeIsolated`'s runtime
+/// executor check.
+///
+/// On macOS 26.4.x that check (`swift_task_isCurrentExecutorWithFlags`) can
+/// SEGV — `swift_getObjectType` faults on the executor identity — and the
+/// tab-item hit-test path that needs main-actor state runs on every mouse
+/// event, so `assumeIsolated` there crashes the app almost immediately.
+///
+/// For a *synchronous* closure, `@MainActor () -> T` and `() -> T` are
+/// ABI-identical: actor isolation on a sync closure is a compile-time contract
+/// with no runtime executor hop, so reinterpret-and-call is sound as long as we
+/// are genuinely on the main thread. The debug precondition enforces that; every
+/// caller is a main-thread AppKit event handler.
+@inline(__always)
+func bonsplitAssumingMainActor<T>(_ body: @MainActor () -> T) -> T {
+    assert(Thread.isMainThread, "bonsplitAssumingMainActor invoked off the main thread")
+    return withoutActuallyEscaping(body) { escaping in
+        unsafeBitCast(escaping, to: (() -> T).self)()
+    }
+}
+
 public enum BonsplitTabBarHitRegionRegistry {
     private static let lock = NSLock()
     private static let registeredViews = NSHashTable<NSView>.weakObjects()
@@ -2314,7 +2336,15 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         }
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            MainActor.assumeIsolated {
+            // Runs synchronously on the main thread: it is invoked only from
+            // NSWindow / NSApplication event dispatch during hit-testing (see
+            // BonsplitTabItemHitRegionRegistry.containsWindowPoint). The natural
+            // way to touch the @MainActor state below is MainActor.assumeIsolated,
+            // but on macOS 26.4.x its runtime executor check
+            // (swift_task_isCurrentExecutorWithFlags) SEGVs — and because this
+            // fires on EVERY mouse event, assumeIsolated crashes the app almost
+            // immediately. Bypass the check with a main-thread-guarded reinterpret.
+            bonsplitAssumingMainActor {
                 let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
                 return BonsplitTabItemHitTesting.containsTabLaneHit(
                     localPoint: localPoint,

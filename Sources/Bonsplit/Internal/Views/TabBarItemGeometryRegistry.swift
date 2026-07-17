@@ -111,7 +111,7 @@ final class TabBarItemGeometryRegistry {
             object: clipView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            bonsplitAssumingMainActor {
                 self?.scrollBoundsDidChange()
             }
         }
@@ -120,7 +120,7 @@ final class TabBarItemGeometryRegistry {
             object: scrollView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            bonsplitAssumingMainActor {
                 self?.userWillScroll()
             }
         }
@@ -266,7 +266,7 @@ final class TabBarItemGeometryRegistry {
             object: documentView,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
+            bonsplitAssumingMainActor {
                 self?.documentGeometryDidChange()
             }
         }
@@ -529,7 +529,7 @@ struct TabItemHitRegionView: NSViewRepresentable {
                 object: containerView,
                 queue: .main
             ) { [weak self] _ in
-                MainActor.assumeIsolated {
+                bonsplitAssumingMainActor {
                     self?.notifyGeometryDidChange()
                 }
             }
