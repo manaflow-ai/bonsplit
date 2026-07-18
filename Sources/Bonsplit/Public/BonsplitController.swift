@@ -111,9 +111,12 @@ public final class BonsplitController {
     // MARK: - Initialization
 
     /// Create a new controller with the specified configuration
-    public init(configuration: BonsplitConfiguration = .default) {
+    public init(
+        configuration: BonsplitConfiguration = .default,
+        initialPaneID: PaneID? = nil
+    ) {
         self.configuration = configuration
-        self.internalController = SplitViewController()
+        self.internalController = SplitViewController(initialPaneID: initialPaneID)
         internalController.publicController = self
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }
@@ -507,7 +510,8 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         withTab tab: Tab? = nil,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits else { return nil }
 
@@ -547,7 +551,8 @@ public final class BonsplitController {
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             with: internalTab,
-            initialDividerPosition: dividerPosition
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
         )
 
         // Find new pane (will be focused after split)
@@ -578,7 +583,8 @@ public final class BonsplitController {
         orientation: SplitOrientation,
         withTab tab: Tab,
         insertFirst: Bool,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits else { return nil }
 
@@ -614,7 +620,8 @@ public final class BonsplitController {
             orientation: orientation,
             tab: internalTab,
             insertFirst: insertFirst,
-            initialDividerPosition: dividerPosition
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
         )
 
         let newPaneId = focusedPaneId!
@@ -654,7 +661,8 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         movingTab tabId: TabID,
-        insertFirst: Bool
+        insertFirst: Bool,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits,
               configuration.allowCrossPaneTabMove else { return nil }
@@ -699,7 +707,8 @@ public final class BonsplitController {
             orientation: orientation,
             tab: tabItem,
             insertFirst: insertFirst,
-            initialDividerPosition: normalizedInitialDividerPosition(nil)
+            initialDividerPosition: normalizedInitialDividerPosition(nil),
+            newPaneID: newPaneID
         )
 
         let newPaneId = focusedPaneId!

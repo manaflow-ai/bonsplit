@@ -101,7 +101,7 @@ final class SplitViewController {
         }
     }
 
-    init(rootNode: SplitNode? = nil) {
+    init(rootNode: SplitNode? = nil, initialPaneID: PaneID? = nil) {
         let resolvedRoot: SplitNode
         let initialFocusedPaneId: PaneID?
         if let rootNode {
@@ -110,7 +110,7 @@ final class SplitViewController {
         } else {
             // Initialize with a single pane containing a welcome tab
             let welcomeTab = TabItem(title: "Welcome", icon: "star")
-            let initialPane = PaneState(tabs: [welcomeTab])
+            let initialPane = PaneState(id: initialPaneID ?? PaneID(), tabs: [welcomeTab])
             resolvedRoot = .pane(initialPane)
             initialFocusedPaneId = initialPane.id
         }
@@ -233,7 +233,8 @@ final class SplitViewController {
         _ paneId: PaneID,
         orientation: SplitOrientation,
         with newTab: TabItem? = nil,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) {
         guard paneStatesById[paneId] != nil else { return }
         clearPaneZoom()
@@ -244,6 +245,7 @@ final class SplitViewController {
             orientation: orientation,
             newTab: newTab,
             initialDividerPosition: initialDividerPosition,
+            newPaneID: newPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
@@ -257,6 +259,7 @@ final class SplitViewController {
         orientation: SplitOrientation,
         newTab: TabItem?,
         initialDividerPosition: CGFloat?,
+        newPaneID: PaneID?,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
@@ -265,9 +268,9 @@ final class SplitViewController {
                 // Create new pane - empty if no tab provided (gives developer full control)
                 let newPane: PaneState
                 if let tab = newTab {
-                    newPane = PaneState(tabs: [tab])
+                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
                 } else {
-                    newPane = PaneState(tabs: [])
+                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [])
                 }
 
                 // Start with divider at the edge so there's no flash before animation
@@ -297,6 +300,7 @@ final class SplitViewController {
                 orientation: orientation,
                 newTab: newTab,
                 initialDividerPosition: initialDividerPosition,
+                newPaneID: newPaneID,
                 createdPane: &createdPane
             )
             if createdPane == nil {
@@ -306,6 +310,7 @@ final class SplitViewController {
                     orientation: orientation,
                     newTab: newTab,
                     initialDividerPosition: initialDividerPosition,
+                    newPaneID: newPaneID,
                     createdPane: &createdPane
                 )
             }
@@ -319,7 +324,8 @@ final class SplitViewController {
         orientation: SplitOrientation,
         tab: TabItem,
         insertFirst: Bool,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) {
         guard paneStatesById[paneId] != nil else { return }
         clearPaneZoom()
@@ -331,6 +337,7 @@ final class SplitViewController {
             tab: tab,
             insertFirst: insertFirst,
             initialDividerPosition: initialDividerPosition,
+            newPaneID: newPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
@@ -345,13 +352,14 @@ final class SplitViewController {
         tab: TabItem,
         insertFirst: Bool,
         initialDividerPosition: CGFloat?,
+        newPaneID: PaneID?,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
         case .pane(let paneState):
             if paneState.id == targetPaneId {
                 // Create new pane with the tab
-                let newPane = PaneState(tabs: [tab])
+                let newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
 
                 // Start with divider at the edge so there's no flash before animation
                 let splitState: SplitState
@@ -391,6 +399,7 @@ final class SplitViewController {
                 tab: tab,
                 insertFirst: insertFirst,
                 initialDividerPosition: initialDividerPosition,
+                newPaneID: newPaneID,
                 createdPane: &createdPane
             )
             if createdPane == nil {
@@ -401,6 +410,7 @@ final class SplitViewController {
                     tab: tab,
                     insertFirst: insertFirst,
                     initialDividerPosition: initialDividerPosition,
+                    newPaneID: newPaneID,
                     createdPane: &createdPane
                 )
             }

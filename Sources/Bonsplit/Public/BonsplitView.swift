@@ -47,6 +47,7 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
             },
             appearance: controller.configuration.appearance,
             dividerPositionRange: controller.configuration.dividerPositionRange,
+            allowDividerResizing: controller.configuration.allowDividerResizing,
             showSplitButtons: controller.configuration.allowSplits && controller.configuration.appearance.showSplitButtons,
             tabBarVisibility: controller.configuration.tabBarVisibility,
             contentViewLifecycle: controller.configuration.contentViewLifecycle,
