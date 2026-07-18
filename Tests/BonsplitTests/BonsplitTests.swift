@@ -1540,6 +1540,19 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testCreateTabCanRestoreExactIdentityAndRejectsDuplicate() {
+        let controller = BonsplitController()
+        let restoredID = TabID()
+
+        XCTAssertEqual(
+            controller.createTab(title: "Restored", tabID: restoredID),
+            restoredID
+        )
+        XCTAssertNil(controller.createTab(title: "Duplicate", tabID: restoredID))
+        XCTAssertEqual(controller.allTabIds.filter { $0 == restoredID }.count, 1)
+    }
+
+    @MainActor
     func testCreateAndUpdateTabCustomTitleFlag() {
         let controller = BonsplitController()
         let tabId = controller.createTab(

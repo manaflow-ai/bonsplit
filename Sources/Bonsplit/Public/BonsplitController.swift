@@ -172,6 +172,7 @@ public final class BonsplitController {
     @discardableResult
     public func createTab(
         title: String,
+        tabID: TabID? = nil,
         hasCustomTitle: Bool = false,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
@@ -186,7 +187,8 @@ public final class BonsplitController {
         showsRemoteIndicator: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
-        let tabId = TabID()
+        let tabId = tabID ?? TabID()
+        guard tab(tabId) == nil else { return nil }
         let tab = Tab(
             id: tabId,
             title: title,
