@@ -1136,9 +1136,8 @@ public final class BonsplitController {
     /// - Parameters:
     ///   - isDragging: Whether the change is due to active divider dragging
     ///   - force: Deliver even inside the external-update suppression window.
-    ///     Only the drag-end path passes true: its notification is the one
-    ///     the delegate contract guarantees, so the anti-echo gate must not
-    ///     swallow it.
+    ///     Drag-end and authoritative tree replacement pass true because each
+    ///     operation guarantees one final geometry notification.
     internal func notifyGeometryChange(isDragging: Bool = false, force: Bool = false) {
         guard force || !internalController.isExternalUpdateInProgress else { return }
 
