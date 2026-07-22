@@ -99,4 +99,19 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(controller.allPaneIds.count, paneCountBefore)
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
     }
+
+    func testManualTabReorderFallbackOnlyOwnsMinimalModeDrags() {
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: false
+        ))
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: true
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: false,
+            isMinimalMode: true
+        ))
+    }
 }
