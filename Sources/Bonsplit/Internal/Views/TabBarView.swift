@@ -268,6 +268,18 @@ enum TabBarStyling {
 
 }
 
+/// The AppKit monitor is a compatibility path for minimal chrome, where the
+/// normal SwiftUI drag recognizer can lose the mouse sequence to window chrome.
+/// Standard tab bars use the item-provider drag as their single drag owner.
+enum TabBarManualReorderPolicy {
+    static func shouldInstall(
+        allowsTabReordering: Bool,
+        isMinimalMode: Bool
+    ) -> Bool {
+        allowsTabReordering && isMinimalMode
+    }
+}
+
 struct TabBarLayout: Equatable {
     let barHeight: CGFloat
     let availableWidth: CGFloat
@@ -1017,7 +1029,10 @@ struct TabBarView: View {
 
     @ViewBuilder
     private var manualReorderTracker: some View {
-        if controller.configuration.allowTabReordering {
+        if TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: controller.configuration.allowTabReordering,
+            isMinimalMode: isMinimalMode
+        ) {
             TabBarManualReorderTrackingView(
                 pane: pane,
                 bonsplitController: controller,
