@@ -4352,6 +4352,16 @@ final class BonsplitTests: XCTestCase {
 
     @MainActor
     func testTabBarDragZoneMovesChildWindowWhenNativeDragHandoffDoesNothing() throws {
+        try assertTabBarDragZoneMovesChildWindow(isMinimalMode: true)
+    }
+
+    @MainActor
+    func testTabBarDragZoneMovesChildWindowInStandardMode() throws {
+        try assertTabBarDragZoneMovesChildWindow(isMinimalMode: false)
+    }
+
+    @MainActor
+    private func assertTabBarDragZoneMovesChildWindow(isMinimalMode: Bool) throws {
         let parent = NSWindow(
             contentRect: NSRect(x: 40, y: 80, width: 500, height: 320),
             styleMask: [.titled],
@@ -4373,7 +4383,7 @@ final class BonsplitTests: XCTestCase {
         let view = TabBarDragZoneView.DragNSView(
             frame: NSRect(x: 0, y: 0, width: 160, height: 30)
         )
-        view.isMinimalMode = true
+        view.isMinimalMode = isMinimalMode
         view.isFocusedPane = true
         child.contentView?.addSubview(view)
         parent.addChildWindow(child, ordered: .above)
@@ -4399,7 +4409,7 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(
             child.frame.origin,
             NSPoint(x: initialOrigin.x + 30, y: initialOrigin.y + 20),
-            "Empty tab chrome must move a child window even when native performDrag cannot take ownership"
+            "Empty tab chrome must move a child window in every presentation mode"
         )
         XCTAssertTrue(child.parent === parent)
     }
