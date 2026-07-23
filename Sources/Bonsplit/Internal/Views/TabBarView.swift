@@ -1003,6 +1003,19 @@ struct TabBarView: View {
         }
     }
 
+    /// Only the first leaf in Bonsplit's left/top-first tree owns window-leading
+    /// chrome. Other panes already have a split divider on their leading edge.
+    private var ownsWindowLeadingChrome: Bool {
+        appearance.tabBarLeadingInset > 0
+            && controller.internalController.rootNode.allPaneIds.first == pane.id
+    }
+
+    private var leadingChromeSeparatorBottomInset: CGFloat {
+        visibleTabEntries.first?.tab.id == pane.selectedTabId
+            ? TabBarMetrics.selectedTabLeftSeparatorBottomInset
+            : 0
+    }
+
     private var tabIds: [UUID] {
         pane.tabs.map(\.id)
     }
@@ -1113,13 +1126,20 @@ struct TabBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
+            if ownsWindowLeadingChrome {
                 TabBarDragZoneView(
                     doubleClickBehavior: emptyChromeDoubleClickBehavior,
                     isFocusedPane: isFocused,
                     onSingleClick: focusPaneFromTabBarChrome
                 ) { return false }
                     .frame(width: appearance.tabBarLeadingInset)
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(TabBarColors.separator(for: appearance))
+                            .frame(width: 1)
+                            .padding(.bottom, leadingChromeSeparatorBottomInset)
+                            .allowsHitTesting(false)
+                    }
             }
             // Scrollable tabs with fade overlays
             GeometryReader { containerGeo in
