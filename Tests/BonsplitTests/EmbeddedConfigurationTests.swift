@@ -100,18 +100,45 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
     }
 
-    func testManualTabReorderFallbackOnlyOwnsMinimalModeDrags() {
+    func testManualTabReorderFallbackInstallsForMinimalModeOrExplicitHostRequest() {
         XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
             allowsTabReordering: true,
-            isMinimalMode: false
+            isMinimalMode: false,
+            hostRequestsFallback: false
         ))
         XCTAssertTrue(TabBarManualReorderPolicy.shouldInstall(
             allowsTabReordering: true,
-            isMinimalMode: true
+            isMinimalMode: true,
+            hostRequestsFallback: false
+        ))
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: false,
+            hostRequestsFallback: true
         ))
         XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
             allowsTabReordering: false,
-            isMinimalMode: true
+            isMinimalMode: true,
+            hostRequestsFallback: true
+        ))
+    }
+
+    func testManualTabReorderFallbackYieldsToMatchingItemProviderDrag() {
+        let sourceTabId = UUID()
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: nil,
+            draggingTabId: nil
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: sourceTabId,
+            draggingTabId: nil
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: nil,
+            draggingTabId: sourceTabId
         ))
     }
 }
