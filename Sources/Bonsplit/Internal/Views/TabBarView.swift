@@ -287,6 +287,14 @@ enum TabBarManualReorderPolicy {
     ) -> Bool {
         activeDragTabId != sourceTabId && draggingTabId != sourceTabId
     }
+
+    static func shouldApplyDeferredFallback(
+        sourceTabId: UUID,
+        originalTabIds: [UUID],
+        currentTabIds: [UUID]
+    ) -> Bool {
+        originalTabIds == currentTabIds && currentTabIds.contains(sourceTabId)
+    }
 }
 
 struct TabBarLayout: Equatable {
@@ -2120,6 +2128,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             session = ManualDragSession(
                 sourceTab: source,
                 sourcePaneId: pane.id,
+                originalTabIds: pane.tabs.map(\.id),
                 startPoint: point,
                 currentTargetIndex: nil,
                 didStartDrag: false
@@ -2154,17 +2163,37 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
                 return
             }
 
-            defer {
-                clearManualDrag()
+            let shouldApplyImmediately = TabBarManualReorderPolicy.shouldApplyFallback(
+                sourceTabId: session.sourceTab.id,
+                activeDragTabId: splitViewController?.activeDragTab?.id,
+                draggingTabId: splitViewController?.draggingTab?.id
+            )
+            clearManualDrag()
+
+            if shouldApplyImmediately {
+                applyFallback(session)
+                return
             }
 
+            // SwiftUI drop delegates run synchronously while dispatching mouseUp.
+            // Check on the next run loop only when that path started, and fall
+            // back only if it left the source pane byte-for-byte unchanged.
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      let pane = self.pane,
+                      TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+                        sourceTabId: session.sourceTab.id,
+                        originalTabIds: session.originalTabIds,
+                        currentTabIds: pane.tabs.map(\.id)
+                      ) else { return }
+                self.applyFallback(session)
+            }
+        }
+
+        private func applyFallback(_ session: ManualDragSession) {
             guard session.didStartDrag,
-                  TabBarManualReorderPolicy.shouldApplyFallback(
-                    sourceTabId: session.sourceTab.id,
-                    activeDragTabId: splitViewController?.activeDragTab?.id,
-                    draggingTabId: splitViewController?.draggingTab?.id
-                  ),
                   let pane,
+                  pane.id == session.sourcePaneId,
                   let bonsplitController,
                   let targetIndex = session.currentTargetIndex,
                   !shouldSuppressIndicator(sourceTabId: session.sourceTab.id, targetIndex: targetIndex),
@@ -2241,6 +2270,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
         private struct ManualDragSession {
             let sourceTab: TabItem
             let sourcePaneId: PaneID
+            let originalTabIds: [UUID]
             let startPoint: NSPoint
             var currentTargetIndex: Int?
             var didStartDrag: Bool
