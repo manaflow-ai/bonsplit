@@ -141,4 +141,26 @@ final class EmbeddedConfigurationTests: XCTestCase {
             draggingTabId: sourceTabId
         ))
     }
+
+    func testDeferredManualFallbackOnlyAppliesToAnUnchangedSourcePane() {
+        let sourceTabId = UUID()
+        let siblingTabId = UUID()
+        let originalOrder = [siblingTabId, sourceTabId]
+
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: originalOrder
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: [sourceTabId, siblingTabId]
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: [siblingTabId]
+        ))
+    }
 }
