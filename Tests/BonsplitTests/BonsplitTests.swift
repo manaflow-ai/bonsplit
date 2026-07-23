@@ -3029,6 +3029,17 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testLeadingTabBarInsetEndsWithSeparator() {
+        guard let alphas = renderedLeadingTabBarInsetBoundaryAlphas() else {
+            XCTFail("Expected rendered leading tab-bar inset boundary alphas")
+            return
+        }
+
+        XCTAssertLessThan(alphas.inset, 0.1)
+        XCTAssertGreaterThan(alphas.boundary, 0.3)
+    }
+
+    @MainActor
     func testInactiveSelectedTabIndicatorUsesDesaturatedAccent() {
         guard let focusedSaturation = renderedTabBarIndicatorSaturation(isFocused: true),
               let unfocusedSaturation = renderedTabBarIndicatorSaturation(isFocused: false) else {
@@ -5210,6 +5221,36 @@ final class BonsplitTests: XCTestCase {
                 return nil
             }
             return (top: top, bottom: bottom)
+        }
+    }
+
+    @MainActor
+    private func renderedLeadingTabBarInsetBoundaryAlphas() -> (inset: CGFloat, boundary: CGFloat)? {
+        let leadingInset: CGFloat = 80
+        let appearance = BonsplitConfiguration.Appearance(
+            tabBarLeadingInset: leadingInset,
+            chromeColors: .init(
+                backgroundHex: "#00000000",
+                tabBarBackgroundHex: "#00000000",
+                borderHex: "#FFFFFF80"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: true,
+            appearance: appearance,
+            size: NSSize(width: 320, height: TabBarMetrics.barHeight)
+        ) { hostingView in
+            guard let inset = renderedColorInViewCoordinates(
+                in: hostingView,
+                at: NSPoint(x: leadingInset - 2, y: 4)
+            )?.usingColorSpace(.sRGB)?.alphaComponent,
+                  let boundary = renderedColorInViewCoordinates(
+                    in: hostingView,
+                    at: NSPoint(x: leadingInset - 0.5, y: 4)
+                  )?.usingColorSpace(.sRGB)?.alphaComponent else {
+                return nil
+            }
+            return (inset: inset, boundary: boundary)
         }
     }
 
