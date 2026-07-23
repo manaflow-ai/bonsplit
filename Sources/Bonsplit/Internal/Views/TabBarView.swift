@@ -268,15 +268,24 @@ enum TabBarStyling {
 
 }
 
-/// The AppKit monitor is a compatibility path for minimal chrome, where the
-/// normal SwiftUI drag recognizer can lose the mouse sequence to window chrome.
-/// Standard tab bars use the item-provider drag as their single drag owner.
+/// The AppKit monitor is a compatibility path for hosts where the normal
+/// SwiftUI drag recognizer can lose the mouse sequence. It yields whenever a
+/// matching item-provider drag started, so one path completes each reorder.
 enum TabBarManualReorderPolicy {
     static func shouldInstall(
         allowsTabReordering: Bool,
-        isMinimalMode: Bool
+        isMinimalMode: Bool,
+        hostRequestsFallback: Bool
     ) -> Bool {
-        allowsTabReordering && isMinimalMode
+        allowsTabReordering && (isMinimalMode || hostRequestsFallback)
+    }
+
+    static func shouldApplyFallback(
+        sourceTabId: UUID,
+        activeDragTabId: UUID?,
+        draggingTabId: UUID?
+    ) -> Bool {
+        activeDragTabId != sourceTabId && draggingTabId != sourceTabId
     }
 }
 
@@ -1031,7 +1040,8 @@ struct TabBarView: View {
     private var manualReorderTracker: some View {
         if TabBarManualReorderPolicy.shouldInstall(
             allowsTabReordering: controller.configuration.allowTabReordering,
-            isMinimalMode: isMinimalMode
+            isMinimalMode: isMinimalMode,
+            hostRequestsFallback: controller.configuration.manualTabReorderFallbackEnabled
         ) {
             TabBarManualReorderTrackingView(
                 pane: pane,
@@ -2123,7 +2133,6 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             let dy = point.y - session.startPoint.y
             if !session.didStartDrag {
                 guard dx * dx + dy * dy >= Self.dragStartDistanceSquared else { return }
-                beginManualDrag(for: session)
                 session.didStartDrag = true
             }
 
@@ -2146,11 +2155,15 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             }
 
             defer {
-                clearControllerDragStateIfNeeded(sourceTabId: session.sourceTab.id)
                 clearManualDrag()
             }
 
             guard session.didStartDrag,
+                  TabBarManualReorderPolicy.shouldApplyFallback(
+                    sourceTabId: session.sourceTab.id,
+                    activeDragTabId: splitViewController?.activeDragTab?.id,
+                    draggingTabId: splitViewController?.draggingTab?.id
+                  ),
                   let pane,
                   let bonsplitController,
                   let targetIndex = session.currentTargetIndex,
@@ -2159,6 +2172,12 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
                 return
             }
 
+#if DEBUG
+            dlog(
+                "tab.manualReorderFallback pane=\(session.sourcePaneId.id.uuidString.prefix(5)) " +
+                    "tab=\(session.sourceTab.id.uuidString.prefix(5)) target=\(targetIndex)"
+            )
+#endif
             let orderBeforeReorder = pane.tabs.map { $0.id }
             withTransaction(Transaction(animation: nil)) {
                 pane.moveTab(from: currentSourceIndex, to: targetIndex)
@@ -2173,32 +2192,9 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             }
         }
 
-        private func beginManualDrag(for session: ManualDragSession) {
-            guard let splitViewController else { return }
-#if DEBUG
-            dlog(
-                "tab.manualDragStart pane=\(session.sourcePaneId.id.uuidString.prefix(5)) " +
-                    "tab=\(session.sourceTab.id.uuidString.prefix(5)) title=\"\(session.sourceTab.title)\""
-            )
-#endif
-            _ = splitViewController.beginTabDrag(session.sourceTab, from: session.sourcePaneId)
-        }
-
         private func clearManualDrag() {
             session = nil
             onDropStateChanged?(nil, .idle)
-        }
-
-        private func clearControllerDragStateIfNeeded(sourceTabId: UUID) {
-            guard let splitViewController else { return }
-            if splitViewController.draggingTab?.id == sourceTabId {
-                splitViewController.draggingTab = nil
-                splitViewController.dragSourcePaneId = nil
-            }
-            if splitViewController.activeDragTab?.id == sourceTabId {
-                splitViewController.activeDragTab = nil
-                splitViewController.activeDragSourcePaneId = nil
-            }
         }
 
         private func tab(at point: NSPoint, in pane: PaneState) -> TabItem? {
