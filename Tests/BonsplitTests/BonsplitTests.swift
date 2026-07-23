@@ -4350,6 +4350,60 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(view.mouseDownCanMoveWindow, "Focused-pane drag zone must not advertise window dragging to AppKit or AppKit steals mouseUp and breaks new-tab double-clicks")
     }
 
+    @MainActor
+    func testTabBarDragZoneMovesChildWindowWhenNativeDragHandoffDoesNothing() throws {
+        let parent = NSWindow(
+            contentRect: NSRect(x: 40, y: 80, width: 500, height: 320),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let child = NoOpNativeDragWindow(
+            contentRect: NSRect(x: 100, y: 140, width: 200, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer {
+            parent.removeChildWindow(child)
+            child.orderOut(nil)
+            parent.orderOut(nil)
+        }
+
+        let view = TabBarDragZoneView.DragNSView(
+            frame: NSRect(x: 0, y: 0, width: 160, height: 30)
+        )
+        view.isMinimalMode = true
+        view.isFocusedPane = true
+        child.contentView?.addSubview(view)
+        parent.addChildWindow(child, ordered: .above)
+        parent.orderFront(nil)
+        child.orderFront(nil)
+
+        let initialOrigin = child.frame.origin
+        let mouseDown = try makeLeftMouseDownEvent(
+            in: view,
+            at: NSPoint(x: 20, y: 15),
+            clickCount: 1
+        )
+        let mouseDragged = try makeMouseEvent(
+            type: .leftMouseDragged,
+            in: view,
+            at: NSPoint(x: 50, y: 35),
+            clickCount: 1
+        )
+
+        view.mouseDown(with: mouseDown)
+        view.mouseDragged(with: mouseDragged)
+
+        XCTAssertEqual(
+            child.frame.origin,
+            NSPoint(x: initialOrigin.x + 30, y: initialOrigin.y + 20),
+            "Empty tab chrome must move a child window even when native performDrag cannot take ownership"
+        )
+        XCTAssertTrue(child.parent === parent)
+    }
+
     private func withShortcutHintDefaultsSuite(_ body: (UserDefaults) -> Void) {
         let suiteName = "BonsplitShortcutHintPolicyTests-\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
@@ -5568,4 +5622,9 @@ final class BonsplitTests: XCTestCase {
         let configured = BonsplitConfiguration.Appearance(tabWidthMode: .fill)
         XCTAssertEqual(configured.tabWidthMode, .fill)
     }
+}
+
+@MainActor
+private final class NoOpNativeDragWindow: NSWindow {
+    override func performDrag(with event: NSEvent) {}
 }
