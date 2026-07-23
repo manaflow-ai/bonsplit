@@ -2318,6 +2318,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         private var windowDidResignKeyObserver: NSObjectProtocol?
         private var localMouseMonitor: Any?
         private var isHovering = false
+        private var windowDragSession = BonsplitWindowDragSession()
 
         override var mouseDownCanMoveWindow: Bool { false }
 
@@ -2330,6 +2331,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            windowDragSession.end()
             BonsplitTabBarHitRegionRegistry.unregister(self)
             BonsplitTabItemHitRegionRegistry.unregister(self)
             removeWindowObservers()
@@ -2423,10 +2425,20 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
                 super.mouseDown(with: event)
                 return
             }
-            let wasMovable = window.isMovable
-            window.isMovable = true
-            window.performDrag(with: event)
-            window.isMovable = wasMovable
+            windowDragSession.begin(with: event, in: window)
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard isMinimalMode, let window, windowDragSession.isActive else {
+                super.mouseDragged(with: event)
+                return
+            }
+            windowDragSession.update(with: event, in: window)
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            windowDragSession.end()
+            super.mouseUp(with: event)
         }
 
         func syncHoverStateToCurrentMouseLocation() {
@@ -2556,7 +2568,12 @@ struct TabBarDragZoneView: NSViewRepresentable {
         }
         var hitTestEventTypeOverride: NSEvent.EventType?
         var isMinimalMode = false {
-            didSet { invalidateWindowDragCursorRects() }
+            didSet {
+                if !isMinimalMode {
+                    clearWindowDrag()
+                }
+                invalidateWindowDragCursorRects()
+            }
         }
         var isFocusedPane = false
         var onSingleClick: (() -> Bool)?
@@ -2564,6 +2581,8 @@ struct TabBarDragZoneView: NSViewRepresentable {
         var performWindowDrag: ((NSEvent) -> Bool)?
         private var pendingWindowDragEvent: NSEvent?
         private var pendingWindowDragStart: NSPoint?
+        private var isWindowDragActive = false
+        private var windowDragSession = BonsplitWindowDragSession()
 
         private static let windowDragStartDistanceSquared: CGFloat = 16
 
@@ -2575,13 +2594,14 @@ struct TabBarDragZoneView: NSViewRepresentable {
         // own window-drag tracking. When AppKit steals mouseUp from the first
         // click, the second click of a double-click is registered as a fresh
         // clickCount=1 instead of 2, making new-tab double-clicks flaky. We
-        // still support window dragging via the custom mouseDragged →
-        // window.performDrag flow below. See `NonDraggableHostingView` in
+        // still support window dragging via the custom screen-space drag
+        // session below. See `NonDraggableHostingView` in
         // SplitNodeView.swift for the same class of bug on pane tab clicks.
         override var mouseDownCanMoveWindow: Bool { false }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            clearWindowDrag()
             invalidateWindowDragCursorRects()
         }
 
@@ -2617,12 +2637,13 @@ struct TabBarDragZoneView: NSViewRepresentable {
             )
 #endif
             guard let window = self.window else {
+                clearWindowDrag()
                 super.mouseDown(with: event)
                 return
             }
+            clearWindowDrag()
 
             if !isMinimalMode {
-                clearPendingWindowDrag()
                 if event.clickCount == 1 {
                     if !isFocusedPane, onSingleClick?() == true {
 #if DEBUG
@@ -2650,7 +2671,6 @@ struct TabBarDragZoneView: NSViewRepresentable {
             }
 
             if event.clickCount >= 2 {
-                clearPendingWindowDrag()
 #if DEBUG
                 dlog("tab.bar.dragZone.doubleClick action=titlebar")
 #endif
@@ -2659,7 +2679,6 @@ struct TabBarDragZoneView: NSViewRepresentable {
             }
 
             if !isFocusedPane, onSingleClick?() == true {
-                clearPendingWindowDrag()
 #if DEBUG
                 dlog("tab.bar.dragZone.focusPane")
 #endif
@@ -2668,6 +2687,7 @@ struct TabBarDragZoneView: NSViewRepresentable {
 
             pendingWindowDragEvent = event
             pendingWindowDragStart = event.locationInWindow
+            windowDragSession.begin(with: event, in: window)
         }
 
         private func shouldCaptureHit(at point: NSPoint) -> Bool {
@@ -2784,9 +2804,18 @@ struct TabBarDragZoneView: NSViewRepresentable {
         }
 
         override func mouseDragged(with event: NSEvent) {
-            guard isMinimalMode,
-                  let window,
-                  let pendingEvent = pendingWindowDragEvent,
+            guard isMinimalMode, let window else {
+                clearWindowDrag()
+                super.mouseDragged(with: event)
+                return
+            }
+
+            if isWindowDragActive {
+                windowDragSession.update(with: event, in: window)
+                return
+            }
+
+            guard let pendingEvent = pendingWindowDragEvent,
                   let start = pendingWindowDragStart else {
                 super.mouseDragged(with: event)
                 return
@@ -2804,12 +2833,25 @@ struct TabBarDragZoneView: NSViewRepresentable {
                 "dx=\(dx.rounded()) dy=\(dy.rounded())"
             )
 #endif
-            clearPendingWindowDrag()
-            startWindowDrag(with: pendingEvent, in: window)
+            if let performWindowDrag, performWindowDrag(pendingEvent) {
+                clearWindowDrag()
+#if DEBUG
+                dlog("tab.bar.dragZone.dragStart action=testHook")
+#endif
+                return
+            }
+
+            pendingWindowDragEvent = nil
+            pendingWindowDragStart = nil
+            isWindowDragActive = true
+            windowDragSession.update(with: event, in: window)
+#if DEBUG
+            dlog("tab.bar.dragZone.dragStart action=screenSpaceSession")
+#endif
         }
 
         override func mouseUp(with event: NSEvent) {
-            clearPendingWindowDrag()
+            clearWindowDrag()
             super.mouseUp(with: event)
         }
 
@@ -2818,20 +2860,10 @@ struct TabBarDragZoneView: NSViewRepresentable {
             pendingWindowDragStart = nil
         }
 
-        private func startWindowDrag(with event: NSEvent, in window: NSWindow) {
-            if let performWindowDrag, performWindowDrag(event) {
-#if DEBUG
-                dlog("tab.bar.dragZone.dragStart action=testHook")
-#endif
-                return
-            }
-            let wasMovable = window.isMovable
-            window.isMovable = true
-            defer { window.isMovable = wasMovable }
-            window.performDrag(with: event)
-#if DEBUG
-            dlog("tab.bar.dragZone.dragStart action=windowPerformDrag")
-#endif
+        private func clearWindowDrag() {
+            clearPendingWindowDrag()
+            isWindowDragActive = false
+            windowDragSession.end()
         }
 
         private func performTitlebarDoubleClickAction(in window: NSWindow) {
