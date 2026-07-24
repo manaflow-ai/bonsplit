@@ -4008,6 +4008,16 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarDragZoneAcceptsFirstMouseInInactiveWindow() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
+
+        XCTAssertTrue(
+            view.acceptsFirstMouse(for: nil),
+            "Empty titlebar chrome must receive the first drag gesture while its window is inactive"
+        )
+    }
+
+    @MainActor
     func testTabBarDragZoneMinimalModeNeverRequestsNewTabAfterSingleThenDoubleClick() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
         view.doubleClickBehavior = .titlebar
