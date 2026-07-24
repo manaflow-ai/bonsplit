@@ -2306,9 +2306,6 @@ final class BonsplitTests: XCTestCase {
         hostingView.autoresizingMask = [.width, .height]
         contentView.addSubview(hostingView)
         window.makeKeyAndOrderFront(nil)
-        contentView.layoutSubtreeIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
-        contentView.layoutSubtreeIfNeeded()
 
         func setDragHitTesting(_ view: NSView) {
             (view as? TabBarDragZoneView.DragNSView)?.hitTestEventTypeOverride = .leftMouseDragged
@@ -2316,7 +2313,6 @@ final class BonsplitTests: XCTestCase {
                 setDragHitTesting(subview)
             }
         }
-        setDragHitTesting(hostingView)
         func tabDropDestinations(in view: NSView) -> [NSView] {
             var matches: [NSView] = []
             if view.registeredDraggedTypes.contains(where: { pasteboardType in
@@ -2345,8 +2341,22 @@ final class BonsplitTests: XCTestCase {
                 && abs(lhsFrame.minY - rhsFrame.minY) <= 0.5
                 && abs(lhsFrame.maxY - rhsFrame.maxY) <= 0.5
         }
-        let dropDestinations = tabDropDestinations(in: hostingView)
-        let dragZoneViews = dragZones(in: hostingView)
+        let registrationDeadline = Date().addingTimeInterval(0.5)
+        var dropDestinations: [NSView] = []
+        var dragZoneViews: [TabBarDragZoneView.DragNSView] = []
+        repeat {
+            contentView.layoutSubtreeIfNeeded()
+            setDragHitTesting(hostingView)
+            dropDestinations = tabDropDestinations(in: hostingView)
+            dragZoneViews = dragZones(in: hostingView)
+            if dragZoneViews.contains(where: { dragZone in
+                dropDestinations.contains(where: { framesMatch(dragZone, $0) })
+            }) {
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        } while Date() < registrationDeadline
+
         guard dragZoneViews.contains(where: { dragZone in
             dropDestinations.contains(where: { framesMatch(dragZone, $0) })
         }) else {
