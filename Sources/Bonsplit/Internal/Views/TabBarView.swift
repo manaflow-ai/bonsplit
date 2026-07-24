@@ -1001,6 +1001,14 @@ struct TabBarView: View {
             performNewTerminalSplitButtonAction()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onDrop(of: [.tabTransfer, .fileURL], delegate: TabDropDelegate(
+            targetIndex: pane.tabs.count,
+            pane: pane,
+            bonsplitController: controller,
+            controller: splitViewController,
+            dropTargetIndex: $dropTargetIndex,
+            dropLifecycle: $dropLifecycle
+        ))
     }
 
     private var dragAndHoverBackground: some View {
