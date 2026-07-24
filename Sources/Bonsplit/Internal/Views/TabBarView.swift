@@ -2697,6 +2697,11 @@ struct TabBarDragZoneView: NSViewRepresentable {
         // SplitNodeView.swift for the same class of bug on pane tab clicks.
         override var mouseDownCanMoveWindow: Bool { false }
 
+        // AppKit asks the hit view, not its outer NSHostingView, whether an
+        // inactive window should receive the activating mouse-down. Accepting
+        // it here preserves that same event as the start of the drag gesture.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             clearWindowDrag()
