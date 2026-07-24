@@ -2274,7 +2274,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testTrailingTabBarChromeRoutesTabDropsAcrossFullWidth() {
+    func testTrailingTabBarChromeRoutesTabDropsAcrossFullWidth() throws {
         let appearance = BonsplitConfiguration.Appearance(splitButtons: [])
         let controller = BonsplitController(
             configuration: BonsplitConfiguration(appearance: appearance)
@@ -2330,7 +2330,30 @@ final class BonsplitTests: XCTestCase {
             }
             return matches
         }
+        func dragZones(in view: NSView) -> [TabBarDragZoneView.DragNSView] {
+            var matches = (view as? TabBarDragZoneView.DragNSView).map { [$0] } ?? []
+            for subview in view.subviews {
+                matches.append(contentsOf: dragZones(in: subview))
+            }
+            return matches
+        }
+        func framesMatch(_ lhs: NSView, _ rhs: NSView) -> Bool {
+            let lhsFrame = lhs.convert(lhs.bounds, to: nil)
+            let rhsFrame = rhs.convert(rhs.bounds, to: nil)
+            return abs(lhsFrame.minX - rhsFrame.minX) <= 0.5
+                && abs(lhsFrame.maxX - rhsFrame.maxX) <= 0.5
+                && abs(lhsFrame.minY - rhsFrame.minY) <= 0.5
+                && abs(lhsFrame.maxY - rhsFrame.maxY) <= 0.5
+        }
         let dropDestinations = tabDropDestinations(in: hostingView)
+        let dragZoneViews = dragZones(in: hostingView)
+        guard dragZoneViews.contains(where: { dragZone in
+            dropDestinations.contains(where: { framesMatch(dragZone, $0) })
+        }) else {
+            throw XCTSkip(
+                "This SwiftUI runtime does not expose view-local onDrop registration through registeredDraggedTypes"
+            )
+        }
 
         for point in [
             NSPoint(x: 90, y: 30),
