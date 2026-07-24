@@ -4,6 +4,7 @@ import AppKit
 import Observation
 import QuartzCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -2270,6 +2271,89 @@ final class BonsplitTests: XCTestCase {
 
         XCTAssertNil(spy.requestedKind)
         XCTAssertNil(spy.requestedPaneId)
+    }
+
+    @MainActor
+    func testTrailingTabBarChromeRoutesTabDropsAcrossFullWidth() {
+        let appearance = BonsplitConfiguration.Appearance(splitButtons: [])
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(appearance: appearance)
+        )
+        controller.tabShortcutHintsEnabled = false
+        let pane = controller.internalController.rootNode.allPanes.first!
+        let tab = TabItem(title: "Tab", icon: nil)
+        pane.tabs = [tab]
+        pane.selectedTabId = tab.id
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: true)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 60),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+        window.makeKeyAndOrderFront(nil)
+        contentView.layoutSubtreeIfNeeded()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        contentView.layoutSubtreeIfNeeded()
+
+        func setDragHitTesting(_ view: NSView) {
+            (view as? TabBarDragZoneView.DragNSView)?.hitTestEventTypeOverride = .leftMouseDragged
+            for subview in view.subviews {
+                setDragHitTesting(subview)
+            }
+        }
+        setDragHitTesting(hostingView)
+        func tabDropDestinations(in view: NSView) -> [NSView] {
+            var matches: [NSView] = []
+            if view.registeredDraggedTypes.contains(where: { pasteboardType in
+                guard let registeredType = UTType(pasteboardType.rawValue) else { return false }
+                return UTType.tabTransfer.conforms(to: registeredType)
+            }) {
+                matches.append(view)
+            }
+            for subview in view.subviews {
+                matches.append(contentsOf: tabDropDestinations(in: subview))
+            }
+            return matches
+        }
+        let dropDestinations = tabDropDestinations(in: hostingView)
+
+        for point in [
+            NSPoint(x: 90, y: 30),
+            NSPoint(x: 240, y: 30),
+            NSPoint(x: 460, y: 30),
+        ] {
+            guard let hitView = hostingView.hitTest(point) else {
+                XCTFail("Expected tab-bar chrome to hit-test at x=\(point.x)")
+                continue
+            }
+            let pointInWindow = hostingView.convert(point, to: nil)
+            let hitFrameInWindow = hitView.convert(hitView.bounds, to: nil)
+            let dropDestination = dropDestinations.first { view in
+                let destinationFrame = view.convert(view.bounds, to: nil)
+                return destinationFrame.contains(pointInWindow)
+                    && abs(destinationFrame.minX - hitFrameInWindow.minX) <= 0.5
+                    && abs(destinationFrame.maxX - hitFrameInWindow.maxX) <= 0.5
+            }
+            XCTAssertNotNil(
+                dropDestination,
+                "Trailing tab-bar chrome at x=\(point.x) should route tab transfers to a registered drop destination"
+            )
+        }
     }
 
     @MainActor
