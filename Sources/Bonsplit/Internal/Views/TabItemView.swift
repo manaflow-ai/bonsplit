@@ -524,6 +524,24 @@ struct TabItemView: View {
         }
     }
 
+    /// The font for the tab title, honoring the host's ``TabStyle`` family and
+    /// weight overrides and falling back to the system font at the configured size.
+    private var tabTitleFont: Font {
+        let size = appearance.tabTitleFontSize
+        let style = appearance.tabStyle
+        let hasFamily = (style.fontFamily?.isEmpty == false)
+        switch (hasFamily, style.fontWeight) {
+        case (true, let weight?):
+            return .custom(style.fontFamily!, fixedSize: size).weight(weight.swiftUIFontWeight)
+        case (true, nil):
+            return .custom(style.fontFamily!, fixedSize: size)
+        case (false, let weight?):
+            return .system(size: size, weight: weight.swiftUIFontWeight)
+        case (false, nil):
+            return .system(size: size)
+        }
+    }
+
     /// Standard titled tab layout: leading icon, title, optional audio/zoom
     /// affordances, and the trailing close/pin/dirty accessory.
     @ViewBuilder
@@ -534,7 +552,7 @@ struct TabItemView: View {
                 leadingIcon
 
                 Text(tab.title)
-                    .font(.system(size: appearance.tabTitleFontSize))
+                    .font(tabTitleFont)
                     .lineLimit(1)
                     .foregroundStyle(
                         isSelected
@@ -1003,7 +1021,8 @@ struct TabItemView: View {
                 Rectangle()
                     .fill(TabBarColors.hoveredTabBackground(for: appearance))
             } else {
-                Color.clear
+                Rectangle()
+                    .fill(TabBarColors.inactiveTabBackground(for: appearance))
             }
 
             // Right border separator

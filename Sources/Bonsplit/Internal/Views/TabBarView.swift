@@ -974,12 +974,21 @@ struct TabBarView: View {
         pane.tabs.map(\.id)
     }
 
+    private var selectionIndicatorColor: NSColor {
+        // A `.hidden` indicator edge suppresses the accent line entirely; any other
+        // edge keeps it, preferring an explicit theme override over the accent.
+        if appearance.tabStyle.activeIndicatorEdge == .hidden {
+            return .clear
+        }
+        return TabBarColors.nsColorActiveIndicator(for: appearance, saturation: tabBarSaturation)
+    }
+
     @ViewBuilder
     private var selectionChrome: some View {
         TabBarSelectionChromeView(
             selectedTabId: pane.selectedTabId,
             geometryRegistry: tabItemGeometryRegistry,
-            indicatorColor: TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
+            indicatorColor: selectionIndicatorColor,
             separatorColor: TabBarColors.nsColorSeparator(for: appearance),
             mask: selectionChromeMask
         )
