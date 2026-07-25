@@ -522,7 +522,7 @@ extension BonsplitConfiguration {
         /// style.activeIndicatorHex = "#7aa2f7"   // replaces the system accent
         /// style.dividerHex = "none"
         /// ```
-        public struct TabStyle: Sendable, Equatable {
+        public struct TabStyle: Sendable, Equatable, Codable {
             /// Which edge of the selected tab carries the accent indicator line.
             ///
             /// The case is named `hidden` rather than `none` to avoid colliding
