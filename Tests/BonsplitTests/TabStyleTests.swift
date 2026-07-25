@@ -81,4 +81,22 @@ final class TabStyleTests: XCTestCase {
         XCTAssertEqual(BonsplitConfiguration.Appearance.TabStyle.FontWeight.semibold.nsFontWeight, .semibold)
         XCTAssertEqual(BonsplitConfiguration.Appearance.TabStyle.FontWeight.black.nsFontWeight, .black)
     }
+
+    func testActiveIndicatorEdgePlacement() {
+        let bounds = CGRect(x: 0, y: 0, width: 200, height: 30)
+        let base = CGRect(x: 10, y: 0, width: 100, height: 30)
+
+        let top = TabBarSelectionChromeView.ChromeNSView.positionedIndicatorFrame(
+            base: base, in: bounds, edge: .top
+        )
+        let bottom = TabBarSelectionChromeView.ChromeNSView.positionedIndicatorFrame(
+            base: base, in: bounds, edge: .bottom
+        )
+
+        // The view is flipped: .top pins to minY, .bottom to the far edge.
+        XCTAssertEqual(top.origin.y, bounds.minY, accuracy: 0.001)
+        XCTAssertEqual(bottom.origin.y, bounds.maxY - TabBarMetrics.activeIndicatorHeight, accuracy: 0.001)
+        XCTAssertNotEqual(top.origin.y, bottom.origin.y, "top and bottom must differ")
+        XCTAssertEqual(bottom.size.height, TabBarMetrics.activeIndicatorHeight, accuracy: 0.001)
+    }
 }

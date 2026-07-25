@@ -989,6 +989,7 @@ struct TabBarView: View {
             selectedTabId: pane.selectedTabId,
             geometryRegistry: tabItemGeometryRegistry,
             indicatorColor: selectionIndicatorColor,
+            indicatorEdge: appearance.tabStyle.activeIndicatorEdge ?? .top,
             separatorColor: TabBarColors.nsColorSeparator(for: appearance),
             mask: selectionChromeMask
         )

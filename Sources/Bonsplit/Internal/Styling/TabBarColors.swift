@@ -331,7 +331,9 @@ enum TabBarColors {
     ) -> NSColor {
         if let hex = appearance.tabStyle.activeIndicatorHex,
            let override = NSColor(bonsplitHex: hex) {
-            return override
+            // Apply the same saturation the derived indicator uses so a themed
+            // indicator dims consistently when the window loses focus.
+            return override.bonsplitSaturating(by: saturation)
         }
         return nsColorActiveIndicator(saturation: saturation)
     }
