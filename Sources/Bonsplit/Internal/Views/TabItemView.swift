@@ -529,17 +529,30 @@ struct TabItemView: View {
     private var tabTitleFont: Font {
         let size = appearance.tabTitleFontSize
         let style = appearance.tabStyle
-        let hasFamily = (style.fontFamily?.isEmpty == false)
-        switch (hasFamily, style.fontWeight) {
-        case (true, let weight?):
-            return .custom(style.fontFamily!, fixedSize: size).weight(weight.swiftUIFontWeight)
-        case (true, nil):
-            return .custom(style.fontFamily!, fixedSize: size)
-        case (false, let weight?):
-            return .system(size: size, weight: weight.swiftUIFontWeight)
-        case (false, nil):
-            return .system(size: size)
+        let weight = style.fontWeight?.swiftUIFontWeight
+
+        guard let family = style.fontFamily, !family.isEmpty else {
+            return weight.map { .system(size: size, weight: $0) } ?? .system(size: size)
         }
+
+        // "SF Mono" and friends aren't resolvable by name via Font.custom (they
+        // silently fall back to the default UI font), so map the common
+        // monospaced aliases to the system monospaced design instead.
+        let monospacedAliases: Set<String> = [
+            "sf mono", "sfmono", "sfmono-regular",
+            "ui-monospace", "monospace", "system-monospace",
+        ]
+        if monospacedAliases.contains(family.lowercased()) {
+            return .system(size: size, weight: weight ?? .regular, design: .monospaced)
+        }
+
+        // Only use Font.custom for a family AppKit can actually resolve; otherwise
+        // fall back to the system font rather than silently mis-rendering.
+        if NSFont(name: family, size: size) != nil {
+            let base = Font.custom(family, fixedSize: size)
+            return weight.map { base.weight($0) } ?? base
+        }
+        return weight.map { .system(size: size, weight: $0) } ?? .system(size: size)
     }
 
     /// Standard titled tab layout: leading icon, title, optional audio/zoom
