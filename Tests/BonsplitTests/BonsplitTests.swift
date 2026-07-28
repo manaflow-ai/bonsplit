@@ -2164,6 +2164,56 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuRefreshReevaluatesForkConversationAvailability() async throws {
+        let target = TabContextMenuActionTarget()
+        var availability = TabContextForkConversationAvailability.refreshing
+        var refreshCount = 0
+        let refreshStarted = expectation(description: "Fork availability refresh started")
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            forkConversationDefaultAction: .forkConversationRight,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] },
+            forkConversationAvailabilityProvider: { availability },
+            forkConversationAvailabilityRefreshHandler: {
+                refreshCount += 1
+                availability = .available
+                refreshStarted.fulfill()
+            }
+        )
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+
+        menu.menuWillOpen(menu)
+        menu.menuWillOpen(menu)
+        await fulfillment(of: [refreshStarted], timeout: 1)
+
+        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(menu.forkConversationAvailability, .available)
+        XCTAssertTrue(forkItem.isEnabled)
+        XCTAssertTrue(forkSubmenuItem.isEnabled)
+        menu.menuDidClose(menu)
+    }
+
+    @MainActor
     func testTabContextMenuShowsDisconnectRemoteOnlyWhenAvailable() throws {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?

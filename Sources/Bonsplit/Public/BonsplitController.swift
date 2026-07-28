@@ -81,6 +81,11 @@ public final class BonsplitController {
     /// remain visible but disabled; hidden actions are omitted.
     @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> TabContextForkConversationAvailability)?
 
+    /// Host-provided refresh invoked when Fork Conversation availability is still loading
+    /// as the tab context menu opens. When it returns, the open menu re-evaluates the
+    /// synchronous availability provider and updates its items in place.
+    @ObservationIgnored public var tabContextForkConversationAvailabilityRefreshHandler: (@MainActor (TabID, PaneID) async -> Void)?
+
     /// Host-provided default destination for the tab context menu's primary "Fork
     /// Conversation" action. Return a destination-specific fork action; invalid values
     /// fall back to `.forkConversationRight`.
