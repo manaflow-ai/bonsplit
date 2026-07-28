@@ -59,6 +59,12 @@ public struct BonsplitConfiguration: Sendable {
     /// Whether to allow drag & drop reordering of tabs
     public var allowTabReordering: Bool
 
+    /// Installs an AppKit mouse-sequence fallback for hosts where SwiftUI's
+    /// item-provider drag recognizer does not reliably start. The fallback
+    /// only completes a same-pane reorder when no matching item-provider drag
+    /// owns the gesture.
+    public var manualTabReorderFallbackEnabled: Bool
+
     /// Whether to allow moving tabs between panes
     public var allowCrossPaneTabMove: Bool
 
@@ -112,6 +118,7 @@ public struct BonsplitConfiguration: Sendable {
         allowCloseTabs: Bool = true,
         allowCloseLastPane: Bool = false,
         allowTabReordering: Bool = true,
+        manualTabReorderFallbackEnabled: Bool = false,
         allowCrossPaneTabMove: Bool = true,
         allowsTabContextMenu: Bool = true,
         autoCloseEmptyPanes: Bool = true,
@@ -125,6 +132,7 @@ public struct BonsplitConfiguration: Sendable {
         self.allowCloseTabs = allowCloseTabs
         self.allowCloseLastPane = allowCloseLastPane
         self.allowTabReordering = allowTabReordering
+        self.manualTabReorderFallbackEnabled = manualTabReorderFallbackEnabled
         self.allowCrossPaneTabMove = allowCrossPaneTabMove
         self.allowsTabContextMenu = allowsTabContextMenu
         self.autoCloseEmptyPanes = autoCloseEmptyPanes

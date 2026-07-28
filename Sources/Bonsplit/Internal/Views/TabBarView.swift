@@ -268,6 +268,35 @@ enum TabBarStyling {
 
 }
 
+/// The AppKit monitor is a compatibility path for hosts where the normal
+/// SwiftUI drag recognizer can lose the mouse sequence. It yields whenever a
+/// matching item-provider drag started, so one path completes each reorder.
+enum TabBarManualReorderPolicy {
+    static func shouldInstall(
+        allowsTabReordering: Bool,
+        isMinimalMode: Bool,
+        hostRequestsFallback: Bool
+    ) -> Bool {
+        allowsTabReordering && (isMinimalMode || hostRequestsFallback)
+    }
+
+    static func shouldApplyFallback(
+        sourceTabId: UUID,
+        activeDragTabId: UUID?,
+        draggingTabId: UUID?
+    ) -> Bool {
+        activeDragTabId != sourceTabId && draggingTabId != sourceTabId
+    }
+
+    static func shouldApplyDeferredFallback(
+        sourceTabId: UUID,
+        originalTabIds: [UUID],
+        currentTabIds: [UUID]
+    ) -> Bool {
+        originalTabIds == currentTabIds && currentTabIds.contains(sourceTabId)
+    }
+}
+
 struct TabBarLayout: Equatable {
     let barHeight: CGFloat
     let availableWidth: CGFloat
@@ -909,6 +938,10 @@ struct TabBarView: View {
         presentationMode == "minimal"
     }
 
+    private var emptyChromeDoubleClickBehavior: TabBarEmptyChromeDoubleClickBehavior {
+        isMinimalMode ? .titlebar : .newTabAction
+    }
+
     private var trailingTabContentInset: CGFloat {
         tabBarLayout.trailingTabContentInset
     }
@@ -970,6 +1003,19 @@ struct TabBarView: View {
         }
     }
 
+    /// Only the first leaf in Bonsplit's left/top-first tree owns window-leading
+    /// chrome. Other panes already have a split divider on their leading edge.
+    private var ownsWindowLeadingChrome: Bool {
+        appearance.tabBarLeadingInset > 0
+            && controller.internalController.rootNode.allPaneIds.first == pane.id
+    }
+
+    private var leadingChromeSeparatorBottomInset: CGFloat {
+        visibleTabEntries.first?.tab.id == pane.selectedTabId
+            ? TabBarMetrics.selectedTabLeftSeparatorBottomInset
+            : 0
+    }
+
     private var tabIds: [UUID] {
         pane.tabs.map(\.id)
     }
@@ -994,7 +1040,7 @@ struct TabBarView: View {
                 tabIds: tabIds,
                 reservedTrailingWidth: shouldRenderSplitButtons ? splitButtonsBackdropWidth : 0
             ),
-            isMinimalMode: isMinimalMode,
+            doubleClickBehavior: emptyChromeDoubleClickBehavior,
             isFocusedPane: isFocused,
             onSingleClick: focusPaneFromTabBarChrome
         ) {
@@ -1013,7 +1059,7 @@ struct TabBarView: View {
 
     private var dragAndHoverBackground: some View {
         TabBarDragAndHoverView(
-            isMinimalMode: isMinimalMode,
+            doubleClickBehavior: emptyChromeDoubleClickBehavior,
             geometryRegistry: tabItemGeometryRegistry,
             tabIds: tabIds,
             onDoubleClick: {
@@ -1025,7 +1071,11 @@ struct TabBarView: View {
 
     @ViewBuilder
     private var manualReorderTracker: some View {
-        if controller.configuration.allowTabReordering {
+        if TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: controller.configuration.allowTabReordering,
+            isMinimalMode: isMinimalMode,
+            hostRequestsFallback: controller.configuration.manualTabReorderFallbackEnabled
+        ) {
             TabBarManualReorderTrackingView(
                 pane: pane,
                 bonsplitController: controller,
@@ -1084,13 +1134,20 @@ struct TabBarView: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
+            if ownsWindowLeadingChrome {
                 TabBarDragZoneView(
-                    isMinimalMode: isMinimalMode,
+                    doubleClickBehavior: emptyChromeDoubleClickBehavior,
                     isFocusedPane: isFocused,
                     onSingleClick: focusPaneFromTabBarChrome
                 ) { return false }
                     .frame(width: appearance.tabBarLeadingInset)
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(TabBarColors.separator(for: appearance))
+                            .frame(width: 1)
+                            .padding(.bottom, leadingChromeSeparatorBottomInset)
+                            .allowsHitTesting(false)
+                    }
             }
             // Scrollable tabs with fade overlays
             GeometryReader { containerGeo in
@@ -1109,7 +1166,7 @@ struct TabBarView: View {
                         let trailing = max(0, containerGeo.size.width - contentWidth)
                         if trailing >= 1 {
                             TabBarDragZoneView(
-                                isMinimalMode: isMinimalMode,
+                                doubleClickBehavior: emptyChromeDoubleClickBehavior,
                                 isFocusedPane: isFocused,
                                 onSingleClick: focusPaneFromTabBarChrome
                             ) {
@@ -1361,7 +1418,7 @@ struct TabBarView: View {
     @ViewBuilder
     private var dropZoneAfterTabs: some View {
         TabBarDragZoneView(
-            isMinimalMode: isMinimalMode,
+            doubleClickBehavior: emptyChromeDoubleClickBehavior,
             isFocusedPane: isFocused,
             onSingleClick: focusPaneFromTabBarChrome
         ) {
@@ -2109,6 +2166,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             session = ManualDragSession(
                 sourceTab: source,
                 sourcePaneId: pane.id,
+                originalTabIds: pane.tabs.map(\.id),
                 startPoint: point,
                 currentTargetIndex: nil,
                 didStartDrag: false
@@ -2122,7 +2180,6 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             let dy = point.y - session.startPoint.y
             if !session.didStartDrag {
                 guard dx * dx + dy * dy >= Self.dragStartDistanceSquared else { return }
-                beginManualDrag(for: session)
                 session.didStartDrag = true
             }
 
@@ -2144,13 +2201,37 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
                 return
             }
 
-            defer {
-                clearControllerDragStateIfNeeded(sourceTabId: session.sourceTab.id)
-                clearManualDrag()
+            let shouldApplyImmediately = TabBarManualReorderPolicy.shouldApplyFallback(
+                sourceTabId: session.sourceTab.id,
+                activeDragTabId: splitViewController?.activeDragTab?.id,
+                draggingTabId: splitViewController?.draggingTab?.id
+            )
+            clearManualDrag()
+
+            if shouldApplyImmediately {
+                applyFallback(session)
+                return
             }
 
+            // SwiftUI drop delegates run synchronously while dispatching mouseUp.
+            // Check on the next run loop only when that path started, and fall
+            // back only if it left the source pane byte-for-byte unchanged.
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      let pane = self.pane,
+                      TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+                        sourceTabId: session.sourceTab.id,
+                        originalTabIds: session.originalTabIds,
+                        currentTabIds: pane.tabs.map(\.id)
+                      ) else { return }
+                self.applyFallback(session)
+            }
+        }
+
+        private func applyFallback(_ session: ManualDragSession) {
             guard session.didStartDrag,
                   let pane,
+                  pane.id == session.sourcePaneId,
                   let bonsplitController,
                   let targetIndex = session.currentTargetIndex,
                   !shouldSuppressIndicator(sourceTabId: session.sourceTab.id, targetIndex: targetIndex),
@@ -2158,6 +2239,12 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
                 return
             }
 
+#if DEBUG
+            dlog(
+                "tab.manualReorderFallback pane=\(session.sourcePaneId.id.uuidString.prefix(5)) " +
+                    "tab=\(session.sourceTab.id.uuidString.prefix(5)) target=\(targetIndex)"
+            )
+#endif
             let orderBeforeReorder = pane.tabs.map { $0.id }
             withTransaction(Transaction(animation: nil)) {
                 pane.moveTab(from: currentSourceIndex, to: targetIndex)
@@ -2172,32 +2259,9 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
             }
         }
 
-        private func beginManualDrag(for session: ManualDragSession) {
-            guard let splitViewController else { return }
-#if DEBUG
-            dlog(
-                "tab.manualDragStart pane=\(session.sourcePaneId.id.uuidString.prefix(5)) " +
-                    "tab=\(session.sourceTab.id.uuidString.prefix(5)) title=\"\(session.sourceTab.title)\""
-            )
-#endif
-            _ = splitViewController.beginTabDrag(session.sourceTab, from: session.sourcePaneId)
-        }
-
         private func clearManualDrag() {
             session = nil
             onDropStateChanged?(nil, .idle)
-        }
-
-        private func clearControllerDragStateIfNeeded(sourceTabId: UUID) {
-            guard let splitViewController else { return }
-            if splitViewController.draggingTab?.id == sourceTabId {
-                splitViewController.draggingTab = nil
-                splitViewController.dragSourcePaneId = nil
-            }
-            if splitViewController.activeDragTab?.id == sourceTabId {
-                splitViewController.activeDragTab = nil
-                splitViewController.activeDragSourcePaneId = nil
-            }
         }
 
         private func tab(at point: NSPoint, in pane: PaneState) -> TabItem? {
@@ -2244,6 +2308,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
         private struct ManualDragSession {
             let sourceTab: TabItem
             let sourcePaneId: PaneID
+            let originalTabIds: [UUID]
             let startPoint: NSPoint
             var currentTargetIndex: Int?
             var didStartDrag: Bool
@@ -2251,12 +2316,101 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
     }
 }
 
-/// Background view that provides window-drag-from-empty-space in minimal mode
+enum TabBarEmptyChromeDoubleClickBehavior {
+    case newTabAction
+    case titlebar
+}
+
+@MainActor
+private struct TabBarEmptyChromeDragGesture {
+    enum Update {
+        case inactive
+        case waiting
+        case started(dx: CGFloat, dy: CGFloat)
+        case moved
+        case handledByTestHook(dx: CGFloat, dy: CGFloat)
+    }
+
+    private enum Phase {
+        case idle
+        case armed(mouseDownEvent: NSEvent, startLocation: NSPoint)
+        case dragging
+    }
+
+    private static let startDistanceSquared: CGFloat = 16
+
+    private var phase = Phase.idle
+    private var windowDragSession = BonsplitWindowDragSession()
+
+    mutating func begin(with event: NSEvent, in window: NSWindow) {
+        end()
+        phase = .armed(
+            mouseDownEvent: event,
+            startLocation: event.locationInWindow
+        )
+        windowDragSession.begin(with: event, in: window)
+    }
+
+    mutating func update(
+        with event: NSEvent,
+        in window: NSWindow,
+        performWindowDrag: ((NSEvent) -> Bool)? = nil
+    ) -> Update {
+        switch phase {
+        case .idle:
+            return .inactive
+        case .armed(let mouseDownEvent, let startLocation):
+            let dx = event.locationInWindow.x - startLocation.x
+            let dy = event.locationInWindow.y - startLocation.y
+            guard dx * dx + dy * dy >= Self.startDistanceSquared else {
+                return .waiting
+            }
+            if let performWindowDrag, performWindowDrag(mouseDownEvent) {
+                end()
+                return .handledByTestHook(dx: dx, dy: dy)
+            }
+            phase = .dragging
+            windowDragSession.update(with: event, in: window)
+            return .started(dx: dx, dy: dy)
+        case .dragging:
+            windowDragSession.update(with: event, in: window)
+            return .moved
+        }
+    }
+
+    mutating func end() {
+        phase = .idle
+        windowDragSession.end()
+    }
+}
+
+@MainActor
+private func performTabBarEmptyChromeDoubleClick(
+    behavior: TabBarEmptyChromeDoubleClickBehavior,
+    in window: NSWindow,
+    newTabAction: () -> Bool
+) {
+    switch behavior {
+    case .newTabAction:
+        _ = newTabAction()
+    case .titlebar:
+        let action = UserDefaults.standard
+            .persistentDomain(forName: UserDefaults.globalDomain)?["AppleActionOnDoubleClick"] as? String
+        switch action {
+        case "Minimize":
+            window.miniaturize(nil)
+        default:
+            window.zoom(nil)
+        }
+    }
+}
+
+/// Background view that provides window-drag-from-empty-space in every presentation mode
 /// and hover tracking via NSTrackingArea (replacing .contentShape + .onHover).
 /// As a .background(), AppKit routes clicks to tabs/buttons in front first;
 /// this view only receives hits in truly empty space.
 private struct TabBarDragAndHoverView: NSViewRepresentable {
-    let isMinimalMode: Bool
+    let doubleClickBehavior: TabBarEmptyChromeDoubleClickBehavior
     let geometryRegistry: TabBarItemGeometryRegistry
     let tabIds: [UUID]
     let onDoubleClick: () -> Bool
@@ -2264,7 +2418,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
     func makeNSView(context: Context) -> TabBarBackgroundNSView {
         let view = TabBarBackgroundNSView()
-        view.isMinimalMode = isMinimalMode
+        view.doubleClickBehavior = doubleClickBehavior
         view.geometryRegistry = geometryRegistry
         view.tabIds = tabIds
         view.onDoubleClick = onDoubleClick
@@ -2273,7 +2427,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TabBarBackgroundNSView, context: Context) {
-        nsView.isMinimalMode = isMinimalMode
+        nsView.doubleClickBehavior = doubleClickBehavior
         nsView.geometryRegistry = geometryRegistry
         nsView.tabIds = tabIds
         nsView.onDoubleClick = onDoubleClick
@@ -2281,7 +2435,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
     }
 
     final class TabBarBackgroundNSView: NSView, BonsplitTabItemHitRegionProviding {
-        var isMinimalMode = false
+        var doubleClickBehavior = TabBarEmptyChromeDoubleClickBehavior.newTabAction
         nonisolated(unsafe) var tabIds: [UUID] = []
         weak var geometryRegistry: TabBarItemGeometryRegistry?
         var onDoubleClick: (() -> Bool)?
@@ -2291,6 +2445,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         private var windowDidResignKeyObserver: NSObjectProtocol?
         private var localMouseMonitor: Any?
         private var isHovering = false
+        private var windowDragGesture = TabBarEmptyChromeDragGesture()
 
         override var mouseDownCanMoveWindow: Bool { false }
 
@@ -2303,6 +2458,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            windowDragGesture.end()
             BonsplitTabBarHitRegionRegistry.unregister(self)
             BonsplitTabItemHitRegionRegistry.unregister(self)
             removeWindowObservers()
@@ -2366,8 +2522,12 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
 
         override func mouseDown(with event: NSEvent) {
 #if DEBUG
-            dlog("tab.bar.bg.mouseDown isMinimal=\(isMinimalMode ? 1 : 0) clickCount=\(event.clickCount)")
+            dlog(
+                "tab.bar.bg.mouseDown doubleClickBehavior=\(String(describing: doubleClickBehavior)) " +
+                "clickCount=\(event.clickCount)"
+            )
 #endif
+            windowDragGesture.end()
             guard let window else {
                 super.mouseDown(with: event)
                 return
@@ -2380,26 +2540,29 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
                 return
             }
             if event.clickCount >= 2 {
-                if isMinimalMode {
-                    let action = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleActionOnDoubleClick"] as? String
-                    switch action {
-                    case "Minimize": window.miniaturize(nil)
-                    default: window.zoom(nil)
-                    }
-                    return
-                }
-                if onDoubleClick?() == true {
-                    return
-                }
-            }
-            guard isMinimalMode else {
-                super.mouseDown(with: event)
+                performTabBarEmptyChromeDoubleClick(
+                    behavior: doubleClickBehavior,
+                    in: window,
+                    newTabAction: { onDoubleClick?() == true }
+                )
                 return
             }
-            let wasMovable = window.isMovable
-            window.isMovable = true
-            window.performDrag(with: event)
-            window.isMovable = wasMovable
+            windowDragGesture.begin(with: event, in: window)
+        }
+
+        override func mouseDragged(with event: NSEvent) {
+            guard let window else {
+                super.mouseDragged(with: event)
+                return
+            }
+            if case .inactive = windowDragGesture.update(with: event, in: window) {
+                super.mouseDragged(with: event)
+            }
+        }
+
+        override func mouseUp(with event: NSEvent) {
+            windowDragGesture.end()
+            super.mouseUp(with: event)
         }
 
         func syncHoverStateToCurrentMouseLocation() {
@@ -2494,7 +2657,7 @@ struct TabBarDragZoneView: NSViewRepresentable {
     }
 
     var hitRegion: HitRegion = .entireBounds
-    let isMinimalMode: Bool
+    let doubleClickBehavior: TabBarEmptyChromeDoubleClickBehavior
     let isFocusedPane: Bool
     let onSingleClick: () -> Bool
     let onDoubleClick: () -> Bool
@@ -2502,7 +2665,7 @@ struct TabBarDragZoneView: NSViewRepresentable {
     func makeNSView(context: Context) -> DragNSView {
         let view = DragNSView()
         view.hitRegion = hitRegion
-        view.isMinimalMode = isMinimalMode
+        view.doubleClickBehavior = doubleClickBehavior
         view.isFocusedPane = isFocusedPane
         view.onSingleClick = onSingleClick
         view.onDoubleClick = onDoubleClick
@@ -2513,7 +2676,7 @@ struct TabBarDragZoneView: NSViewRepresentable {
 
     func updateNSView(_ nsView: DragNSView, context: Context) {
         nsView.hitRegion = hitRegion
-        nsView.isMinimalMode = isMinimalMode
+        nsView.doubleClickBehavior = doubleClickBehavior
         nsView.isFocusedPane = isFocusedPane
         nsView.onSingleClick = onSingleClick
         nsView.onDoubleClick = onDoubleClick
@@ -2528,17 +2691,12 @@ struct TabBarDragZoneView: NSViewRepresentable {
             }
         }
         var hitTestEventTypeOverride: NSEvent.EventType?
-        var isMinimalMode = false {
-            didSet { invalidateWindowDragCursorRects() }
-        }
+        var doubleClickBehavior = TabBarEmptyChromeDoubleClickBehavior.newTabAction
         var isFocusedPane = false
         var onSingleClick: (() -> Bool)?
         var onDoubleClick: (() -> Bool)?
         var performWindowDrag: ((NSEvent) -> Bool)?
-        private var pendingWindowDragEvent: NSEvent?
-        private var pendingWindowDragStart: NSPoint?
-
-        private static let windowDragStartDistanceSquared: CGFloat = 16
+        private var windowDragGesture = TabBarEmptyChromeDragGesture()
 
         deinit {
             unregisterGeometryObserver(from: hitRegion)
@@ -2548,13 +2706,19 @@ struct TabBarDragZoneView: NSViewRepresentable {
         // own window-drag tracking. When AppKit steals mouseUp from the first
         // click, the second click of a double-click is registered as a fresh
         // clickCount=1 instead of 2, making new-tab double-clicks flaky. We
-        // still support window dragging via the custom mouseDragged →
-        // window.performDrag flow below. See `NonDraggableHostingView` in
+        // still support window dragging via the custom screen-space drag
+        // session below. See `NonDraggableHostingView` in
         // SplitNodeView.swift for the same class of bug on pane tab clicks.
         override var mouseDownCanMoveWindow: Bool { false }
 
+        // AppKit asks the hit view, not its outer NSHostingView, whether an
+        // inactive window should receive the activating mouse-down. Accepting
+        // it here preserves that same event as the start of the drag gesture.
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            clearWindowDrag()
             invalidateWindowDragCursorRects()
         }
 
@@ -2583,64 +2747,41 @@ struct TabBarDragZoneView: NSViewRepresentable {
 #if DEBUG
             let point = convert(event.locationInWindow, from: nil)
             dlog(
-                "tab.bar.dragZone.mouseDown isMinimal=\(isMinimalMode ? 1 : 0) " +
+                "tab.bar.dragZone.mouseDown doubleClickBehavior=\(String(describing: doubleClickBehavior)) " +
                 "focused=\(isFocusedPane ? 1 : 0) clickCount=\(event.clickCount) " +
                 "point=\(point.x.rounded()),\(point.y.rounded()) " +
                 "bounds=\(bounds.width.rounded())x\(bounds.height.rounded())"
             )
 #endif
             guard let window = self.window else {
+                clearWindowDrag()
                 super.mouseDown(with: event)
                 return
             }
-
-            if !isMinimalMode {
-                clearPendingWindowDrag()
-                if event.clickCount == 1 {
-                    if !isFocusedPane, onSingleClick?() == true {
-#if DEBUG
-                        dlog("tab.bar.dragZone.focusPane")
-#endif
-                    } else {
-#if DEBUG
-                        dlog("tab.bar.dragZone.click skipped reason=standardSingleClick clickCount=\(event.clickCount)")
-#endif
-                    }
-                    return
-                }
-                if event.clickCount >= 2 {
-                    if onDoubleClick?() == true {
-#if DEBUG
-                        dlog("tab.bar.dragZone.doubleClick action=newTab")
-#endif
-                        return
-                    }
-                }
-#if DEBUG
-                dlog("tab.bar.dragZone.click skipped reason=standardUnhandledClick clickCount=\(event.clickCount)")
-#endif
-                return
-            }
+            clearWindowDrag()
 
             if event.clickCount >= 2 {
-                clearPendingWindowDrag()
 #if DEBUG
-                dlog("tab.bar.dragZone.doubleClick action=titlebar")
+                dlog(
+                    "tab.bar.dragZone.doubleClick action=" +
+                    "\(String(describing: doubleClickBehavior))"
+                )
 #endif
-                performTitlebarDoubleClickAction(in: window)
+                performTabBarEmptyChromeDoubleClick(
+                    behavior: doubleClickBehavior,
+                    in: window,
+                    newTabAction: { onDoubleClick?() == true }
+                )
                 return
             }
 
             if !isFocusedPane, onSingleClick?() == true {
-                clearPendingWindowDrag()
 #if DEBUG
                 dlog("tab.bar.dragZone.focusPane")
 #endif
-                return
             }
 
-            pendingWindowDragEvent = event
-            pendingWindowDragStart = event.locationInWindow
+            windowDragGesture.begin(with: event, in: window)
         }
 
         private func shouldCaptureHit(at point: NSPoint) -> Bool {
@@ -2691,7 +2832,7 @@ struct TabBarDragZoneView: NSViewRepresentable {
         }
 
         func windowDragCursorRectsForCurrentState() -> [NSRect] {
-            guard isMinimalMode, !bounds.isEmpty else { return [] }
+            guard !bounds.isEmpty else { return [] }
 
             switch hitRegion {
             case .entireBounds:
@@ -2757,62 +2898,47 @@ struct TabBarDragZoneView: NSViewRepresentable {
         }
 
         override func mouseDragged(with event: NSEvent) {
-            guard isMinimalMode,
-                  let window,
-                  let pendingEvent = pendingWindowDragEvent,
-                  let start = pendingWindowDragStart else {
+            guard let window else {
+                clearWindowDrag()
                 super.mouseDragged(with: event)
                 return
             }
 
-            let dx = event.locationInWindow.x - start.x
-            let dy = event.locationInWindow.y - start.y
-            guard dx * dx + dy * dy >= Self.windowDragStartDistanceSquared else {
-                return
-            }
-
+            switch windowDragGesture.update(
+                with: event,
+                in: window,
+                performWindowDrag: performWindowDrag
+            ) {
+            case .inactive:
+                super.mouseDragged(with: event)
+            case .waiting, .moved:
+                break
+            case .started(let dx, let dy):
 #if DEBUG
-            dlog(
-                "tab.bar.dragZone.dragStart " +
-                "dx=\(dx.rounded()) dy=\(dy.rounded())"
-            )
+                dlog(
+                    "tab.bar.dragZone.dragStart " +
+                    "dx=\(dx.rounded()) dy=\(dy.rounded()) " +
+                    "action=screenSpaceSession"
+                )
 #endif
-            clearPendingWindowDrag()
-            startWindowDrag(with: pendingEvent, in: window)
+            case .handledByTestHook(let dx, let dy):
+#if DEBUG
+                dlog(
+                    "tab.bar.dragZone.dragStart " +
+                    "dx=\(dx.rounded()) dy=\(dy.rounded()) " +
+                    "action=testHook"
+                )
+#endif
+            }
         }
 
         override func mouseUp(with event: NSEvent) {
-            clearPendingWindowDrag()
+            clearWindowDrag()
             super.mouseUp(with: event)
         }
 
-        private func clearPendingWindowDrag() {
-            pendingWindowDragEvent = nil
-            pendingWindowDragStart = nil
-        }
-
-        private func startWindowDrag(with event: NSEvent, in window: NSWindow) {
-            if let performWindowDrag, performWindowDrag(event) {
-#if DEBUG
-                dlog("tab.bar.dragZone.dragStart action=testHook")
-#endif
-                return
-            }
-            let wasMovable = window.isMovable
-            window.isMovable = true
-            defer { window.isMovable = wasMovable }
-            window.performDrag(with: event)
-#if DEBUG
-            dlog("tab.bar.dragZone.dragStart action=windowPerformDrag")
-#endif
-        }
-
-        private func performTitlebarDoubleClickAction(in window: NSWindow) {
-            let action = UserDefaults.standard.persistentDomain(forName: UserDefaults.globalDomain)?["AppleActionOnDoubleClick"] as? String
-            switch action {
-            case "Minimize": window.miniaturize(nil)
-            default: window.zoom(nil)
-            }
+        private func clearWindowDrag() {
+            windowDragGesture.end()
         }
     }
 }

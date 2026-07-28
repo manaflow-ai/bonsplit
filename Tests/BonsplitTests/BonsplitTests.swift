@@ -3250,6 +3250,17 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testLeadingTabBarInsetEndsWithSeparator() {
+        guard let alphas = renderedLeadingTabBarInsetBoundaryAlphas() else {
+            XCTFail("Expected rendered leading tab-bar inset boundary alphas")
+            return
+        }
+
+        XCTAssertLessThan(alphas.inset, 0.1)
+        XCTAssertGreaterThan(alphas.boundary, 0.3)
+    }
+
+    @MainActor
     func testInactiveSelectedTabIndicatorUsesDesaturatedAccent() {
         guard let focusedSaturation = renderedTabBarIndicatorSaturation(isFocused: true),
               let unfocusedSaturation = renderedTabBarIndicatorSaturation(isFocused: false) else {
@@ -4181,7 +4192,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneFocusesInactivePaneInMinimalMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
         view.isFocusedPane = false
 
         var focused = false
@@ -4218,9 +4229,19 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabBarDragZoneAcceptsFirstMouseInInactiveWindow() {
+        let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
+
+        XCTAssertTrue(
+            view.acceptsFirstMouse(for: nil),
+            "Empty titlebar chrome must receive the first drag gesture while its window is inactive"
+        )
+    }
+
+    @MainActor
     func testTabBarDragZoneMinimalModeNeverRequestsNewTabAfterSingleThenDoubleClick() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
         view.isFocusedPane = true
 
         var requestedNewTab = false
@@ -4268,7 +4289,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneDoubleClickDoesNotRequestNewTabInMinimalMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
         view.isFocusedPane = true
 
         var requestedNewTab = false
@@ -4306,7 +4327,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneSingleClickDoesNotRequestNewTabInStandardMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = false
+        view.doubleClickBehavior = .newTabAction
         view.isFocusedPane = true
 
         var newTabCount = 0
@@ -4344,7 +4365,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneSingleClickFocusesInactivePaneInStandardMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = false
+        view.doubleClickBehavior = .newTabAction
         view.isFocusedPane = false
 
         var focused = false
@@ -4388,7 +4409,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneStandardModeDoubleClickCreatesOnlyOneTab() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = false
+        view.doubleClickBehavior = .newTabAction
         view.isFocusedPane = true
 
         var newTabCount = 0
@@ -4491,7 +4512,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testTabBarDragZoneCursorMarksOnlyMinimalModeWindowDragArea() {
+    func testTabBarDragZoneCursorMarksEmptyWindowDragAreaInEveryMode() {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 320, height: 30))
         view.hitRegion = .trailingEmptyChrome(
             tabFrames: [CGRect(x: 10, y: 0, width: 90, height: 30)],
@@ -4500,23 +4521,23 @@ final class BonsplitTests: XCTestCase {
 
         XCTAssertEqual(
             view.windowDragCursorRectsForCurrentState(),
-            [],
-            "Standard mode should not advertise tab-bar window dragging with an open-hand cursor"
+            [NSRect(x: 110, y: 0, width: 162, height: 30)],
+            "Standard mode should mark empty tab chrome as a window-drag area"
         )
 
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
 
         XCTAssertEqual(
             view.windowDragCursorRectsForCurrentState(),
             [NSRect(x: 110, y: 0, width: 162, height: 30)],
-            "Minimal mode should show the open-hand cursor only in empty chrome after the tab frames and before action buttons"
+            "Minimal mode should mark the same empty tab chrome as a window-drag area"
         )
     }
 
     @MainActor
     func testTabBarDragZoneCursorCoversEntireExplicitDragZoneInMinimalMode() {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
 
         XCTAssertEqual(
             view.windowDragCursorRectsForCurrentState(),
@@ -4528,7 +4549,7 @@ final class BonsplitTests: XCTestCase {
     @MainActor
     func testTabBarDragZoneKeepsFocusedPaneWindowDragInMinimalMode() throws {
         let view = TabBarDragZoneView.DragNSView(frame: NSRect(x: 0, y: 0, width: 160, height: 30))
-        view.isMinimalMode = true
+        view.doubleClickBehavior = .titlebar
         view.isFocusedPane = true
 
         var focused = false
@@ -4569,6 +4590,72 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(focused, "Focused-pane drag zone should not bounce through first-click focus")
         XCTAssertTrue(dragged, "Focused-pane drag zone should continue to start window drags in minimal mode")
         XCTAssertFalse(view.mouseDownCanMoveWindow, "Focused-pane drag zone must not advertise window dragging to AppKit or AppKit steals mouseUp and breaks new-tab double-clicks")
+    }
+
+    @MainActor
+    func testTabBarDragZoneMovesChildWindowWhenNativeDragHandoffDoesNothing() throws {
+        try assertTabBarDragZoneMovesChildWindow(doubleClickBehavior: .titlebar)
+    }
+
+    @MainActor
+    func testTabBarDragZoneMovesChildWindowInStandardMode() throws {
+        try assertTabBarDragZoneMovesChildWindow(doubleClickBehavior: .newTabAction)
+    }
+
+    @MainActor
+    private func assertTabBarDragZoneMovesChildWindow(
+        doubleClickBehavior: TabBarEmptyChromeDoubleClickBehavior
+    ) throws {
+        let parent = NSWindow(
+            contentRect: NSRect(x: 40, y: 80, width: 500, height: 320),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let child = NoOpNativeDragWindow(
+            contentRect: NSRect(x: 100, y: 140, width: 200, height: 60),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        defer {
+            parent.removeChildWindow(child)
+            child.orderOut(nil)
+            parent.orderOut(nil)
+        }
+
+        let view = TabBarDragZoneView.DragNSView(
+            frame: NSRect(x: 0, y: 0, width: 160, height: 30)
+        )
+        view.doubleClickBehavior = doubleClickBehavior
+        view.isFocusedPane = true
+        child.contentView?.addSubview(view)
+        parent.addChildWindow(child, ordered: .above)
+        parent.orderFront(nil)
+        child.orderFront(nil)
+
+        let initialOrigin = child.frame.origin
+        let mouseDown = try makeLeftMouseDownEvent(
+            in: view,
+            at: NSPoint(x: 20, y: 15),
+            clickCount: 1
+        )
+        let mouseDragged = try makeMouseEvent(
+            type: .leftMouseDragged,
+            in: view,
+            at: NSPoint(x: 50, y: 35),
+            clickCount: 1
+        )
+
+        view.mouseDown(with: mouseDown)
+        view.mouseDragged(with: mouseDragged)
+
+        XCTAssertEqual(
+            child.frame.origin,
+            NSPoint(x: initialOrigin.x + 30, y: initialOrigin.y + 20),
+            "Empty tab chrome must move a child window in every presentation mode"
+        )
+        XCTAssertTrue(child.parent === parent)
     }
 
     private func withShortcutHintDefaultsSuite(_ body: (UserDefaults) -> Void) {
@@ -5369,6 +5456,36 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    private func renderedLeadingTabBarInsetBoundaryAlphas() -> (inset: CGFloat, boundary: CGFloat)? {
+        let leadingInset: CGFloat = 80
+        let appearance = BonsplitConfiguration.Appearance(
+            tabBarLeadingInset: leadingInset,
+            chromeColors: .init(
+                backgroundHex: "#00000000",
+                tabBarBackgroundHex: "#00000000",
+                borderHex: "#FFFFFF80"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: true,
+            appearance: appearance,
+            size: NSSize(width: 320, height: TabBarMetrics.barHeight)
+        ) { hostingView in
+            guard let inset = renderedColorInViewCoordinates(
+                in: hostingView,
+                at: NSPoint(x: leadingInset - 2, y: 4)
+            )?.usingColorSpace(.sRGB)?.alphaComponent,
+                  let boundary = renderedColorInViewCoordinates(
+                    in: hostingView,
+                    at: NSPoint(x: leadingInset - 0.5, y: 4)
+                  )?.usingColorSpace(.sRGB)?.alphaComponent else {
+                return nil
+            }
+            return (inset: inset, boundary: boundary)
+        }
+    }
+
+    @MainActor
     private func renderedColorInViewCoordinates(in view: NSView, at point: NSPoint) -> NSColor? {
         let integralBounds = view.bounds.integral
         guard let bitmap = view.bitmapImageRepForCachingDisplay(in: integralBounds) else { return nil }
@@ -5789,4 +5906,9 @@ final class BonsplitTests: XCTestCase {
         let configured = BonsplitConfiguration.Appearance(tabWidthMode: .fill)
         XCTAssertEqual(configured.tabWidthMode, .fill)
     }
+}
+
+@MainActor
+private final class NoOpNativeDragWindow: NSWindow {
+    override func performDrag(with event: NSEvent) {}
 }

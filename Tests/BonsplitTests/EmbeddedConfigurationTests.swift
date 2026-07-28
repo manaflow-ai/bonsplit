@@ -99,4 +99,68 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(controller.allPaneIds.count, paneCountBefore)
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
     }
+
+    func testManualTabReorderFallbackInstallsForMinimalModeOrExplicitHostRequest() {
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: false,
+            hostRequestsFallback: false
+        ))
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: true,
+            hostRequestsFallback: false
+        ))
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: true,
+            isMinimalMode: false,
+            hostRequestsFallback: true
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldInstall(
+            allowsTabReordering: false,
+            isMinimalMode: true,
+            hostRequestsFallback: true
+        ))
+    }
+
+    func testManualTabReorderFallbackYieldsToMatchingItemProviderDrag() {
+        let sourceTabId = UUID()
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: nil,
+            draggingTabId: nil
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: sourceTabId,
+            draggingTabId: nil
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyFallback(
+            sourceTabId: sourceTabId,
+            activeDragTabId: nil,
+            draggingTabId: sourceTabId
+        ))
+    }
+
+    func testDeferredManualFallbackOnlyAppliesToAnUnchangedSourcePane() {
+        let sourceTabId = UUID()
+        let siblingTabId = UUID()
+        let originalOrder = [siblingTabId, sourceTabId]
+
+        XCTAssertTrue(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: originalOrder
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: [sourceTabId, siblingTabId]
+        ))
+        XCTAssertFalse(TabBarManualReorderPolicy.shouldApplyDeferredFallback(
+            sourceTabId: sourceTabId,
+            originalTabIds: originalOrder,
+            currentTabIds: [siblingTabId]
+        ))
+    }
 }
