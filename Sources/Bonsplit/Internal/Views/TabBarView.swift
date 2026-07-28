@@ -1252,6 +1252,12 @@ struct TabBarView: View {
             forkConversationAvailabilityProvider: {
                 controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? .hidden
             },
+            forkConversationAvailabilityRefreshHandler: {
+                await controller.tabContextForkConversationAvailabilityRefreshHandler?(
+                    TabID(id: tab.id),
+                    pane.id
+                )
+            },
             onSelect: {
                 // Tab selection must be instant. Animating this transaction causes the pane
                 // content (often swapped via opacity) to crossfade, which is undesirable for
