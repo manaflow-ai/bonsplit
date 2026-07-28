@@ -2118,6 +2118,52 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuUpdateReevaluatesForkConversationAvailability() throws {
+        let target = TabContextMenuActionTarget()
+        var availability = TabContextForkConversationAvailability.refreshing
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            forkConversationDefaultAction: .forkConversationRight,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] },
+            forkConversationAvailabilityProvider: { availability }
+        )
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+
+        XCTAssertFalse(forkItem.isEnabled)
+        XCTAssertFalse(forkSubmenuItem.isEnabled)
+
+        availability = .available
+        menu.delegate?.menuNeedsUpdate?(menu)
+
+        XCTAssertTrue(forkItem.isEnabled)
+        XCTAssertTrue(forkSubmenuItem.isEnabled)
+        XCTAssertEqual(
+            forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem }.map(\.isEnabled),
+            Array(repeating: true, count: 6)
+        )
+    }
+
+    @MainActor
     func testTabContextMenuShowsDisconnectRemoteOnlyWhenAvailable() throws {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?
