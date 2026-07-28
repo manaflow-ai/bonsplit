@@ -2169,6 +2169,8 @@ final class BonsplitTests: XCTestCase {
         var availability = TabContextForkConversationAvailability.refreshing
         var refreshCount = 0
         let refreshStarted = expectation(description: "Fork availability refresh started")
+        let availabilityReevaluated = expectation(description: "Fork availability reevaluated")
+        var didObserveAvailable = false
         let state = TabContextMenuState(
             isPinned: false,
             isUnread: false,
@@ -2191,7 +2193,13 @@ final class BonsplitTests: XCTestCase {
             tabId: UUID(),
             state: state,
             moveDestinationsProvider: { [] },
-            forkConversationAvailabilityProvider: { availability },
+            forkConversationAvailabilityProvider: {
+                if availability == .available, !didObserveAvailable {
+                    didObserveAvailable = true
+                    availabilityReevaluated.fulfill()
+                }
+                return availability
+            },
             forkConversationAvailabilityRefreshHandler: {
                 refreshCount += 1
                 availability = .available
@@ -2204,7 +2212,7 @@ final class BonsplitTests: XCTestCase {
 
         menu.menuWillOpen(menu)
         menu.menuWillOpen(menu)
-        await fulfillment(of: [refreshStarted], timeout: 1)
+        await fulfillment(of: [refreshStarted, availabilityReevaluated], timeout: 1)
 
         XCTAssertEqual(refreshCount, 1)
         XCTAssertEqual(menu.forkConversationAvailability, .available)
