@@ -5,6 +5,10 @@ struct TabDragPreview: View {
     let tab: TabItem
     let appearance: BonsplitConfiguration.Appearance
 
+    private var titleFontSize: CGFloat {
+        TabItemStyling.clampedTitleFontSize(appearance.tabTitleFontSize)
+    }
+
     var body: some View {
         HStack(spacing: TabBarMetrics.contentSpacing) {
             if let iconName = tab.icon {
@@ -14,7 +18,7 @@ struct TabDragPreview: View {
             }
 
             Text(tab.title)
-                .font(.system(size: appearance.tabTitleFontSize))
+                .font(.system(size: titleFontSize))
                 .lineLimit(1)
                 .foregroundStyle(TabBarColors.activeText(for: appearance))
         }

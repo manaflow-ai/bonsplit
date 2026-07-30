@@ -2620,6 +2620,12 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testClampedTitleFontSizeUsesMinimumReadableSize() {
+        XCTAssertEqual(TabItemStyling.clampedTitleFontSize(3), 8)
+        XCTAssertEqual(TabItemStyling.clampedTitleFontSize(8), 8)
+        XCTAssertEqual(TabItemStyling.clampedTitleFontSize(13), 13)
+    }
+
     func testResolvedFaviconImageUsesIncomingDataWhenDecodable() {
         let existing = NSImage(size: NSSize(width: 12, height: 12))
         let incoming = NSImage(size: NSSize(width: 16, height: 16))
