@@ -116,9 +116,12 @@ public final class BonsplitController {
     // MARK: - Initialization
 
     /// Create a new controller with the specified configuration
-    public init(configuration: BonsplitConfiguration = .default) {
+    public init(
+        configuration: BonsplitConfiguration = .default,
+        initialPaneID: PaneID? = nil
+    ) {
         self.configuration = configuration
-        self.internalController = SplitViewController()
+        self.internalController = SplitViewController(initialPaneID: initialPaneID)
         internalController.publicController = self
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }
@@ -174,6 +177,7 @@ public final class BonsplitController {
     @discardableResult
     public func createTab(
         title: String,
+        tabID: TabID? = nil,
         hasCustomTitle: Bool = false,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
@@ -188,7 +192,8 @@ public final class BonsplitController {
         showsRemoteIndicator: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
-        let tabId = TabID()
+        let tabId = tabID ?? TabID()
+        guard tab(tabId) == nil else { return nil }
         let tab = Tab(
             id: tabId,
             title: title,
@@ -512,7 +517,8 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         withTab tab: Tab? = nil,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits else { return nil }
 
@@ -552,7 +558,8 @@ public final class BonsplitController {
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             with: internalTab,
-            initialDividerPosition: dividerPosition
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
         )
 
         // Find new pane (will be focused after split)
@@ -583,7 +590,8 @@ public final class BonsplitController {
         orientation: SplitOrientation,
         withTab tab: Tab,
         insertFirst: Bool,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits else { return nil }
 
@@ -619,7 +627,8 @@ public final class BonsplitController {
             orientation: orientation,
             tab: internalTab,
             insertFirst: insertFirst,
-            initialDividerPosition: dividerPosition
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
         )
 
         let newPaneId = focusedPaneId!
@@ -659,7 +668,8 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         movingTab tabId: TabID,
-        insertFirst: Bool
+        insertFirst: Bool,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits,
               configuration.allowCrossPaneTabMove else { return nil }
@@ -704,7 +714,8 @@ public final class BonsplitController {
             orientation: orientation,
             tab: tabItem,
             insertFirst: insertFirst,
-            initialDividerPosition: normalizedInitialDividerPosition(nil)
+            initialDividerPosition: normalizedInitialDividerPosition(nil),
+            newPaneID: newPaneID
         )
 
         let newPaneId = focusedPaneId!
@@ -1132,9 +1143,8 @@ public final class BonsplitController {
     /// - Parameters:
     ///   - isDragging: Whether the change is due to active divider dragging
     ///   - force: Deliver even inside the external-update suppression window.
-    ///     Only the drag-end path passes true: its notification is the one
-    ///     the delegate contract guarantees, so the anti-echo gate must not
-    ///     swallow it.
+    ///     Drag-end and authoritative tree replacement pass true because each
+    ///     operation guarantees one final geometry notification.
     internal func notifyGeometryChange(isDragging: Bool = false, force: Bool = false) {
         guard force || !internalController.isExternalUpdateInProgress else { return }
 

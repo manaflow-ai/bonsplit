@@ -14,6 +14,45 @@ private final class DropZoneModel {
 
 final class BonsplitTests: XCTestCase {
     @MainActor
+    func testDividerInteractionConfigurationReachesManagedSplitView() throws {
+        for allowDividerResizing in [true, false] {
+            let controller = BonsplitController(configuration: BonsplitConfiguration(
+                allowDividerResizing: allowDividerResizing,
+                appearance: .init(enableAnimations: false)
+            ))
+            _ = controller.createTab(title: "Base")
+            let sourcePane = try XCTUnwrap(controller.focusedPaneId)
+            XCTAssertNotNil(controller.splitPane(sourcePane, orientation: .horizontal))
+
+            let hostingView = NSHostingView(
+                rootView: BonsplitView(controller: controller) { _, _ in
+                    Color.clear
+                } emptyPane: { _ in
+                    Color.clear
+                }
+            )
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            defer { window.orderOut(nil) }
+            let contentView = try XCTUnwrap(window.contentView)
+            hostingView.frame = contentView.bounds
+            hostingView.autoresizingMask = [.width, .height]
+            contentView.addSubview(hostingView)
+            window.makeKeyAndOrderFront(nil)
+            contentView.layoutSubtreeIfNeeded()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+            contentView.layoutSubtreeIfNeeded()
+
+            let splitView = try XCTUnwrap(firstDescendant(ofType: ThemedSplitView.self, in: hostingView))
+            XCTAssertEqual(splitView.isDividerInteractionEnabled, allowDividerResizing)
+        }
+    }
+
+    @MainActor
     private final class FakeTabBarHitRegionView: NSView {
         deinit {
             BonsplitTabBarHitRegionRegistry.unregister(self)
@@ -1499,6 +1538,19 @@ final class BonsplitTests: XCTestCase {
         let tab = controller.tab(tabId)
         XCTAssertEqual(tab?.kind, "browser")
         XCTAssertEqual(tab?.isPinned, true)
+    }
+
+    @MainActor
+    func testCreateTabCanRestoreExactIdentityAndRejectsDuplicate() {
+        let controller = BonsplitController()
+        let restoredID = TabID()
+
+        XCTAssertEqual(
+            controller.createTab(title: "Restored", tabID: restoredID),
+            restoredID
+        )
+        XCTAssertNil(controller.createTab(title: "Duplicate", tabID: restoredID))
+        XCTAssertEqual(controller.allTabIds.filter { $0 == restoredID }.count, 1)
     }
 
     @MainActor

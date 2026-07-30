@@ -8,6 +8,8 @@ final class EmbeddedConfigurationTests: XCTestCase {
 
         XCTAssertTrue(configuration.allowsTabContextMenu)
         XCTAssertEqual(configuration.dividerPositionRange, 0.1...0.9)
+        XCTAssertTrue(configuration.allowDividerResizing)
+        XCTAssertFalse(BonsplitConfiguration.readOnly.allowDividerResizing)
     }
 
     func testConfiguredDividerRangeAllowsNarrowProgrammaticLayouts() throws {
@@ -98,5 +100,22 @@ final class EmbeddedConfigurationTests: XCTestCase {
         ))
         XCTAssertEqual(controller.allPaneIds.count, paneCountBefore)
         XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), orderBefore)
+    }
+
+    func testCallerCanInstallStablePaneIdentities() throws {
+        let rootPane = PaneID(id: UUID())
+        let secondPane = PaneID(id: UUID())
+        let controller = BonsplitController(initialPaneID: rootPane)
+
+        XCTAssertEqual(controller.allPaneIds, [rootPane])
+        XCTAssertEqual(
+            controller.splitPane(
+                rootPane,
+                orientation: .horizontal,
+                newPaneID: secondPane
+            ),
+            secondPane
+        )
+        XCTAssertEqual(Set(controller.allPaneIds), [rootPane, secondPane])
     }
 }

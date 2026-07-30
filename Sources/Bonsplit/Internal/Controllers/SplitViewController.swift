@@ -5,6 +5,11 @@ import SwiftUI
 @Observable
 @MainActor
 final class SplitViewController {
+    private struct PaneIndexes {
+        var panes: [PaneID: PaneState]
+        var tabOwners: [UUID: PaneID]
+    }
+
     /// The public wrapper that owns this controller, for identity lookups
     /// from managed AppKit views (see `BonsplitManagedSplitView`).
     weak var publicController: BonsplitController?
@@ -13,8 +18,7 @@ final class SplitViewController {
     private(set) var rootNode: SplitNode
 
     /// Live indexes for host queries that must not walk the split tree.
-    @ObservationIgnored private var paneStatesById: [PaneID: PaneState]
-    @ObservationIgnored private var paneIdsByTabId: [UUID: PaneID]
+    @ObservationIgnored private var paneIndexes: PaneIndexes
 
     /// Currently zoomed pane. When set, rendering should only show this pane.
     var zoomedPaneId: PaneID?
@@ -101,7 +105,7 @@ final class SplitViewController {
         }
     }
 
-    init(rootNode: SplitNode? = nil) {
+    init(rootNode: SplitNode? = nil, initialPaneID: PaneID? = nil) {
         let resolvedRoot: SplitNode
         let initialFocusedPaneId: PaneID?
         if let rootNode {
@@ -110,39 +114,38 @@ final class SplitViewController {
         } else {
             // Initialize with a single pane containing a welcome tab
             let welcomeTab = TabItem(title: "Welcome", icon: "star")
-            let initialPane = PaneState(tabs: [welcomeTab])
+            let initialPane = PaneState(id: initialPaneID ?? PaneID(), tabs: [welcomeTab])
             resolvedRoot = .pane(initialPane)
             initialFocusedPaneId = initialPane.id
         }
 
         let indexes = Self.makeIndexes(for: resolvedRoot)
         self.rootNode = resolvedRoot
-        self.paneStatesById = indexes.panes
-        self.paneIdsByTabId = indexes.tabOwners
+        self.paneIndexes = indexes
         self.focusedPaneId = initialFocusedPaneId
     }
 
     // MARK: - Indexed State
 
     func paneState(for paneId: PaneID) -> PaneState? {
-        paneStatesById[paneId]
+        paneIndexes.panes[paneId]
     }
 
     func paneId(containing tabId: UUID) -> PaneID? {
-        paneIdsByTabId[tabId]
+        paneIndexes.tabOwners[tabId]
     }
 
     func selectedTabId(inPane paneId: PaneID) -> UUID? {
-        paneStatesById[paneId]?.selectedTabId
+        paneIndexes.panes[paneId]?.selectedTabId
     }
 
     var paneCount: Int {
-        paneStatesById.count
+        paneIndexes.panes.count
     }
 
     private static func makeIndexes(
         for rootNode: SplitNode
-    ) -> (panes: [PaneID: PaneState], tabOwners: [UUID: PaneID]) {
+    ) -> PaneIndexes {
         var panes: [PaneID: PaneState] = [:]
         var tabOwners: [UUID: PaneID] = [:]
         var pendingNodes = [rootNode]
@@ -160,32 +163,48 @@ final class SplitViewController {
             }
         }
 
-        return (panes, tabOwners)
+        return PaneIndexes(panes: panes, tabOwners: tabOwners)
     }
 
     private func registerPane(_ pane: PaneState) {
-        if let replacedPane = paneStatesById.updateValue(pane, forKey: pane.id) {
-            for tab in replacedPane.tabs where paneIdsByTabId[tab.id] == pane.id {
-                paneIdsByTabId.removeValue(forKey: tab.id)
+        if let replacedPane = paneIndexes.panes.updateValue(pane, forKey: pane.id) {
+            for tab in replacedPane.tabs where paneIndexes.tabOwners[tab.id] == pane.id {
+                paneIndexes.tabOwners.removeValue(forKey: tab.id)
             }
         }
         for tab in pane.tabs {
-            paneIdsByTabId[tab.id] = pane.id
+            paneIndexes.tabOwners[tab.id] = pane.id
         }
     }
 
     private func unregisterPane(_ paneId: PaneID) {
-        guard let pane = paneStatesById.removeValue(forKey: paneId) else { return }
-        for tab in pane.tabs where paneIdsByTabId[tab.id] == paneId {
-            paneIdsByTabId.removeValue(forKey: tab.id)
+        guard let pane = paneIndexes.panes.removeValue(forKey: paneId) else { return }
+        for tab in pane.tabs where paneIndexes.tabOwners[tab.id] == paneId {
+            paneIndexes.tabOwners.removeValue(forKey: tab.id)
         }
+    }
+
+    /// Install a tree whose nodes and presentation state were completely
+    /// prepared by the caller. Index construction also finishes before any
+    /// live state changes. Main-actor isolation then makes the single index
+    /// replacement and single root replacement indivisible to callers.
+    func installAuthoritativeTree(
+        _ rootNode: SplitNode,
+        focusedPaneId: PaneID?,
+        zoomedPaneId: PaneID?
+    ) {
+        let indexes = Self.makeIndexes(for: rootNode)
+        paneIndexes = indexes
+        self.focusedPaneId = focusedPaneId
+        self.zoomedPaneId = zoomedPaneId
+        self.rootNode = rootNode
     }
 
     // MARK: - Focus Management
 
     /// Set focus to a specific pane
     func focusPane(_ paneId: PaneID) {
-        guard paneStatesById[paneId] != nil else { return }
+        guard paneIndexes.panes[paneId] != nil else { return }
 #if DEBUG
         dlog("focus.bonsplit pane=\(paneId.id.uuidString.prefix(5))")
 #endif
@@ -195,11 +214,11 @@ final class SplitViewController {
     /// Get the currently focused pane state
     var focusedPane: PaneState? {
         guard let focusedPaneId else { return nil }
-        return paneStatesById[focusedPaneId]
+        return paneIndexes.panes[focusedPaneId]
     }
 
     var zoomedNode: SplitNode? {
-        guard let zoomedPaneId, let pane = paneStatesById[zoomedPaneId] else { return nil }
+        guard let zoomedPaneId, let pane = paneIndexes.panes[zoomedPaneId] else { return nil }
         return .pane(pane)
     }
 
@@ -212,7 +231,7 @@ final class SplitViewController {
 
     @discardableResult
     func togglePaneZoom(_ paneId: PaneID) -> Bool {
-        guard paneStatesById[paneId] != nil else { return false }
+        guard paneIndexes.panes[paneId] != nil else { return false }
 
         if zoomedPaneId == paneId {
             zoomedPaneId = nil
@@ -220,7 +239,7 @@ final class SplitViewController {
         }
 
         // Match Ghostty behavior: a single-pane layout can't be zoomed.
-        guard paneStatesById.count > 1 else { return false }
+        guard paneIndexes.panes.count > 1 else { return false }
         zoomedPaneId = paneId
         focusedPaneId = paneId
         return true
@@ -233,9 +252,10 @@ final class SplitViewController {
         _ paneId: PaneID,
         orientation: SplitOrientation,
         with newTab: TabItem? = nil,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) {
-        guard paneStatesById[paneId] != nil else { return }
+        guard paneIndexes.panes[paneId] != nil else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeRecursively(
@@ -244,6 +264,7 @@ final class SplitViewController {
             orientation: orientation,
             newTab: newTab,
             initialDividerPosition: initialDividerPosition,
+            newPaneID: newPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
@@ -257,6 +278,7 @@ final class SplitViewController {
         orientation: SplitOrientation,
         newTab: TabItem?,
         initialDividerPosition: CGFloat?,
+        newPaneID: PaneID?,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
@@ -265,9 +287,9 @@ final class SplitViewController {
                 // Create new pane - empty if no tab provided (gives developer full control)
                 let newPane: PaneState
                 if let tab = newTab {
-                    newPane = PaneState(tabs: [tab])
+                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
                 } else {
-                    newPane = PaneState(tabs: [])
+                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [])
                 }
 
                 // Start with divider at the edge so there's no flash before animation
@@ -297,6 +319,7 @@ final class SplitViewController {
                 orientation: orientation,
                 newTab: newTab,
                 initialDividerPosition: initialDividerPosition,
+                newPaneID: newPaneID,
                 createdPane: &createdPane
             )
             if createdPane == nil {
@@ -306,6 +329,7 @@ final class SplitViewController {
                     orientation: orientation,
                     newTab: newTab,
                     initialDividerPosition: initialDividerPosition,
+                    newPaneID: newPaneID,
                     createdPane: &createdPane
                 )
             }
@@ -319,9 +343,10 @@ final class SplitViewController {
         orientation: SplitOrientation,
         tab: TabItem,
         insertFirst: Bool,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) {
-        guard paneStatesById[paneId] != nil else { return }
+        guard paneIndexes.panes[paneId] != nil else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeWithTabRecursively(
@@ -331,6 +356,7 @@ final class SplitViewController {
             tab: tab,
             insertFirst: insertFirst,
             initialDividerPosition: initialDividerPosition,
+            newPaneID: newPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
@@ -345,13 +371,14 @@ final class SplitViewController {
         tab: TabItem,
         insertFirst: Bool,
         initialDividerPosition: CGFloat?,
+        newPaneID: PaneID?,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
         case .pane(let paneState):
             if paneState.id == targetPaneId {
                 // Create new pane with the tab
-                let newPane = PaneState(tabs: [tab])
+                let newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
 
                 // Start with divider at the edge so there's no flash before animation
                 let splitState: SplitState
@@ -391,6 +418,7 @@ final class SplitViewController {
                 tab: tab,
                 insertFirst: insertFirst,
                 initialDividerPosition: initialDividerPosition,
+                newPaneID: newPaneID,
                 createdPane: &createdPane
             )
             if createdPane == nil {
@@ -401,6 +429,7 @@ final class SplitViewController {
                     tab: tab,
                     insertFirst: insertFirst,
                     initialDividerPosition: initialDividerPosition,
+                    newPaneID: newPaneID,
                     createdPane: &createdPane
                 )
             }
@@ -416,7 +445,7 @@ final class SplitViewController {
     /// Close a pane and collapse the split
     func closePane(_ paneId: PaneID) {
         // Don't close the last pane
-        guard paneStatesById.count > 1, paneStatesById[paneId] != nil else { return }
+        guard paneIndexes.panes.count > 1, paneIndexes.panes[paneId] != nil else { return }
 
         let (newRoot, siblingPaneId) = closePaneRecursively(node: rootNode, targetPaneId: paneId)
 
@@ -432,7 +461,7 @@ final class SplitViewController {
             focusedPaneId = firstPane
         }
 
-        if let zoomedPaneId, paneStatesById[zoomedPaneId] == nil {
+        if let zoomedPaneId, paneIndexes.panes[zoomedPaneId] == nil {
             self.zoomedPaneId = nil
         }
     }
@@ -484,20 +513,20 @@ final class SplitViewController {
     func addTab(_ tab: TabItem, toPane paneId: PaneID? = nil, atIndex index: Int? = nil) {
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId,
-              let pane = paneStatesById[targetPaneId] else { return }
+              let pane = paneIndexes.panes[targetPaneId] else { return }
 
         if let index {
             pane.insertTab(tab, at: index)
         } else {
             pane.addTab(tab)
         }
-        paneIdsByTabId[tab.id] = targetPaneId
+        paneIndexes.tabOwners[tab.id] = targetPaneId
     }
 
     /// Move a tab from one pane to another
     func moveTab(_ tab: TabItem, from sourcePaneId: PaneID, to targetPaneId: PaneID, atIndex index: Int? = nil) {
-        guard let sourcePane = paneStatesById[sourcePaneId],
-              let targetPane = paneStatesById[targetPaneId] else { return }
+        guard let sourcePane = paneIndexes.panes[sourcePaneId],
+              let targetPane = paneIndexes.panes[targetPaneId] else { return }
 
         if sourcePaneId == targetPaneId {
             guard let sourceIndex = sourcePane.tabs.firstIndex(where: { $0.id == tab.id }) else { return }
@@ -517,13 +546,13 @@ final class SplitViewController {
         } else {
             targetPane.addTab(tab)
         }
-        paneIdsByTabId[tab.id] = targetPaneId
+        paneIndexes.tabOwners[tab.id] = targetPaneId
 
         // Focus target pane
         focusPane(targetPaneId)
 
         // If source pane is now empty and not the only pane, close it
-        if sourcePane.tabs.isEmpty && paneStatesById.count > 1 {
+        if sourcePane.tabs.isEmpty && paneIndexes.panes.count > 1 {
             closePane(sourcePaneId)
         }
     }
@@ -532,21 +561,21 @@ final class SplitViewController {
     /// Callers that leave an empty pane decide whether to close or refill it.
     @discardableResult
     func removeTab(_ tabId: UUID, fromPane paneId: PaneID) -> TabItem? {
-        guard let pane = paneStatesById[paneId],
+        guard let pane = paneIndexes.panes[paneId],
               let removedTab = pane.removeTab(tabId) else { return nil }
-        if paneIdsByTabId[tabId] == paneId {
-            paneIdsByTabId.removeValue(forKey: tabId)
+        if paneIndexes.tabOwners[tabId] == paneId {
+            paneIndexes.tabOwners.removeValue(forKey: tabId)
         }
         return removedTab
     }
 
     /// Close a tab in a specific pane
     func closeTab(_ tabId: UUID, inPane paneId: PaneID) {
-        guard let pane = paneStatesById[paneId],
+        guard let pane = paneIndexes.panes[paneId],
               removeTab(tabId, fromPane: paneId) != nil else { return }
 
         // If pane is now empty and not the only pane, close it
-        if pane.tabs.isEmpty && paneStatesById.count > 1 {
+        if pane.tabs.isEmpty && paneIndexes.panes.count > 1 {
             closePane(paneId)
         }
     }
