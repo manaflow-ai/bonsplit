@@ -402,7 +402,9 @@ struct TabItemView: View {
         TabBarColors.tabText(
             for: appearance,
             backgroundHex: tab.backgroundHex,
-            isSelected: true
+            isSelected: isSelected,
+            isHovered: isHovered,
+            isSecondary: false
         )
     }
 
@@ -410,7 +412,9 @@ struct TabItemView: View {
         TabBarColors.tabText(
             for: appearance,
             backgroundHex: tab.backgroundHex,
-            isSelected: false
+            isSelected: isSelected,
+            isHovered: isHovered,
+            isSecondary: true
         )
     }
 
@@ -422,8 +426,32 @@ struct TabItemView: View {
         TabBarColors.nsColorTabText(
             for: appearance,
             backgroundHex: tab.backgroundHex,
-            isSelected: isSelected
+            isSelected: isSelected,
+            isHovered: isHovered
         )
+    }
+
+    private var customHoverControlColors: TabBarColors.TabControlColorPair? {
+        TabBarColors.customTabControlColors(
+            for: appearance,
+            backgroundHex: tab.backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered
+        )
+    }
+
+    private var customPinnedBadgeColors: TabBarColors.TabControlColorPair? {
+        TabBarColors.customTabControlColors(
+            for: appearance,
+            backgroundHex: tab.backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered,
+            prominent: true
+        )
+    }
+
+    private var secondaryAccessoryText: Color {
+        customHoverControlColors == nil ? currentTabText.opacity(0.78) : subduedTabText
     }
 
     /// Whether this tab renders in the compact icon-only style reserved for pinned
@@ -575,9 +603,7 @@ struct TabItemView: View {
                 if tab.showsRemoteIndicator {
                     Image(systemName: "network")
                         .font(.system(size: accessoryFontSize, weight: .semibold))
-                        .foregroundStyle(
-                            currentTabText.opacity(0.78)
-                        )
+                        .foregroundStyle(secondaryAccessoryText)
                         .saturation(saturation)
                         .accessibilityHidden(true)
                 }
@@ -601,15 +627,16 @@ struct TabItemView: View {
                             .font(.system(size: accessoryFontSize, weight: .semibold))
                             .foregroundStyle(
                                 isAudioHovered
-                                    ? currentTabText
-                                    : currentTabText.opacity(0.78)
+                                    ? (customHoverControlColors?.foreground ?? currentTabText)
+                                    : secondaryAccessoryText
                             )
                             .frame(width: accessorySlotSize, height: accessorySlotSize)
                             .background(
                                 Circle()
                                     .fill(
                                         isAudioHovered
-                                            ? TabBarColors.hoveredTabBackground(for: appearance)
+                                            ? (customHoverControlColors?.background
+                                                ?? TabBarColors.hoveredTabBackground(for: appearance))
                                             : .clear
                                     )
                             )
@@ -634,7 +661,7 @@ struct TabItemView: View {
                             .font(.system(size: accessoryFontSize, weight: .semibold))
                             .foregroundStyle(
                                 isZoomHovered
-                                    ? emphasizedTabText
+                                    ? (customHoverControlColors?.foreground ?? emphasizedTabText)
                                     : subduedTabText
                             )
                             .frame(width: accessorySlotSize, height: accessorySlotSize)
@@ -642,7 +669,8 @@ struct TabItemView: View {
                                 Circle()
                                     .fill(
                                         isZoomHovered
-                                            ? TabBarColors.hoveredTabBackground(for: appearance)
+                                            ? (customHoverControlColors?.background
+                                                ?? TabBarColors.hoveredTabBackground(for: appearance))
                                             : .clear
                                     )
                             )
@@ -785,10 +813,13 @@ struct TabItemView: View {
                 } label: {
                     Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: max(6, accessoryFontSize - 4), weight: .semibold))
-                        .foregroundStyle(currentTabText)
+                        .foregroundStyle(customPinnedBadgeColors?.foreground ?? currentTabText)
                         .padding(2)
                         .background(
-                            Circle().fill(TabBarColors.activeTabBackground(for: appearance))
+                            Circle().fill(
+                                customPinnedBadgeColors?.background
+                                    ?? TabBarColors.activeTabBackground(for: appearance)
+                            )
                         )
                         .contentShape(Circle())
                 }
@@ -1069,7 +1100,7 @@ struct TabItemView: View {
                         .font(.system(size: scaledCloseIconSize, weight: .semibold))
                         .foregroundStyle(
                             isCloseHovered
-                                ? emphasizedTabText
+                                ? (customHoverControlColors?.foreground ?? emphasizedTabText)
                                 : subduedTabText
                         )
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
@@ -1077,7 +1108,8 @@ struct TabItemView: View {
                             Circle()
                                 .fill(
                                     isCloseHovered
-                                        ? TabBarColors.hoveredTabBackground(for: appearance)
+                                        ? (customHoverControlColors?.background
+                                            ?? TabBarColors.hoveredTabBackground(for: appearance))
                                         : .clear
                                 )
                         )

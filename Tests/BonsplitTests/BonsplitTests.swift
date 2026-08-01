@@ -1217,6 +1217,59 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(foreground.blueComponent, 0.9)
     }
 
+    func testTranslucentPerTabBackgroundUsesCompositedTabBarSurfaceForContrast() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                tabBarBackgroundHex: "#FFFFFF1A",
+                paneBackgroundHex: "#000000"
+            )
+        )
+
+        let foreground = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#FFFFFF66",
+            isSelected: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(foreground.greenComponent, 0.9)
+        XCTAssertGreaterThan(foreground.blueComponent, 0.9)
+    }
+
+    func testHoveredPerTabBackgroundReevaluatesForegroundContrast() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let resting = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#737373",
+            isSelected: false,
+            isHovered: false
+        ).usingColorSpace(.sRGB)!
+        let hovered = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#737373",
+            isSelected: false,
+            isHovered: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(resting.redComponent, 0.9)
+        XCTAssertLessThan(hovered.redComponent, 0.1)
+    }
+
+    func testCustomTabControlColorsUseOneContrastResolvedTone() {
+        let pair = TabBarColors.customTabControlColors(
+            for: BonsplitConfiguration.Appearance(),
+            backgroundHex: "#112233",
+            isSelected: true,
+            isHovered: false
+        )!
+        let foreground = NSColor(pair.foreground).usingColorSpace(.sRGB)!
+        let background = NSColor(pair.background).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(background.redComponent, 0.9)
+        XCTAssertEqual(background.alphaComponent, 0.14, accuracy: 0.001)
+    }
+
     func testInvalidPerTabBackgroundFallsBackToStandardSelectedStyle() {
         let appearance = BonsplitConfiguration.Appearance()
         let invalid = NSColor(TabBarColors.tabBackground(
