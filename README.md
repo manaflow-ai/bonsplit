@@ -109,7 +109,15 @@ controller.selectPreviousTab()
 controller.selectNextTab()
 ```
 
-When tab context menus are enabled, **Customize Tab…** opens an icon and background editor. Bonsplit stores those choices in `iconOverride` and `backgroundHexOverride`, so resetting the customization restores the host-provided icon, favicon, and background.
+When tab context menus are enabled, **Tab Icon…** opens a searchable SF Symbol picker and **Tab Color** exposes a named palette plus a custom color picker. User colors render as a leading accent rail, while host-provided `backgroundHex` continues to control the full tab background. Bonsplit stores these choices in `iconOverride` and `colorHexOverride`, so clearing them restores the host-provided appearance.
+
+Hosts can keep the tab palette aligned with another color system by providing entries at menu-open time:
+
+```swift
+controller.tabColorPaletteProvider = {
+    [TabColorPaletteEntry(name: "Blue", hex: "#1565C0")]
+}
+```
 
 #### Split Operations
 
@@ -207,7 +215,7 @@ public struct Tab {
     public let icon: String?
     public let backgroundHex: String?
     public let iconOverride: String?
-    public let backgroundHexOverride: String?
+    public let colorHexOverride: String?
     public let isDirty: Bool
 }
 ```

@@ -37,6 +37,31 @@ enum TabAppearanceColor {
         return Color(nsColor: color)
     }
 
+    static func railNSColor(hex value: String) -> NSColor? {
+        guard let color = nsColor(hex: value)?.usingColorSpace(.sRGB) else { return nil }
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        color.getHue(
+            &hue,
+            saturation: &saturation,
+            brightness: &brightness,
+            alpha: &alpha
+        )
+
+        let boostedBrightness = min(1, max(brightness, 0.62) + ((1 - brightness) * 0.28))
+        let boostedSaturation = saturation <= 0.08
+            ? saturation
+            : min(1, saturation + ((1 - saturation) * 0.12))
+        return NSColor(
+            hue: hue,
+            saturation: boostedSaturation,
+            brightness: boostedBrightness,
+            alpha: alpha
+        )
+    }
+
     static func hex(from color: Color) -> String? {
         hex(from: NSColor(color))
     }

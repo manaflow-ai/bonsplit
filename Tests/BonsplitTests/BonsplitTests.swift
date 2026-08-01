@@ -265,7 +265,17 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(tab.title, "Legacy")
         XCTAssertNil(tab.backgroundHex)
         XCTAssertNil(tab.iconOverride)
-        XCTAssertNil(tab.backgroundHexOverride)
+        XCTAssertNil(tab.colorHexOverride)
+    }
+
+    func testLegacyBackgroundColorOverrideDecodesAsTabColor() throws {
+        let data = Data(
+            ##"{"id":"11111111-1111-1111-1111-111111111111","title":"Legacy","backgroundHexOverride":"#AABBCC"}"##.utf8
+        )
+
+        let tab = try JSONDecoder().decode(TabItem.self, from: data)
+
+        XCTAssertEqual(tab.colorHexOverride, "#AABBCC")
     }
 
     @MainActor
@@ -282,12 +292,12 @@ final class BonsplitTests: XCTestCase {
         controller.updateTab(
             tabId,
             iconOverride: .some("star.fill"),
-            backgroundHexOverride: .some("#AABBCC80")
+            colorHexOverride: .some("#AABBCC80")
         )
 
         var tab = controller.tab(tabId)
         XCTAssertEqual(tab?.iconOverride, "star.fill")
-        XCTAssertEqual(tab?.backgroundHexOverride, "#AABBCC80")
+        XCTAssertEqual(tab?.colorHexOverride, "#AABBCC80")
         XCTAssertEqual(tab?.icon, "globe")
         XCTAssertEqual(tab?.iconImageData, favicon)
         XCTAssertEqual(tab?.backgroundHex, "#112233")
@@ -295,34 +305,36 @@ final class BonsplitTests: XCTestCase {
         controller.updateTab(
             tabId,
             iconOverride: .some(nil),
-            backgroundHexOverride: .some(nil)
+            colorHexOverride: .some(nil)
         )
 
         tab = controller.tab(tabId)
         XCTAssertNil(tab?.iconOverride)
-        XCTAssertNil(tab?.backgroundHexOverride)
+        XCTAssertNil(tab?.colorHexOverride)
         XCTAssertEqual(tab?.icon, "globe")
         XCTAssertEqual(tab?.iconImageData, favicon)
         XCTAssertEqual(tab?.backgroundHex, "#112233")
     }
 
-    func testTabItemResolvesUserAppearanceAheadOfHostAppearance() {
+    func testTabItemKeepsUserAccentSeparateFromHostBackground() {
         var tab = TabItem(
             title: "Customized",
             icon: "globe",
             backgroundHex: "#112233",
             iconOverride: "star.fill",
-            backgroundHexOverride: "#AABBCC"
+            colorHexOverride: "#AABBCC"
         )
 
         XCTAssertEqual(tab.resolvedIconName, "star.fill")
-        XCTAssertEqual(tab.resolvedBackgroundHex, "#AABBCC")
+        XCTAssertEqual(tab.backgroundHex, "#112233")
+        XCTAssertEqual(tab.colorHexOverride, "#AABBCC")
 
         tab.iconOverride = nil
-        tab.backgroundHexOverride = nil
+        tab.colorHexOverride = nil
 
         XCTAssertEqual(tab.resolvedIconName, "globe")
-        XCTAssertEqual(tab.resolvedBackgroundHex, "#112233")
+        XCTAssertEqual(tab.backgroundHex, "#112233")
+        XCTAssertNil(tab.colorHexOverride)
     }
 
     @MainActor
@@ -335,7 +347,7 @@ final class BonsplitTests: XCTestCase {
             iconAsset: "AgentIcons/Claude",
             backgroundHex: "#112233",
             iconOverride: "star.fill",
-            backgroundHexOverride: "#445566",
+            colorHexOverride: "#445566",
             kind: "terminal",
             isDirty: true,
             showsNotificationBadge: true,
@@ -359,7 +371,7 @@ final class BonsplitTests: XCTestCase {
             iconAsset: .some("AgentIcons/Claude"),
             backgroundHex: .some("#112233"),
             iconOverride: .some("star.fill"),
-            backgroundHexOverride: .some("#445566"),
+            colorHexOverride: .some("#445566"),
             kind: .some("terminal"),
             hasCustomTitle: true,
             isDirty: true,
@@ -409,7 +421,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testSplitPaneWithTabPreservesIconAndBackground() {
+    func testSplitPaneWithTabPreservesIconBackgroundAndAccentColor() {
         let controller = BonsplitController()
         _ = controller.createTab(title: "Base")
         let styled = Bonsplit.Tab(
@@ -417,7 +429,7 @@ final class BonsplitTests: XCTestCase {
             icon: "paintbrush.fill",
             backgroundHex: "#336699",
             iconOverride: "star.fill",
-            backgroundHexOverride: "#663399"
+            colorHexOverride: "#663399"
         )
 
         let newPane = controller.splitPane(orientation: .horizontal, withTab: styled)
@@ -426,7 +438,7 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(controller.tab(styled.id)?.icon, "paintbrush.fill")
         XCTAssertEqual(controller.tab(styled.id)?.backgroundHex, "#336699")
         XCTAssertEqual(controller.tab(styled.id)?.iconOverride, "star.fill")
-        XCTAssertEqual(controller.tab(styled.id)?.backgroundHexOverride, "#663399")
+        XCTAssertEqual(controller.tab(styled.id)?.colorHexOverride, "#663399")
     }
 
     @MainActor
@@ -1385,6 +1397,13 @@ final class BonsplitTests: XCTestCase {
         XCTAssertNil(TabAppearanceColor.nsColor(hex: "#not-a-color"))
     }
 
+    @MainActor
+    func testTabIconCatalogOffersBroadAvailableSelection() {
+        XCTAssertGreaterThanOrEqual(TabIconCatalog.availableNames.count, 40)
+        XCTAssertTrue(TabIconCatalog.availableNames.contains("terminal.fill"))
+        XCTAssertTrue(TabIconCatalog.availableNames.contains("star.fill"))
+    }
+
     func testPaneBackgroundHexOverrideCanDifferFromChromeBackground() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(
@@ -2086,10 +2105,14 @@ final class BonsplitTests: XCTestCase {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?
         var selectedDestinationId: String?
-        var customizeAppearanceRequestCount = 0
+        var customizeIconRequestCount = 0
+        var selectedTabColors: [String?] = []
+        var customColorRequestCount = 0
         target.onContextAction = { selectedAction = $0 }
         target.onMoveDestination = { selectedDestinationId = $0 }
-        target.onCustomizeAppearance = { customizeAppearanceRequestCount += 1 }
+        target.onCustomizeIcon = { customizeIconRequestCount += 1 }
+        target.onTabColor = { selectedTabColors.append($0) }
+        target.onChooseCustomTabColor = { customColorRequestCount += 1 }
         let state = TabContextMenuState(
             isPinned: false,
             isUnread: false,
@@ -2112,6 +2135,13 @@ final class BonsplitTests: XCTestCase {
         let snapshot = TabContextMenuSnapshot(
             tabId: UUID(),
             state: state,
+            colorHexOverride: "#1565C0",
+            colorPaletteProvider: {
+                [
+                    TabColorPaletteEntry(name: "Blue", hex: "#1565C0"),
+                    TabColorPaletteEntry(name: "Purple", hex: "#6A1B9A"),
+                ]
+            },
             moveDestinationsProvider: {
                 moveDestinationRequestCount += 1
                 return [
@@ -2123,10 +2153,16 @@ final class BonsplitTests: XCTestCase {
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
         let moveItem = menu.items.first { $0.title == "Move Tab" }
-        let customizeAppearanceItem = menu.items.first { $0.title == "Customize Tab…" }
+        let tabIconItem = menu.items.first { $0.title == "Tab Icon…" }
+        let tabColorItem = menu.items.first { $0.title == "Tab Color" }
 
         XCTAssertEqual(moveDestinationRequestCount, 1)
-        XCTAssertNotNil(customizeAppearanceItem)
+        XCTAssertNotNil(tabIconItem)
+        XCTAssertEqual(
+            tabColorItem?.submenu?.items.map(\.title),
+            ["Clear Color", "Choose Custom Color…", "", "Blue", "Purple"]
+        )
+        XCTAssertEqual(tabColorItem?.submenu?.items[3].state, .on)
         XCTAssertNotNil(moveItem)
         XCTAssertTrue(moveItem?.isEnabled ?? false)
         XCTAssertEqual(moveItem?.submenu?.items.map(\.title), ["Move Tab to New Workspace", "Workspace A"])
@@ -2140,8 +2176,21 @@ final class BonsplitTests: XCTestCase {
         target.performMoveDestination(workspaceItem)
         XCTAssertEqual(selectedDestinationId, "workspace:abc")
 
-        target.performCustomizeAppearance(try XCTUnwrap(customizeAppearanceItem))
-        XCTAssertEqual(customizeAppearanceRequestCount, 1)
+        target.performCustomizeIcon(try XCTUnwrap(tabIconItem))
+        XCTAssertEqual(customizeIconRequestCount, 1)
+
+        let clearColorItem = try XCTUnwrap(tabColorItem?.submenu?.items.first)
+        target.performTabColor(clearColorItem)
+        XCTAssertEqual(selectedTabColors.count, 1)
+        XCTAssertNil(selectedTabColors[0])
+
+        let blueItem = try XCTUnwrap(tabColorItem?.submenu?.items[3])
+        target.performTabColor(blueItem)
+        XCTAssertEqual(selectedTabColors.last!, "#1565C0")
+
+        let customColorItem = try XCTUnwrap(tabColorItem?.submenu?.items[1])
+        target.performChooseCustomTabColor(customColorItem)
+        XCTAssertEqual(customColorRequestCount, 1)
     }
 
     @MainActor

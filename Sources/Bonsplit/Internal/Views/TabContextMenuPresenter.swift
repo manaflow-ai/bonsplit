@@ -4,6 +4,8 @@ import SwiftUI
 struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
+    let colorHexOverride: String?
+    let colorPaletteProvider: () -> [TabColorPaletteEntry]
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
@@ -11,12 +13,18 @@ struct TabContextMenuSnapshot {
     init(
         tabId: UUID,
         state: TabContextMenuState,
+        colorHexOverride: String? = nil,
+        colorPaletteProvider: @escaping () -> [TabColorPaletteEntry] = {
+            TabColorPaletteEntry.defaultPalette
+        },
         moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
         forkConversationAvailabilityProvider: @escaping () -> TabContextForkConversationAvailability,
         forkConversationAvailabilityRefreshHandler: @escaping @MainActor () async -> Void = {}
     ) {
         self.tabId = tabId
         self.state = state
+        self.colorHexOverride = colorHexOverride
+        self.colorPaletteProvider = colorPaletteProvider
         self.moveDestinationsProvider = moveDestinationsProvider
         self.forkConversationAvailabilityProvider = forkConversationAvailabilityProvider
         self.forkConversationAvailabilityRefreshHandler = forkConversationAvailabilityRefreshHandler
@@ -26,7 +34,9 @@ struct TabContextMenuSnapshot {
 final class TabContextMenuActionTarget: NSObject {
     var onContextAction: ((TabContextAction) -> Void)?
     var onMoveDestination: ((String) -> Void)?
-    var onCustomizeAppearance: (() -> Void)?
+    var onCustomizeIcon: (() -> Void)?
+    var onTabColor: ((String?) -> Void)?
+    var onChooseCustomTabColor: (() -> Void)?
 
     @objc func performContextAction(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
@@ -41,8 +51,17 @@ final class TabContextMenuActionTarget: NSObject {
         onMoveDestination?(destinationId)
     }
 
-    @objc func performCustomizeAppearance(_ sender: NSMenuItem) {
-        onCustomizeAppearance?()
+    @objc func performCustomizeIcon(_ sender: NSMenuItem) {
+        onCustomizeIcon?()
+    }
+
+    @objc func performTabColor(_ sender: NSMenuItem) {
+        guard let value = sender.representedObject as? String else { return }
+        onTabColor?(value.isEmpty ? nil : value)
+    }
+
+    @objc func performChooseCustomTabColor(_ sender: NSMenuItem) {
+        onChooseCustomTabColor?()
     }
 }
 
@@ -105,7 +124,9 @@ struct TabContextMenuPresenter: NSViewRepresentable {
     let snapshot: TabContextMenuSnapshot
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
-    let onCustomizeAppearance: () -> Void
+    let onCustomizeIcon: () -> Void
+    let onTabColor: (String?) -> Void
+    let onChooseCustomTabColor: () -> Void
 
     @MainActor
     final class Coordinator {
@@ -134,7 +155,9 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         let coordinator = Coordinator(snapshot: snapshot)
         coordinator.actionTarget.onContextAction = onContextAction
         coordinator.actionTarget.onMoveDestination = onMoveDestination
-        coordinator.actionTarget.onCustomizeAppearance = onCustomizeAppearance
+        coordinator.actionTarget.onCustomizeIcon = onCustomizeIcon
+        coordinator.actionTarget.onTabColor = onTabColor
+        coordinator.actionTarget.onChooseCustomTabColor = onChooseCustomTabColor
         return coordinator
     }
 
@@ -166,6 +189,8 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.actionTarget.onContextAction = onContextAction
         context.coordinator.actionTarget.onMoveDestination = onMoveDestination
-        context.coordinator.actionTarget.onCustomizeAppearance = onCustomizeAppearance
+        context.coordinator.actionTarget.onCustomizeIcon = onCustomizeIcon
+        context.coordinator.actionTarget.onTabColor = onTabColor
+        context.coordinator.actionTarget.onChooseCustomTabColor = onChooseCustomTabColor
     }
 }

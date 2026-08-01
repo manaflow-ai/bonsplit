@@ -292,7 +292,10 @@ struct TabItemView: View {
     let onZoomToggle: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
-    let onAppearanceUpdate: (_ iconOverride: String?, _ backgroundHexOverride: String?) -> Void
+    let tabColorPaletteProvider: () -> [TabColorPaletteEntry]
+    let onIconUpdate: (_ iconOverride: String?) -> Void
+    let onTabColorUpdate: (_ colorHexOverride: String?) -> Void
+    let onCustomTabColorUpdate: (_ colorHex: String) -> Void
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
@@ -304,7 +307,8 @@ struct TabItemView: View {
     @State private var lastLoadingStoppedAt: Date?
     @State private var renderedFaviconData: Data?
     @State private var renderedFaviconImage: NSImage?
-    @State private var isAppearanceCustomizerPresented = false
+    @State private var isIconCustomizerPresented = false
+    @State private var isCustomColorPickerPresented = false
 #if DEBUG
     @State private var debugLastIconFrame: CGRect?
     @State private var debugLastTitleFrame: CGRect?
@@ -353,27 +357,39 @@ struct TabItemView: View {
                     snapshot: TabContextMenuSnapshot(
                         tabId: tab.id,
                         state: contextMenuState,
+                        colorHexOverride: tab.colorHexOverride,
+                        colorPaletteProvider: tabColorPaletteProvider,
                         moveDestinationsProvider: moveDestinationsProvider,
                         forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
                         forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
                     ),
                     onContextAction: onContextAction,
                     onMoveDestination: onMoveDestination,
-                    onCustomizeAppearance: {
-                        isAppearanceCustomizerPresented = true
+                    onCustomizeIcon: {
+                        isIconCustomizerPresented = true
+                    },
+                    onTabColor: onTabColorUpdate,
+                    onChooseCustomTabColor: {
+                        isCustomColorPickerPresented = true
                     }
                 )
             }
         }
-        .sheet(isPresented: $isAppearanceCustomizerPresented) {
-            TabAppearanceCustomizerView(
+        .sheet(isPresented: $isIconCustomizerPresented) {
+            TabIconCustomizerView(
                 tabTitle: tab.title,
                 fallbackIconName: tab.icon,
                 baseBackgroundHex: tab.backgroundHex,
                 appearance: appearance,
                 iconOverride: tab.iconOverride,
-                backgroundHexOverride: tab.backgroundHexOverride,
-                onApply: onAppearanceUpdate
+                onApply: onIconUpdate
+            )
+        }
+        .sheet(isPresented: $isCustomColorPickerPresented) {
+            TabColorPickerView(
+                tabTitle: tab.title,
+                initialColorHex: tab.colorHexOverride,
+                onApply: onCustomTabColorUpdate
             )
         }
         .onTapGesture {
@@ -417,7 +433,7 @@ struct TabItemView: View {
     private var emphasizedTabText: Color {
         TabBarColors.tabText(
             for: appearance,
-            backgroundHex: tab.resolvedBackgroundHex,
+            backgroundHex: tab.backgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             isSecondary: false
@@ -427,7 +443,7 @@ struct TabItemView: View {
     private var subduedTabText: Color {
         TabBarColors.tabText(
             for: appearance,
-            backgroundHex: tab.resolvedBackgroundHex,
+            backgroundHex: tab.backgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             isSecondary: true
@@ -441,7 +457,7 @@ struct TabItemView: View {
     private var currentTabTextNSColor: NSColor {
         TabBarColors.nsColorTabText(
             for: appearance,
-            backgroundHex: tab.resolvedBackgroundHex,
+            backgroundHex: tab.backgroundHex,
             isSelected: isSelected,
             isHovered: isHovered
         )
@@ -450,7 +466,7 @@ struct TabItemView: View {
     private var customHoverControlColors: TabBarColors.TabControlColorPair? {
         TabBarColors.customTabControlColors(
             for: appearance,
-            backgroundHex: tab.resolvedBackgroundHex,
+            backgroundHex: tab.backgroundHex,
             isSelected: isSelected,
             isHovered: isHovered
         )
@@ -459,7 +475,7 @@ struct TabItemView: View {
     private var customPinnedBadgeColors: TabBarColors.TabControlColorPair? {
         TabBarColors.customTabControlColors(
             for: appearance,
-            backgroundHex: tab.resolvedBackgroundHex,
+            backgroundHex: tab.backgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             prominent: true
@@ -698,7 +714,11 @@ struct TabItemView: View {
                         }
                     }
                     .saturation(saturation)
-                    .accessibilityLabel("Exit zoom")
+                    .accessibilityLabel(Bundle.module.localizedString(
+                        forKey: "tabContext.exitZoom",
+                        value: "Exit Zoom",
+                        table: nil
+                    ))
                     .tabBarButtonAnimationsDisabled()
                 }
             }
@@ -1066,7 +1086,7 @@ struct TabItemView: View {
             Rectangle()
                 .fill(TabBarColors.tabBackground(
                     for: appearance,
-                    backgroundHex: tab.resolvedBackgroundHex,
+                    backgroundHex: tab.backgroundHex,
                     isSelected: isSelected,
                     isHovered: TabItemStyling.shouldShowHoverBackground(
                         isHovered: isHovered,
@@ -1081,6 +1101,19 @@ struct TabItemView: View {
                     .fill(TabBarColors.separator(for: appearance))
                     .frame(width: 1)
                     .padding(.bottom, max(0, trailingSeparatorBottomInset))
+            }
+
+            if let railColor = tab.colorHexOverride.flatMap({
+                TabAppearanceColor.railNSColor(hex: $0)
+            }) {
+                HStack {
+                    Capsule(style: .continuous)
+                        .fill(Color(nsColor: railColor).opacity(0.95))
+                        .frame(width: 3)
+                        .padding(.leading, 4)
+                        .padding(.vertical, 5)
+                    Spacer(minLength: 0)
+                }
             }
         }
     }
@@ -1444,13 +1477,14 @@ enum TabContextMenuBuilder {
             to: menu
         )
 
-        let customizeAppearanceItem = NSMenuItem(
-            title: localized("tabContext.customizeAppearance", defaultValue: "Customize Tab…"),
-            action: #selector(TabContextMenuActionTarget.performCustomizeAppearance(_:)),
+        let customizeIconItem = NSMenuItem(
+            title: localized("tabContext.tabIcon", defaultValue: "Tab Icon…"),
+            action: #selector(TabContextMenuActionTarget.performCustomizeIcon(_:)),
             keyEquivalent: ""
         )
-        customizeAppearanceItem.target = target
-        menu.addItem(customizeAppearanceItem)
+        customizeIconItem.target = target
+        menu.addItem(customizeIconItem)
+        menu.addItem(tabColorSubmenuItem(snapshot: snapshot, target: target))
 
         if state.hasCustomTitle {
             addAction(
@@ -1674,6 +1708,74 @@ enum TabContextMenuBuilder {
             for destinationItem in item.submenu?.items ?? [] where !destinationItem.isSeparatorItem {
                 destinationItem.isEnabled = isEnabled
             }
+        }
+    }
+
+    private static func tabColorSubmenuItem(
+        snapshot: TabContextMenuSnapshot,
+        target: TabContextMenuActionTarget
+    ) -> NSMenuItem {
+        let parent = NSMenuItem(
+            title: localized("tabContext.tabColor", defaultValue: "Tab Color"),
+            action: nil,
+            keyEquivalent: ""
+        )
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+
+        if snapshot.colorHexOverride != nil {
+            let clearItem = NSMenuItem(
+                title: localized("tabContext.clearColor", defaultValue: "Clear Color"),
+                action: #selector(TabContextMenuActionTarget.performTabColor(_:)),
+                keyEquivalent: ""
+            )
+            clearItem.target = target
+            clearItem.representedObject = ""
+            clearItem.image = NSImage(systemSymbolName: "xmark.circle", accessibilityDescription: nil)
+            submenu.addItem(clearItem)
+        }
+
+        let customItem = NSMenuItem(
+            title: localized("tabContext.chooseCustomColor", defaultValue: "Choose Custom Color…"),
+            action: #selector(TabContextMenuActionTarget.performChooseCustomTabColor(_:)),
+            keyEquivalent: ""
+        )
+        customItem.target = target
+        customItem.image = NSImage(systemSymbolName: "paintpalette", accessibilityDescription: nil)
+        submenu.addItem(customItem)
+
+        let palette = snapshot.colorPaletteProvider().filter {
+            TabAppearanceColor.nsColor(hex: $0.hex) != nil
+        }
+        if !palette.isEmpty {
+            submenu.addItem(.separator())
+        }
+
+        for entry in palette {
+            let colorItem = NSMenuItem(
+                title: entry.name,
+                action: #selector(TabContextMenuActionTarget.performTabColor(_:)),
+                keyEquivalent: ""
+            )
+            colorItem.target = target
+            colorItem.representedObject = entry.hex
+            colorItem.image = colorSwatchImage(hex: entry.hex)
+            if snapshot.colorHexOverride?.caseInsensitiveCompare(entry.hex) == .orderedSame {
+                colorItem.state = .on
+            }
+            submenu.addItem(colorItem)
+        }
+
+        parent.submenu = submenu
+        return parent
+    }
+
+    private static func colorSwatchImage(hex: String, diameter: CGFloat = 12) -> NSImage? {
+        guard let color = TabAppearanceColor.railNSColor(hex: hex) else { return nil }
+        return NSImage(size: NSSize(width: diameter, height: diameter), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 0.5, dy: 0.5)).fill()
+            return true
         }
     }
 

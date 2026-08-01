@@ -1290,11 +1290,32 @@ struct TabBarView: View {
             onMoveDestination: { destinationId in
                 controller.requestTabMove(toDestination: destinationId, for: TabID(id: tab.id), inPane: pane.id)
             },
-            onAppearanceUpdate: { iconOverride, backgroundHexOverride in
+            tabColorPaletteProvider: {
+                controller.tabColorPaletteProvider()
+            },
+            onIconUpdate: { iconOverride in
                 controller.updateTab(
                     TabID(id: tab.id),
-                    iconOverride: .some(iconOverride),
-                    backgroundHexOverride: .some(backgroundHexOverride)
+                    iconOverride: .some(iconOverride)
+                )
+            },
+            onTabColorUpdate: { colorHexOverride in
+                controller.updateTab(
+                    TabID(id: tab.id),
+                    colorHexOverride: .some(colorHexOverride)
+                )
+            },
+            onCustomTabColorUpdate: { colorHex in
+                let registeredColor: String?
+                if let registrationHandler = controller.tabColorCustomColorRegistrationHandler {
+                    registeredColor = registrationHandler(colorHex)
+                } else {
+                    registeredColor = colorHex
+                }
+                guard let registeredColor else { return }
+                controller.updateTab(
+                    TabID(id: tab.id),
+                    colorHexOverride: .some(registeredColor)
                 )
             }
         )
