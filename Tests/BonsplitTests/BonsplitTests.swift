@@ -1288,6 +1288,24 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(invalid.alphaComponent, standard.alphaComponent, accuracy: 0.0001)
     }
 
+    func testTransparentPerTabBackgroundRemainsExplicit() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let transparent = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#33669900",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(transparent.alphaComponent, 0, accuracy: 0.0001)
+        XCTAssertNotNil(TabBarColors.customTabControlColors(
+            for: appearance,
+            backgroundHex: "#33669900",
+            isSelected: true,
+            isHovered: false
+        ))
+    }
+
     func testPaneBackgroundHexOverrideCanDifferFromChromeBackground() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(

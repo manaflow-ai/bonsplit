@@ -113,7 +113,7 @@ enum TabBarColors {
 
     private static func tabBackgroundColor(from value: String?) -> NSColor? {
         guard let value else { return nil }
-        return nonClearColor(NSColor(bonsplitHex: value))
+        return NSColor(bonsplitHex: value)
     }
 
     private static func compositedColor(
