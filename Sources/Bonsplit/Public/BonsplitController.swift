@@ -163,6 +163,8 @@ public final class BonsplitController {
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - iconAsset: Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
     ///   - backgroundHex: Optional per-tab background color as `#RRGGBB` or `#RRGGBBAA`.
+    ///   - iconOverride: Optional user-selected SF Symbol that takes precedence over host-provided icons.
+    ///   - backgroundHexOverride: Optional user-selected background that takes precedence over `backgroundHex`.
     ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
     ///   - hasCustomTitle: Whether the tab title came from a custom user override
     ///   - isDirty: Whether the tab shows a dirty indicator
@@ -180,6 +182,8 @@ public final class BonsplitController {
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
         backgroundHex: String? = nil,
+        iconOverride: String? = nil,
+        backgroundHexOverride: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -199,6 +203,8 @@ public final class BonsplitController {
             iconImageData: iconImageData,
             iconAsset: iconAsset,
             backgroundHex: backgroundHex,
+            iconOverride: iconOverride,
+            backgroundHexOverride: backgroundHexOverride,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -241,6 +247,8 @@ public final class BonsplitController {
             iconImageData: iconImageData,
             iconAsset: iconAsset,
             backgroundHex: backgroundHex,
+            iconOverride: iconOverride,
+            backgroundHexOverride: backgroundHexOverride,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -294,6 +302,8 @@ public final class BonsplitController {
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - iconAsset: New asset-catalog icon name (pass nil to keep current, pass .some(nil) to remove)
     ///   - backgroundHex: New per-tab background color (pass nil to keep current, pass .some(nil) to remove)
+    ///   - iconOverride: New user-selected SF Symbol (pass nil to keep current, pass .some(nil) to restore the host icon)
+    ///   - backgroundHexOverride: New user-selected background (pass nil to keep current, pass .some(nil) to restore `backgroundHex`)
     ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
     ///   - hasCustomTitle: New custom-title state (pass nil to keep current)
     ///   - isDirty: New dirty state (pass nil to keep current)
@@ -309,6 +319,8 @@ public final class BonsplitController {
         iconImageData: Data?? = nil,
         iconAsset: String?? = nil,
         backgroundHex: String?? = nil,
+        iconOverride: String?? = nil,
+        backgroundHexOverride: String?? = nil,
         kind: String?? = nil,
         hasCustomTitle: Bool? = nil,
         isDirty: Bool? = nil,
@@ -327,6 +339,8 @@ public final class BonsplitController {
             iconImageData.map { currentTab.iconImageData != $0 } ?? false ||
             iconAsset.map { currentTab.iconAsset != $0 } ?? false ||
             backgroundHex.map { currentTab.backgroundHex != $0 } ?? false ||
+            iconOverride.map { currentTab.iconOverride != $0 } ?? false ||
+            backgroundHexOverride.map { currentTab.backgroundHexOverride != $0 } ?? false ||
             kind.map { currentTab.kind != $0 } ?? false ||
             hasCustomTitle.map { currentTab.hasCustomTitle != $0 } ?? false ||
             isDirty.map { currentTab.isDirty != $0 } ?? false ||
@@ -352,6 +366,12 @@ public final class BonsplitController {
         }
         if let backgroundHex = backgroundHex {
             pane.tabs[tabIndex].backgroundHex = backgroundHex
+        }
+        if let iconOverride = iconOverride {
+            pane.tabs[tabIndex].iconOverride = iconOverride
+        }
+        if let backgroundHexOverride = backgroundHexOverride {
+            pane.tabs[tabIndex].backgroundHexOverride = backgroundHexOverride
         }
         if let kind = kind {
             pane.tabs[tabIndex].kind = kind
@@ -544,6 +564,8 @@ public final class BonsplitController {
                 iconImageData: tab.iconImageData,
                 iconAsset: tab.iconAsset,
                 backgroundHex: tab.backgroundHex,
+                iconOverride: tab.iconOverride,
+                backgroundHexOverride: tab.backgroundHexOverride,
                 kind: tab.kind,
                 isDirty: tab.isDirty,
                 showsNotificationBadge: tab.showsNotificationBadge,
@@ -614,6 +636,8 @@ public final class BonsplitController {
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
             backgroundHex: tab.backgroundHex,
+            iconOverride: tab.iconOverride,
+            backgroundHexOverride: tab.backgroundHexOverride,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,

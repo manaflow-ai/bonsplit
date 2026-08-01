@@ -7,12 +7,12 @@ struct TabDragPreview: View {
 
     var body: some View {
         HStack(spacing: TabBarMetrics.contentSpacing) {
-            if let iconName = tab.icon {
+            if let iconName = tab.resolvedIconName {
                 Image(systemName: iconName)
                     .font(.system(size: TabBarMetrics.iconSize))
                     .foregroundStyle(TabBarColors.tabText(
                         for: appearance,
-                        backgroundHex: tab.backgroundHex,
+                        backgroundHex: tab.resolvedBackgroundHex,
                         isSelected: true
                     ))
             }
@@ -22,7 +22,7 @@ struct TabDragPreview: View {
                 .lineLimit(1)
                 .foregroundStyle(TabBarColors.tabText(
                     for: appearance,
-                    backgroundHex: tab.backgroundHex,
+                    backgroundHex: tab.resolvedBackgroundHex,
                     isSelected: true
                 ))
         }
@@ -32,7 +32,7 @@ struct TabDragPreview: View {
             RoundedRectangle(cornerRadius: TabBarMetrics.tabCornerRadius, style: .continuous)
                 .fill(TabBarColors.tabBackground(
                     for: appearance,
-                    backgroundHex: tab.backgroundHex,
+                    backgroundHex: tab.resolvedBackgroundHex,
                     isSelected: true,
                     isHovered: false
                 ))

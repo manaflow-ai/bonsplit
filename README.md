@@ -109,6 +109,8 @@ controller.selectPreviousTab()
 controller.selectNextTab()
 ```
 
+When tab context menus are enabled, **Customize Tab…** opens an icon and background editor. Bonsplit stores those choices in `iconOverride` and `backgroundHexOverride`, so resetting the customization restores the host-provided icon, favicon, and background.
+
 #### Split Operations
 
 ```swift
@@ -204,6 +206,8 @@ public struct Tab {
     public let title: String
     public let icon: String?
     public let backgroundHex: String?
+    public let iconOverride: String?
+    public let backgroundHexOverride: String?
     public let isDirty: Bool
 }
 ```

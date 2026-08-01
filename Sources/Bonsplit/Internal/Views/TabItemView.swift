@@ -292,6 +292,7 @@ struct TabItemView: View {
     let onZoomToggle: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
+    let onAppearanceUpdate: (_ iconOverride: String?, _ backgroundHexOverride: String?) -> Void
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
@@ -303,6 +304,7 @@ struct TabItemView: View {
     @State private var lastLoadingStoppedAt: Date?
     @State private var renderedFaviconData: Data?
     @State private var renderedFaviconImage: NSImage?
+    @State private var isAppearanceCustomizerPresented = false
 #if DEBUG
     @State private var debugLastIconFrame: CGRect?
     @State private var debugLastTitleFrame: CGRect?
@@ -356,9 +358,23 @@ struct TabItemView: View {
                         forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
                     ),
                     onContextAction: onContextAction,
-                    onMoveDestination: onMoveDestination
+                    onMoveDestination: onMoveDestination,
+                    onCustomizeAppearance: {
+                        isAppearanceCustomizerPresented = true
+                    }
                 )
             }
+        }
+        .sheet(isPresented: $isAppearanceCustomizerPresented) {
+            TabAppearanceCustomizerView(
+                tabTitle: tab.title,
+                fallbackIconName: tab.icon,
+                baseBackgroundHex: tab.backgroundHex,
+                appearance: appearance,
+                iconOverride: tab.iconOverride,
+                backgroundHexOverride: tab.backgroundHexOverride,
+                onApply: onAppearanceUpdate
+            )
         }
         .onTapGesture {
             onSelect()
@@ -401,7 +417,7 @@ struct TabItemView: View {
     private var emphasizedTabText: Color {
         TabBarColors.tabText(
             for: appearance,
-            backgroundHex: tab.backgroundHex,
+            backgroundHex: tab.resolvedBackgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             isSecondary: false
@@ -411,7 +427,7 @@ struct TabItemView: View {
     private var subduedTabText: Color {
         TabBarColors.tabText(
             for: appearance,
-            backgroundHex: tab.backgroundHex,
+            backgroundHex: tab.resolvedBackgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             isSecondary: true
@@ -425,7 +441,7 @@ struct TabItemView: View {
     private var currentTabTextNSColor: NSColor {
         TabBarColors.nsColorTabText(
             for: appearance,
-            backgroundHex: tab.backgroundHex,
+            backgroundHex: tab.resolvedBackgroundHex,
             isSelected: isSelected,
             isHovered: isHovered
         )
@@ -434,7 +450,7 @@ struct TabItemView: View {
     private var customHoverControlColors: TabBarColors.TabControlColorPair? {
         TabBarColors.customTabControlColors(
             for: appearance,
-            backgroundHex: tab.backgroundHex,
+            backgroundHex: tab.resolvedBackgroundHex,
             isSelected: isSelected,
             isHovered: isHovered
         )
@@ -443,7 +459,7 @@ struct TabItemView: View {
     private var customPinnedBadgeColors: TabBarColors.TabControlColorPair? {
         TabBarColors.customTabControlColors(
             for: appearance,
-            backgroundHex: tab.backgroundHex,
+            backgroundHex: tab.resolvedBackgroundHex,
             isSelected: isSelected,
             isHovered: isHovered,
             prominent: true
@@ -744,6 +760,10 @@ struct TabItemView: View {
             if tab.isLoading {
                 // Slightly smaller than the icon slot so it reads cleaner at tab scale.
                 TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTintColor)
+            } else if let iconOverride = tab.iconOverride {
+                Image(systemName: iconOverride)
+                    .font(.system(size: glyphSize(for: iconOverride)))
+                    .foregroundStyle(iconTint)
             } else if let image = faviconImage {
                 FaviconIconView(image: image)
                     .frame(width: iconSlotSize, height: iconSlotSize, alignment: .center)
@@ -768,7 +788,10 @@ struct TabItemView: View {
             }
         }
         // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
-        .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
+        .saturation(TabItemStyling.iconSaturation(
+            hasRasterIcon: tab.iconOverride == nil && faviconImage != nil,
+            tabSaturation: saturation
+        ))
         .transaction { tx in
             // Prevent incidental parent animations from briefly fading icon content.
             tx.animation = nil
@@ -785,12 +808,13 @@ struct TabItemView: View {
             globeFallbackWorkItem?.cancel()
             globeFallbackWorkItem = nil
         }
-        .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
-        .onChange(of: tab.iconImageData) { _ in
+        .onChange(of: tab.isLoading) { updateGlobeFallback() }
+        .onChange(of: tab.iconImageData) {
             updateRenderedFaviconImage()
             updateGlobeFallback()
         }
-        .onChange(of: tab.icon) { _ in updateGlobeFallback() }
+        .onChange(of: tab.icon) { updateGlobeFallback() }
+        .onChange(of: tab.iconOverride) { updateGlobeFallback() }
     }
 
     /// Small corner badge for icon-only pinned tabs, preserving the audio/unread/
@@ -1042,7 +1066,7 @@ struct TabItemView: View {
             Rectangle()
                 .fill(TabBarColors.tabBackground(
                     for: appearance,
-                    backgroundHex: tab.backgroundHex,
+                    backgroundHex: tab.resolvedBackgroundHex,
                     isSelected: isSelected,
                     isHovered: TabItemStyling.shouldShowHoverBackground(
                         isHovered: isHovered,
@@ -1419,6 +1443,14 @@ enum TabContextMenuBuilder {
             target: target,
             to: menu
         )
+
+        let customizeAppearanceItem = NSMenuItem(
+            title: localized("tabContext.customizeAppearance", defaultValue: "Customize Tab…"),
+            action: #selector(TabContextMenuActionTarget.performCustomizeAppearance(_:)),
+            keyEquivalent: ""
+        )
+        customizeAppearanceItem.target = target
+        menu.addItem(customizeAppearanceItem)
 
         if state.hasCustomTitle {
             addAction(

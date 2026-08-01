@@ -4,6 +4,7 @@
 "command.moveTabToLeftPane.title" = "Move to Left Pane";
 "command.moveTabToRightPane.title" = "Move to Right Pane";
 "tabContext.renameTab" = "Rename Tab…";
+"tabContext.customizeAppearance" = "Customize Tab…";
 "tabContext.removeCustomTabName" = "Remove Custom Tab Name";
 "tabContext.closeTabsToLeft" = "Close Tabs to Left";
 "tabContext.closeTabsToRight" = "Close Tabs to Right";
@@ -41,3 +42,15 @@
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
 "tabContext.disconnectRemote" = "Disconnect SSH";
 "tabContext.remoteConnectedAccessibility" = "Connected over SSH";
+"tabAppearance.title" = "Customize Tab";
+"tabAppearance.preview" = "Preview";
+"tabAppearance.icon" = "Icon";
+"tabAppearance.iconName" = "SF Symbol name";
+"tabAppearance.invalidIcon" = "This symbol is not available.";
+"tabAppearance.useIcon" = "Use %@ icon";
+"tabAppearance.background" = "Background";
+"tabAppearance.useCustomBackground" = "Use custom background";
+"tabAppearance.backgroundColor" = "Background color";
+"tabAppearance.reset" = "Reset";
+"tabAppearance.cancel" = "Cancel";
+"tabAppearance.save" = "Save";

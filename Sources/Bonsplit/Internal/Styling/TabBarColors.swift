@@ -19,7 +19,7 @@ enum TabBarColors {
         for appearance: BonsplitConfiguration.Appearance
     ) -> NSColor? {
         guard let value = appearance.chromeColors.backgroundHex else { return nil }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func paneBackgroundColor(
@@ -28,7 +28,7 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.paneBackgroundHex else {
             return chromeBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func tabBarBackgroundColor(
@@ -37,7 +37,7 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.tabBarBackgroundHex else {
             return chromeBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func nonClearColor(_ color: NSColor?) -> NSColor? {
@@ -59,14 +59,14 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.splitButtonBackdropHex else {
             return tabBarBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func chromeBorderColor(
         for appearance: BonsplitConfiguration.Appearance
     ) -> NSColor? {
         guard let value = appearance.chromeColors.borderHex else { return nil }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func effectiveBackgroundColor(
@@ -113,7 +113,7 @@ enum TabBarColors {
 
     private static func tabBackgroundColor(from value: String?) -> NSColor? {
         guard let value else { return nil }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func compositedColor(
@@ -487,34 +487,6 @@ enum TabBarColors {
 }
 
 private extension NSColor {
-    private static let bonsplitHexDigits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
-
-    convenience init?(bonsplitHex value: String) {
-        var hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hex.hasPrefix("#") {
-            hex.removeFirst()
-        }
-        guard hex.count == 6 || hex.count == 8 else { return nil }
-        guard hex.unicodeScalars.allSatisfy({ Self.bonsplitHexDigits.contains($0) }) else { return nil }
-        guard let rgba = UInt64(hex, radix: 16) else { return nil }
-        let red: CGFloat
-        let green: CGFloat
-        let blue: CGFloat
-        let alpha: CGFloat
-        if hex.count == 8 {
-            red = CGFloat((rgba & 0xFF000000) >> 24) / 255.0
-            green = CGFloat((rgba & 0x00FF0000) >> 16) / 255.0
-            blue = CGFloat((rgba & 0x0000FF00) >> 8) / 255.0
-            alpha = CGFloat(rgba & 0x000000FF) / 255.0
-        } else {
-            red = CGFloat((rgba & 0xFF0000) >> 16) / 255.0
-            green = CGFloat((rgba & 0x00FF00) >> 8) / 255.0
-            blue = CGFloat(rgba & 0x0000FF) / 255.0
-            alpha = 1.0
-        }
-        self.init(red: red, green: green, blue: blue, alpha: alpha)
-    }
-
     var isBonsplitLightColor: Bool {
         var red: CGFloat = 0
         var green: CGFloat = 0

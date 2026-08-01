@@ -1289,6 +1289,13 @@ struct TabBarView: View {
             },
             onMoveDestination: { destinationId in
                 controller.requestTabMove(toDestination: destinationId, for: TabID(id: tab.id), inPane: pane.id)
+            },
+            onAppearanceUpdate: { iconOverride, backgroundHexOverride in
+                controller.updateTab(
+                    TabID(id: tab.id),
+                    iconOverride: .some(iconOverride),
+                    backgroundHexOverride: .some(backgroundHexOverride)
+                )
             }
         )
         .background(

@@ -26,6 +26,7 @@ struct TabContextMenuSnapshot {
 final class TabContextMenuActionTarget: NSObject {
     var onContextAction: ((TabContextAction) -> Void)?
     var onMoveDestination: ((String) -> Void)?
+    var onCustomizeAppearance: (() -> Void)?
 
     @objc func performContextAction(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
@@ -38,6 +39,10 @@ final class TabContextMenuActionTarget: NSObject {
     @objc func performMoveDestination(_ sender: NSMenuItem) {
         guard let destinationId = sender.representedObject as? String else { return }
         onMoveDestination?(destinationId)
+    }
+
+    @objc func performCustomizeAppearance(_ sender: NSMenuItem) {
+        onCustomizeAppearance?()
     }
 }
 
@@ -100,6 +105,7 @@ struct TabContextMenuPresenter: NSViewRepresentable {
     let snapshot: TabContextMenuSnapshot
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
+    let onCustomizeAppearance: () -> Void
 
     @MainActor
     final class Coordinator {
@@ -128,6 +134,7 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         let coordinator = Coordinator(snapshot: snapshot)
         coordinator.actionTarget.onContextAction = onContextAction
         coordinator.actionTarget.onMoveDestination = onMoveDestination
+        coordinator.actionTarget.onCustomizeAppearance = onCustomizeAppearance
         return coordinator
     }
 
@@ -159,5 +166,6 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.actionTarget.onContextAction = onContextAction
         context.coordinator.actionTarget.onMoveDestination = onMoveDestination
+        context.coordinator.actionTarget.onCustomizeAppearance = onCustomizeAppearance
     }
 }

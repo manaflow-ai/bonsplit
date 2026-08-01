@@ -4,6 +4,7 @@
 "command.moveTabToLeftPane.title" = "左のペインへ移動";
 "command.moveTabToRightPane.title" = "右のペインへ移動";
 "tabContext.renameTab" = "タブ名を変更…";
+"tabContext.customizeAppearance" = "タブをカスタマイズ…";
 "tabContext.removeCustomTabName" = "カスタムタブ名を削除";
 "tabContext.closeTabsToLeft" = "左側のタブを閉じる";
 "tabContext.closeTabsToRight" = "右側のタブを閉じる";
@@ -41,3 +42,15 @@
 "tabContext.forkConversation.newWorkspace" = "新規ワークスペース";
 "tabContext.disconnectRemote" = "SSH接続を解除";
 "tabContext.remoteConnectedAccessibility" = "SSH接続中";
+"tabAppearance.title" = "タブをカスタマイズ";
+"tabAppearance.preview" = "プレビュー";
+"tabAppearance.icon" = "アイコン";
+"tabAppearance.iconName" = "SF Symbols名";
+"tabAppearance.invalidIcon" = "このシンボルは使用できません。";
+"tabAppearance.useIcon" = "%@アイコンを使用";
+"tabAppearance.background" = "背景";
+"tabAppearance.useCustomBackground" = "カスタム背景を使用";
+"tabAppearance.backgroundColor" = "背景色";
+"tabAppearance.reset" = "リセット";
+"tabAppearance.cancel" = "キャンセル";
+"tabAppearance.save" = "保存";

@@ -12,6 +12,10 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let iconAsset: String?
     /// Optional per-tab background color as `#RRGGBB` or `#RRGGBBAA`.
     public let backgroundHex: String?
+    /// Optional SF Symbol selected by the user. When present, this takes precedence over all host-provided icons.
+    public let iconOverride: String?
+    /// Optional background selected by the user. When present, this takes precedence over `backgroundHex`.
+    public let backgroundHexOverride: String?
     /// Consumer-defined tab kind identifier (for example, "terminal" or "browser").
     public let kind: String?
     public let isDirty: Bool
@@ -37,6 +41,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
         backgroundHex: String? = nil,
+        iconOverride: String? = nil,
+        backgroundHexOverride: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -53,6 +59,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.iconImageData = iconImageData
         self.iconAsset = iconAsset
         self.backgroundHex = backgroundHex
+        self.iconOverride = iconOverride
+        self.backgroundHexOverride = backgroundHexOverride
         self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
@@ -71,6 +79,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.iconImageData = tabItem.iconImageData
         self.iconAsset = tabItem.iconAsset
         self.backgroundHex = tabItem.backgroundHex
+        self.iconOverride = tabItem.iconOverride
+        self.backgroundHexOverride = tabItem.backgroundHexOverride
         self.kind = tabItem.kind
         self.isDirty = tabItem.isDirty
         self.showsNotificationBadge = tabItem.showsNotificationBadge
