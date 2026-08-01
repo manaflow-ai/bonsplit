@@ -398,6 +398,34 @@ struct TabItemView: View {
         }
     }
 
+    private var emphasizedTabText: Color {
+        TabBarColors.tabText(
+            for: appearance,
+            backgroundHex: tab.backgroundHex,
+            isSelected: true
+        )
+    }
+
+    private var subduedTabText: Color {
+        TabBarColors.tabText(
+            for: appearance,
+            backgroundHex: tab.backgroundHex,
+            isSelected: false
+        )
+    }
+
+    private var currentTabText: Color {
+        isSelected ? emphasizedTabText : subduedTabText
+    }
+
+    private var currentTabTextNSColor: NSColor {
+        TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: tab.backgroundHex,
+            isSelected: isSelected
+        )
+    }
+
     /// Whether this tab renders in the compact icon-only style reserved for pinned
     /// browser surfaces (favicon only, no title or trailing affordances).
     private var isIconOnlyPinned: Bool {
@@ -538,11 +566,7 @@ struct TabItemView: View {
                 Text(tab.title)
                     .font(.system(size: appearance.tabTitleFontSize))
                     .lineLimit(1)
-                    .foregroundStyle(
-                        isSelected
-                            ? TabBarColors.activeText(for: appearance)
-                            : TabBarColors.inactiveText(for: appearance)
-                    )
+                    .foregroundStyle(currentTabText)
                     .saturation(saturation)
                     .tabGeometryDebugFrame { frame in
                         debugRecordGeometry(which: "title", frame: frame)
@@ -552,10 +576,7 @@ struct TabItemView: View {
                     Image(systemName: "network")
                         .font(.system(size: accessoryFontSize, weight: .semibold))
                         .foregroundStyle(
-                            (isSelected
-                                ? TabBarColors.activeText(for: appearance)
-                                : TabBarColors.inactiveText(for: appearance))
-                                .opacity(0.78)
+                            currentTabText.opacity(0.78)
                         )
                         .saturation(saturation)
                         .accessibilityHidden(true)
@@ -580,13 +601,8 @@ struct TabItemView: View {
                             .font(.system(size: accessoryFontSize, weight: .semibold))
                             .foregroundStyle(
                                 isAudioHovered
-                                    ? (isSelected
-                                        ? TabBarColors.activeText(for: appearance)
-                                        : TabBarColors.inactiveText(for: appearance))
-                                    : (isSelected
-                                        ? TabBarColors.activeText(for: appearance)
-                                        : TabBarColors.inactiveText(for: appearance))
-                                        .opacity(0.78)
+                                    ? currentTabText
+                                    : currentTabText.opacity(0.78)
                             )
                             .frame(width: accessorySlotSize, height: accessorySlotSize)
                             .background(
@@ -618,8 +634,8 @@ struct TabItemView: View {
                             .font(.system(size: accessoryFontSize, weight: .semibold))
                             .foregroundStyle(
                                 isZoomHovered
-                                    ? TabBarColors.activeText(for: appearance)
-                                    : TabBarColors.inactiveText(for: appearance)
+                                    ? emphasizedTabText
+                                    : subduedTabText
                             )
                             .frame(width: accessorySlotSize, height: accessorySlotSize)
                             .background(
@@ -692,9 +708,7 @@ struct TabItemView: View {
     @ViewBuilder
     private var leadingIcon: some View {
         let iconSlotSize = scaledIconSize
-        let iconTintColor = isSelected
-            ? TabBarColors.nsColorActiveText(for: appearance)
-            : TabBarColors.nsColorInactiveText(for: appearance)
+        let iconTintColor = currentTabTextNSColor
         let iconTint = Color(nsColor: iconTintColor)
         let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
 
@@ -771,11 +785,7 @@ struct TabItemView: View {
                 } label: {
                     Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                         .font(.system(size: max(6, accessoryFontSize - 4), weight: .semibold))
-                        .foregroundStyle(
-                            isSelected
-                                ? TabBarColors.activeText(for: appearance)
-                                : TabBarColors.inactiveText(for: appearance)
-                        )
+                        .foregroundStyle(currentTabText)
                         .padding(2)
                         .background(
                             Circle().fill(TabBarColors.activeTabBackground(for: appearance))
@@ -998,15 +1008,16 @@ struct TabItemView: View {
     @ViewBuilder
     private var tabBackground: some View {
         ZStack(alignment: .top) {
-            if isSelected {
-                Rectangle()
-                    .fill(TabBarColors.activeTabBackground(for: appearance))
-            } else if TabItemStyling.shouldShowHoverBackground(isHovered: isHovered, isSelected: isSelected) {
-                Rectangle()
-                    .fill(TabBarColors.hoveredTabBackground(for: appearance))
-            } else {
-                Color.clear
-            }
+            Rectangle()
+                .fill(TabBarColors.tabBackground(
+                    for: appearance,
+                    backgroundHex: tab.backgroundHex,
+                    isSelected: isSelected,
+                    isHovered: TabItemStyling.shouldShowHoverBackground(
+                        isHovered: isHovered,
+                        isSelected: isSelected
+                    )
+                ))
 
             // Right border separator
             HStack {
@@ -1045,7 +1056,7 @@ struct TabItemView: View {
                 if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
                     Image(systemName: "pin.fill")
                         .font(.system(size: scaledCloseIconSize, weight: .semibold))
-                        .foregroundStyle(TabBarColors.inactiveText(for: appearance))
+                        .foregroundStyle(subduedTabText)
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .saturation(saturation)
                 }
@@ -1058,8 +1069,8 @@ struct TabItemView: View {
                         .font(.system(size: scaledCloseIconSize, weight: .semibold))
                         .foregroundStyle(
                             isCloseHovered
-                                ? TabBarColors.activeText(for: appearance)
-                                : TabBarColors.inactiveText(for: appearance)
+                                ? emphasizedTabText
+                                : subduedTabText
                         )
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .background(

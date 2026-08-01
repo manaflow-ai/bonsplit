@@ -229,6 +229,44 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabIconAndBackgroundCreateUpdateClearRoundTrips() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Styled",
+            icon: "doc",
+            backgroundHex: "#112233"
+        )!
+
+        XCTAssertEqual(controller.tab(tabId)?.icon, "doc")
+        XCTAssertEqual(controller.tab(tabId)?.backgroundHex, "#112233")
+
+        controller.updateTab(
+            tabId,
+            icon: .some("terminal.fill"),
+            backgroundHex: .some("#AABBCC80")
+        )
+        XCTAssertEqual(controller.tab(tabId)?.icon, "terminal.fill")
+        XCTAssertEqual(controller.tab(tabId)?.backgroundHex, "#AABBCC80")
+
+        controller.updateTab(
+            tabId,
+            icon: .some(nil),
+            backgroundHex: .some(nil)
+        )
+        XCTAssertNil(controller.tab(tabId)?.icon)
+        XCTAssertNil(controller.tab(tabId)?.backgroundHex)
+    }
+
+    func testLegacyTabItemDecodesWithoutBackground() throws {
+        let data = Data(#"{"id":"11111111-1111-1111-1111-111111111111","title":"Legacy"}"#.utf8)
+
+        let tab = try JSONDecoder().decode(TabItem.self, from: data)
+
+        XCTAssertEqual(tab.title, "Legacy")
+        XCTAssertNil(tab.backgroundHex)
+    }
+
+    @MainActor
     func testNoopTabUpdateDoesNotInvalidateObservedTabMetadata() {
         let controller = BonsplitController()
         let tabId = controller.createTab(
@@ -236,6 +274,7 @@ final class BonsplitTests: XCTestCase {
             hasCustomTitle: true,
             icon: "doc",
             iconAsset: "AgentIcons/Claude",
+            backgroundHex: "#112233",
             kind: "terminal",
             isDirty: true,
             showsNotificationBadge: true,
@@ -257,6 +296,7 @@ final class BonsplitTests: XCTestCase {
             title: "Original",
             icon: .some("doc"),
             iconAsset: .some("AgentIcons/Claude"),
+            backgroundHex: .some("#112233"),
             kind: .some("terminal"),
             hasCustomTitle: true,
             isDirty: true,
@@ -303,6 +343,23 @@ final class BonsplitTests: XCTestCase {
         // The supplied tab's audio-playing state must survive the public
         // Tab -> internal TabItem conversion in the split path.
         XCTAssertEqual(controller.tab(playing.id)?.isAudioPlaying, true)
+    }
+
+    @MainActor
+    func testSplitPaneWithTabPreservesIconAndBackground() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        let styled = Bonsplit.Tab(
+            title: "Styled",
+            icon: "paintbrush.fill",
+            backgroundHex: "#336699"
+        )
+
+        let newPane = controller.splitPane(orientation: .horizontal, withTab: styled)
+
+        XCTAssertNotNil(newPane)
+        XCTAssertEqual(controller.tab(styled.id)?.icon, "paintbrush.fill")
+        XCTAssertEqual(controller.tab(styled.id)?.backgroundHex, "#336699")
     }
 
     @MainActor
@@ -1136,6 +1193,46 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(Int(round(green * 255)), 246)
         XCTAssertEqual(Int(round(blue * 255)), 227)
         XCTAssertEqual(Int(round(alpha * 255)), 255)
+    }
+
+    func testPerTabBackgroundResolvesWithReadableForeground() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let background = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#112233",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+        let foreground = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#112233",
+            isSelected: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(Int(round(background.redComponent * 255)), 17)
+        XCTAssertEqual(Int(round(background.greenComponent * 255)), 34)
+        XCTAssertEqual(Int(round(background.blueComponent * 255)), 51)
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(foreground.greenComponent, 0.9)
+        XCTAssertGreaterThan(foreground.blueComponent, 0.9)
+    }
+
+    func testInvalidPerTabBackgroundFallsBackToStandardSelectedStyle() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let invalid = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#nope",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+        let standard = NSColor(
+            TabBarColors.activeTabBackground(for: appearance)
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(invalid.redComponent, standard.redComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.greenComponent, standard.greenComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.blueComponent, standard.blueComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.alphaComponent, standard.alphaComponent, accuracy: 0.0001)
     }
 
     func testPaneBackgroundHexOverrideCanDifferFromChromeBackground() {

@@ -162,6 +162,7 @@ public final class BonsplitController {
     ///   - icon: Optional SF Symbol name for the tab icon
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - iconAsset: Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
+    ///   - backgroundHex: Optional per-tab background color as `#RRGGBB` or `#RRGGBBAA`.
     ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
     ///   - hasCustomTitle: Whether the tab title came from a custom user override
     ///   - isDirty: Whether the tab shows a dirty indicator
@@ -178,6 +179,7 @@ public final class BonsplitController {
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        backgroundHex: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -196,6 +198,7 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            backgroundHex: backgroundHex,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -237,6 +240,7 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            backgroundHex: backgroundHex,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -289,6 +293,7 @@ public final class BonsplitController {
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - iconAsset: New asset-catalog icon name (pass nil to keep current, pass .some(nil) to remove)
+    ///   - backgroundHex: New per-tab background color (pass nil to keep current, pass .some(nil) to remove)
     ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
     ///   - hasCustomTitle: New custom-title state (pass nil to keep current)
     ///   - isDirty: New dirty state (pass nil to keep current)
@@ -303,6 +308,7 @@ public final class BonsplitController {
         icon: String?? = nil,
         iconImageData: Data?? = nil,
         iconAsset: String?? = nil,
+        backgroundHex: String?? = nil,
         kind: String?? = nil,
         hasCustomTitle: Bool? = nil,
         isDirty: Bool? = nil,
@@ -320,6 +326,7 @@ public final class BonsplitController {
             icon.map { currentTab.icon != $0 } ?? false ||
             iconImageData.map { currentTab.iconImageData != $0 } ?? false ||
             iconAsset.map { currentTab.iconAsset != $0 } ?? false ||
+            backgroundHex.map { currentTab.backgroundHex != $0 } ?? false ||
             kind.map { currentTab.kind != $0 } ?? false ||
             hasCustomTitle.map { currentTab.hasCustomTitle != $0 } ?? false ||
             isDirty.map { currentTab.isDirty != $0 } ?? false ||
@@ -342,6 +349,9 @@ public final class BonsplitController {
         }
         if let iconAsset = iconAsset {
             pane.tabs[tabIndex].iconAsset = iconAsset
+        }
+        if let backgroundHex = backgroundHex {
+            pane.tabs[tabIndex].backgroundHex = backgroundHex
         }
         if let kind = kind {
             pane.tabs[tabIndex].kind = kind
@@ -533,6 +543,7 @@ public final class BonsplitController {
                 icon: tab.icon,
                 iconImageData: tab.iconImageData,
                 iconAsset: tab.iconAsset,
+                backgroundHex: tab.backgroundHex,
                 kind: tab.kind,
                 isDirty: tab.isDirty,
                 showsNotificationBadge: tab.showsNotificationBadge,
@@ -602,6 +613,7 @@ public final class BonsplitController {
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
+            backgroundHex: tab.backgroundHex,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,

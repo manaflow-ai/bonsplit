@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Per-tab `backgroundHex` metadata on `Tab`, `createTab`, and `updateTab`. Hosts can
+  update a tab's icon and background in one call, clear either value explicitly, and
+  retain the style through splits, drag transfers, and persisted tab decoding.
 - `BonsplitConfiguration.Appearance.tabWidthMode` (`TabWidthMode`) to control tab sizing.
   - `.fixed` (default) keeps the historical fixed-width + horizontal-scroll layout unchanged.
   - `.fill` stretches tabs to fill the pane's available tab-bar width, distributing the

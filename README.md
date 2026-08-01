@@ -82,6 +82,7 @@ The main controller for managing tabs and panes.
 let tabId = controller.createTab(
     title: "Document.swift",
     icon: "swift",           // SF Symbol name (optional)
+    backgroundHex: "#315C8C", // Per-tab background (optional)
     isDirty: false,          // Show dirty indicator (optional)
     inPane: paneId           // Target pane (optional, defaults to focused)
 )
@@ -90,6 +91,12 @@ let tabId = controller.createTab(
 controller.updateTab(tabId, title: "NewName.swift")
 controller.updateTab(tabId, isDirty: true)
 controller.updateTab(tabId, icon: "doc.text")
+controller.updateTab(
+    tabId,
+    icon: .some("checkmark.circle.fill"),
+    backgroundHex: .some("#2E7D32")
+)
+controller.updateTab(tabId, backgroundHex: .some(nil)) // Restore the default background
 
 // Close a tab
 controller.closeTab(tabId)
@@ -196,6 +203,7 @@ public struct Tab {
     public let id: TabID
     public let title: String
     public let icon: String?
+    public let backgroundHex: String?
     public let isDirty: Bool
 }
 ```

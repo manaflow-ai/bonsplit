@@ -106,6 +106,49 @@ enum TabBarColors {
         return NSColor.white.withAlphaComponent(alpha)
     }
 
+    private static func tabBackgroundColor(from value: String?) -> NSColor? {
+        guard let value else { return nil }
+        return nonClearColor(NSColor(bonsplitHex: value))
+    }
+
+    private static func compositedTabBackground(
+        _ foreground: NSColor,
+        over background: NSColor
+    ) -> NSColor {
+        guard let foreground = foreground.usingColorSpace(.sRGB),
+              let background = background.usingColorSpace(.sRGB) else {
+            return foreground
+        }
+        let alpha = foreground.alphaComponent
+        let inverseAlpha = 1 - alpha
+        return NSColor(
+            red: foreground.redComponent * alpha + background.redComponent * inverseAlpha,
+            green: foreground.greenComponent * alpha + background.greenComponent * inverseAlpha,
+            blue: foreground.blueComponent * alpha + background.blueComponent * inverseAlpha,
+            alpha: 1
+        )
+    }
+
+    private static func effectiveTabTextColor(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        secondary: Bool
+    ) -> NSColor {
+        guard let customBackground = tabBackgroundColor(from: backgroundHex) else {
+            return effectiveTextColor(for: appearance, secondary: secondary)
+        }
+        let contrastBackground = compositedTabBackground(
+            customBackground,
+            over: nsColorBarBackground(for: appearance)
+        )
+        if contrastBackground.isBonsplitLightColor {
+            let alpha = secondary ? Constants.darkSecondaryTextAlpha : Constants.darkTextAlpha
+            return NSColor.black.withAlphaComponent(alpha)
+        }
+        let alpha = secondary ? Constants.lightSecondaryTextAlpha : Constants.lightTextAlpha
+        return NSColor.white.withAlphaComponent(alpha)
+    }
+
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: paneBackgroundColor(for: appearance) ?? .textBackgroundColor)
     }
@@ -201,6 +244,32 @@ enum TabBarColors {
         .clear
     }
 
+    /// Resolves a tab's background, including its selected and hover states.
+    ///
+    /// A valid per-tab color remains visible in every state. Hovering adjusts its
+    /// lightness slightly; selection continues to use the tab strip's indicator.
+    static func tabBackground(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool
+    ) -> Color {
+        if let custom = tabBackgroundColor(from: backgroundHex) {
+            guard isHovered && !isSelected else { return Color(nsColor: custom) }
+            let adjusted = custom.isBonsplitLightColor
+                ? custom.bonsplitDarken(by: 0.03)
+                : custom.bonsplitLighten(by: 0.07)
+            return Color(nsColor: adjusted)
+        }
+        if isSelected {
+            return activeTabBackground(for: appearance)
+        }
+        if isHovered {
+            return hoveredTabBackground(for: appearance)
+        }
+        return inactiveTabBackground
+    }
+
     // MARK: - Text Colors
 
     static var activeText: Color {
@@ -225,6 +294,31 @@ enum TabBarColors {
 
     static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         effectiveTextColor(for: appearance, secondary: true)
+    }
+
+    /// Resolves readable tab text and symbol color against a per-tab background.
+    static func tabText(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool
+    ) -> Color {
+        Color(nsColor: nsColorTabText(
+            for: appearance,
+            backgroundHex: backgroundHex,
+            isSelected: isSelected
+        ))
+    }
+
+    static func nsColorTabText(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool
+    ) -> NSColor {
+        effectiveTabTextColor(
+            for: appearance,
+            backgroundHex: backgroundHex,
+            secondary: !isSelected
+        )
     }
 
     static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {

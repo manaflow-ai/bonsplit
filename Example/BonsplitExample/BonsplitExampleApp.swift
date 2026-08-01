@@ -25,9 +25,17 @@ struct BonsplitExampleApp: App {
 
 struct DebugCommands: Commands {
     @Environment(\.openWindow) var openWindow
+    @FocusedObject var appState: AppState?
 
     var body: some Commands {
         CommandMenu("Debug") {
+            Button("Cycle Selected Tab Appearance") {
+                appState?.cycleCurrentTabAppearance()
+            }
+            .keyboardShortcut("a", modifiers: [.command, .option])
+
+            Divider()
+
             Button("Show Geometry Debug") {
                 openWindow(id: "debug")
             }
