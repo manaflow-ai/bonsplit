@@ -1414,11 +1414,11 @@ final class BonsplitTests: XCTestCase {
 
     @MainActor
     func testTabColorRailMatchesSelectedIndicatorWeight() throws {
-        let width = try XCTUnwrap(renderedTabColorRailWidth())
+        let weights = try XCTUnwrap(renderedTabColorRailAndSelectedIndicatorWeights())
 
         XCTAssertEqual(
-            width,
-            TabBarMetrics.activeIndicatorHeight,
+            weights.railWidth,
+            weights.indicatorHeight,
             accuracy: 0.01
         )
     }
@@ -5734,7 +5734,10 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    private func renderedTabColorRailWidth() -> CGFloat? {
+    private func renderedTabColorRailAndSelectedIndicatorWeights() -> (
+        railWidth: CGFloat,
+        indicatorHeight: CGFloat
+    )? {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(
                 backgroundHex: "#000000",
@@ -5743,7 +5746,7 @@ final class BonsplitTests: XCTestCase {
             )
         )
         return renderedTabBarValue(
-            isFocused: false,
+            isFocused: true,
             appearance: appearance,
             size: NSSize(width: 160, height: TabBarMetrics.barHeight),
             configurePane: { pane in
@@ -5757,7 +5760,7 @@ final class BonsplitTests: XCTestCase {
                 pane.selectedTabId = selected.id
             }
         ) { hostingView in
-            highSaturationWidth(
+            guard let railWidth = highSaturationWidth(
                 in: hostingView,
                 sampleRect: NSRect(
                     x: 0,
@@ -5765,7 +5768,19 @@ final class BonsplitTests: XCTestCase {
                     width: TabBarMetrics.tabMinWidth,
                     height: TabBarMetrics.barHeight - 8
                 )
-            )
+            ),
+                  let indicatorHeight = highSaturationHeight(
+                    in: hostingView,
+                    sampleRect: NSRect(
+                        x: TabBarMetrics.tabMinWidth + 8,
+                        y: 0,
+                        width: 8,
+                        height: TabBarMetrics.barHeight
+                    )
+                  ) else {
+                return nil
+            }
+            return (railWidth: railWidth, indicatorHeight: indicatorHeight)
         }
     }
 
@@ -6069,6 +6084,46 @@ final class BonsplitTests: XCTestCase {
             }
         }
         return CGFloat(activeColumnCount) / scaleX
+    }
+
+    @MainActor
+    private func highSaturationHeight(in view: NSView, sampleRect: NSRect) -> CGFloat? {
+        let integralBounds = view.bounds.integral
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: integralBounds) else { return nil }
+        bitmap.size = integralBounds.size
+        view.cacheDisplay(in: integralBounds, to: bitmap)
+
+        let scaleX = CGFloat(bitmap.pixelsWide) / max(1, integralBounds.width)
+        let scaleY = CGFloat(bitmap.pixelsHigh) / max(1, integralBounds.height)
+        let minX = max(0, Int(floor(sampleRect.minX * scaleX)))
+        let maxX = min(bitmap.pixelsWide, Int(ceil(sampleRect.maxX * scaleX)))
+        let minY = max(0, Int(floor(sampleRect.minY * scaleY)))
+        let maxY = min(bitmap.pixelsHigh, Int(ceil(sampleRect.maxY * scaleY)))
+
+        var activeRowCount = 0
+        for y in minY..<maxY {
+            var hasIndicatorPixel = false
+            for x in minX..<maxX {
+                guard let color = bitmap.colorAt(x: x, y: y),
+                      let rgb = color.usingColorSpace(.sRGB),
+                      rgb.alphaComponent > 0.05 else { continue }
+                let alpha = min(max(rgb.alphaComponent, 0), 1)
+                let red = rgb.redComponent * alpha
+                let green = rgb.greenComponent * alpha
+                let blue = rgb.blueComponent * alpha
+                let high = max(red, green, blue)
+                guard high > 0.01 else { continue }
+                let low = min(red, green, blue)
+                if (high - low) / high > 0.4 {
+                    hasIndicatorPixel = true
+                    break
+                }
+            }
+            if hasIndicatorPixel {
+                activeRowCount += 1
+            }
+        }
+        return CGFloat(activeRowCount) / scaleY
     }
 
     @MainActor
