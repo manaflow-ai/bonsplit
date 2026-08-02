@@ -49,6 +49,31 @@ class AppState {
         _ = controller.closeTab(tab.id)
     }
 
+    func cycleCurrentTabAppearance() {
+        guard let paneId = controller.focusedPaneId,
+              let tab = controller.selectedTab(inPane: paneId) else { return }
+        switch tab.backgroundHex {
+        case nil:
+            controller.updateTab(
+                tab.id,
+                icon: .some("checkmark.circle.fill"),
+                backgroundHex: .some("#2E7D32")
+            )
+        case "#2E7D32":
+            controller.updateTab(
+                tab.id,
+                icon: .some("paintbrush.fill"),
+                backgroundHex: .some("#6A4C93")
+            )
+        default:
+            controller.updateTab(
+                tab.id,
+                icon: .some("doc.text"),
+                backgroundHex: .some(nil)
+            )
+        }
+    }
+
     func splitHorizontal() {
         // Split creates empty pane - we create a tab via the delegate callback
         _ = controller.splitPane(orientation: .horizontal)

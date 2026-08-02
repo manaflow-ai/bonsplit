@@ -82,6 +82,7 @@ The main controller for managing tabs and panes.
 let tabId = controller.createTab(
     title: "Document.swift",
     icon: "swift",           // SF Symbol name (optional)
+    backgroundHex: "#315C8C", // Per-tab background (optional)
     isDirty: false,          // Show dirty indicator (optional)
     inPane: paneId           // Target pane (optional, defaults to focused)
 )
@@ -90,6 +91,12 @@ let tabId = controller.createTab(
 controller.updateTab(tabId, title: "NewName.swift")
 controller.updateTab(tabId, isDirty: true)
 controller.updateTab(tabId, icon: "doc.text")
+controller.updateTab(
+    tabId,
+    icon: .some("checkmark.circle.fill"),
+    backgroundHex: .some("#2E7D32")
+)
+controller.updateTab(tabId, backgroundHex: .some(nil)) // Restore the default background
 
 // Close a tab
 controller.closeTab(tabId)
@@ -100,6 +107,16 @@ controller.selectTab(tabId)
 // Navigate tabs
 controller.selectPreviousTab()
 controller.selectNextTab()
+```
+
+When tab context menus are enabled, **Tab Icon…** opens a searchable SF Symbol picker and **Tab Color** exposes a named palette plus a custom color picker. User colors render as a leading accent rail, while host-provided `backgroundHex` continues to control the full tab background. Bonsplit stores these choices in `iconOverride` and `colorHexOverride`, so clearing them restores the host-provided appearance.
+
+Hosts can keep the tab palette aligned with another color system by providing entries at menu-open time:
+
+```swift
+controller.tabColorPaletteProvider = {
+    [TabColorPaletteEntry(name: "Blue", hex: "#1565C0")]
+}
 ```
 
 #### Split Operations
@@ -196,6 +213,9 @@ public struct Tab {
     public let id: TabID
     public let title: String
     public let icon: String?
+    public let backgroundHex: String?
+    public let iconOverride: String?
+    public let colorHexOverride: String?
     public let isDirty: Bool
 }
 ```

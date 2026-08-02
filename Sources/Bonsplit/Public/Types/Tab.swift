@@ -10,6 +10,12 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let iconImageData: Data?
     /// Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
     public let iconAsset: String?
+    /// Optional per-tab background color as `#RRGGBB` or `#RRGGBBAA`.
+    public let backgroundHex: String?
+    /// Optional SF Symbol selected by the user. When present, this takes precedence over all host-provided icons.
+    public let iconOverride: String?
+    /// Optional color selected by the user and rendered as a leading accent rail.
+    public let colorHexOverride: String?
     /// Consumer-defined tab kind identifier (for example, "terminal" or "browser").
     public let kind: String?
     public let isDirty: Bool
@@ -34,6 +40,9 @@ public struct Tab: Identifiable, Hashable, Sendable {
         icon: String? = nil,
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        backgroundHex: String? = nil,
+        iconOverride: String? = nil,
+        colorHexOverride: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -49,6 +58,9 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.icon = icon
         self.iconImageData = iconImageData
         self.iconAsset = iconAsset
+        self.backgroundHex = backgroundHex
+        self.iconOverride = iconOverride
+        self.colorHexOverride = colorHexOverride
         self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
@@ -66,6 +78,9 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.icon = tabItem.icon
         self.iconImageData = tabItem.iconImageData
         self.iconAsset = tabItem.iconAsset
+        self.backgroundHex = tabItem.backgroundHex
+        self.iconOverride = tabItem.iconOverride
+        self.colorHexOverride = tabItem.colorHexOverride
         self.kind = tabItem.kind
         self.isDirty = tabItem.isDirty
         self.showsNotificationBadge = tabItem.showsNotificationBadge

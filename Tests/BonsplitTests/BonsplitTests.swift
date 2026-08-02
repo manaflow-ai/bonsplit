@@ -229,6 +229,115 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabIconAndBackgroundCreateUpdateClearRoundTrips() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(
+            title: "Styled",
+            icon: "doc",
+            backgroundHex: "#112233"
+        )!
+
+        XCTAssertEqual(controller.tab(tabId)?.icon, "doc")
+        XCTAssertEqual(controller.tab(tabId)?.backgroundHex, "#112233")
+
+        controller.updateTab(
+            tabId,
+            icon: .some("terminal.fill"),
+            backgroundHex: .some("#AABBCC80")
+        )
+        XCTAssertEqual(controller.tab(tabId)?.icon, "terminal.fill")
+        XCTAssertEqual(controller.tab(tabId)?.backgroundHex, "#AABBCC80")
+
+        controller.updateTab(
+            tabId,
+            icon: .some(nil),
+            backgroundHex: .some(nil)
+        )
+        XCTAssertNil(controller.tab(tabId)?.icon)
+        XCTAssertNil(controller.tab(tabId)?.backgroundHex)
+    }
+
+    func testLegacyTabItemDecodesWithoutBackground() throws {
+        let data = Data(#"{"id":"11111111-1111-1111-1111-111111111111","title":"Legacy"}"#.utf8)
+
+        let tab = try JSONDecoder().decode(TabItem.self, from: data)
+
+        XCTAssertEqual(tab.title, "Legacy")
+        XCTAssertNil(tab.backgroundHex)
+        XCTAssertNil(tab.iconOverride)
+        XCTAssertNil(tab.colorHexOverride)
+    }
+
+    func testLegacyBackgroundColorOverrideDecodesAsTabColor() throws {
+        let data = Data(
+            ##"{"id":"11111111-1111-1111-1111-111111111111","title":"Legacy","backgroundHexOverride":"#AABBCC"}"##.utf8
+        )
+
+        let tab = try JSONDecoder().decode(TabItem.self, from: data)
+
+        XCTAssertEqual(tab.colorHexOverride, "#AABBCC")
+    }
+
+    @MainActor
+    func testTabAppearanceOverridesPreserveHostMetadataWhenReset() {
+        let controller = BonsplitController()
+        let favicon = Data([0x01, 0x02, 0x03])
+        let tabId = controller.createTab(
+            title: "Customized",
+            icon: "globe",
+            iconImageData: favicon,
+            backgroundHex: "#112233"
+        )!
+
+        controller.updateTab(
+            tabId,
+            iconOverride: .some("star.fill"),
+            colorHexOverride: .some("#AABBCC80")
+        )
+
+        var tab = controller.tab(tabId)
+        XCTAssertEqual(tab?.iconOverride, "star.fill")
+        XCTAssertEqual(tab?.colorHexOverride, "#AABBCC80")
+        XCTAssertEqual(tab?.icon, "globe")
+        XCTAssertEqual(tab?.iconImageData, favicon)
+        XCTAssertEqual(tab?.backgroundHex, "#112233")
+
+        controller.updateTab(
+            tabId,
+            iconOverride: .some(nil),
+            colorHexOverride: .some(nil)
+        )
+
+        tab = controller.tab(tabId)
+        XCTAssertNil(tab?.iconOverride)
+        XCTAssertNil(tab?.colorHexOverride)
+        XCTAssertEqual(tab?.icon, "globe")
+        XCTAssertEqual(tab?.iconImageData, favicon)
+        XCTAssertEqual(tab?.backgroundHex, "#112233")
+    }
+
+    func testTabItemKeepsUserAccentSeparateFromHostBackground() {
+        var tab = TabItem(
+            title: "Customized",
+            icon: "globe",
+            backgroundHex: "#112233",
+            iconOverride: "star.fill",
+            colorHexOverride: "#AABBCC"
+        )
+
+        XCTAssertEqual(tab.resolvedIconName, "star.fill")
+        XCTAssertEqual(tab.backgroundHex, "#112233")
+        XCTAssertEqual(tab.colorHexOverride, "#AABBCC")
+
+        tab.iconOverride = nil
+        tab.colorHexOverride = nil
+
+        XCTAssertEqual(tab.resolvedIconName, "globe")
+        XCTAssertEqual(tab.backgroundHex, "#112233")
+        XCTAssertNil(tab.colorHexOverride)
+    }
+
+    @MainActor
     func testNoopTabUpdateDoesNotInvalidateObservedTabMetadata() {
         let controller = BonsplitController()
         let tabId = controller.createTab(
@@ -236,6 +345,9 @@ final class BonsplitTests: XCTestCase {
             hasCustomTitle: true,
             icon: "doc",
             iconAsset: "AgentIcons/Claude",
+            backgroundHex: "#112233",
+            iconOverride: "star.fill",
+            colorHexOverride: "#445566",
             kind: "terminal",
             isDirty: true,
             showsNotificationBadge: true,
@@ -257,6 +369,9 @@ final class BonsplitTests: XCTestCase {
             title: "Original",
             icon: .some("doc"),
             iconAsset: .some("AgentIcons/Claude"),
+            backgroundHex: .some("#112233"),
+            iconOverride: .some("star.fill"),
+            colorHexOverride: .some("#445566"),
             kind: .some("terminal"),
             hasCustomTitle: true,
             isDirty: true,
@@ -303,6 +418,27 @@ final class BonsplitTests: XCTestCase {
         // The supplied tab's audio-playing state must survive the public
         // Tab -> internal TabItem conversion in the split path.
         XCTAssertEqual(controller.tab(playing.id)?.isAudioPlaying, true)
+    }
+
+    @MainActor
+    func testSplitPaneWithTabPreservesIconBackgroundAndAccentColor() {
+        let controller = BonsplitController()
+        _ = controller.createTab(title: "Base")
+        let styled = Bonsplit.Tab(
+            title: "Styled",
+            icon: "paintbrush.fill",
+            backgroundHex: "#336699",
+            iconOverride: "star.fill",
+            colorHexOverride: "#663399"
+        )
+
+        let newPane = controller.splitPane(orientation: .horizontal, withTab: styled)
+
+        XCTAssertNotNil(newPane)
+        XCTAssertEqual(controller.tab(styled.id)?.icon, "paintbrush.fill")
+        XCTAssertEqual(controller.tab(styled.id)?.backgroundHex, "#336699")
+        XCTAssertEqual(controller.tab(styled.id)?.iconOverride, "star.fill")
+        XCTAssertEqual(controller.tab(styled.id)?.colorHexOverride, "#663399")
     }
 
     @MainActor
@@ -1138,6 +1274,162 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(Int(round(alpha * 255)), 255)
     }
 
+    func testPerTabBackgroundResolvesWithReadableForeground() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let background = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#112233",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+        let foreground = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#112233",
+            isSelected: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(Int(round(background.redComponent * 255)), 17)
+        XCTAssertEqual(Int(round(background.greenComponent * 255)), 34)
+        XCTAssertEqual(Int(round(background.blueComponent * 255)), 51)
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(foreground.greenComponent, 0.9)
+        XCTAssertGreaterThan(foreground.blueComponent, 0.9)
+    }
+
+    func testTranslucentPerTabBackgroundUsesCompositedTabBarSurfaceForContrast() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                tabBarBackgroundHex: "#FFFFFF1A",
+                paneBackgroundHex: "#000000"
+            )
+        )
+
+        let foreground = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#FFFFFF66",
+            isSelected: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(foreground.greenComponent, 0.9)
+        XCTAssertGreaterThan(foreground.blueComponent, 0.9)
+    }
+
+    func testHoveredPerTabBackgroundReevaluatesForegroundContrast() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let resting = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#737373",
+            isSelected: false,
+            isHovered: false
+        ).usingColorSpace(.sRGB)!
+        let hovered = TabBarColors.nsColorTabText(
+            for: appearance,
+            backgroundHex: "#737373",
+            isSelected: false,
+            isHovered: true
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(resting.redComponent, 0.9)
+        XCTAssertLessThan(hovered.redComponent, 0.1)
+    }
+
+    func testCustomTabControlColorsUseOneContrastResolvedTone() {
+        let pair = TabBarColors.customTabControlColors(
+            for: BonsplitConfiguration.Appearance(),
+            backgroundHex: "#112233",
+            isSelected: true,
+            isHovered: false
+        )!
+        let foreground = NSColor(pair.foreground).usingColorSpace(.sRGB)!
+        let background = NSColor(pair.background).usingColorSpace(.sRGB)!
+
+        XCTAssertGreaterThan(foreground.redComponent, 0.9)
+        XCTAssertGreaterThan(background.redComponent, 0.9)
+        XCTAssertEqual(background.alphaComponent, 0.14, accuracy: 0.001)
+    }
+
+    func testInvalidPerTabBackgroundFallsBackToStandardSelectedStyle() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let invalid = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#nope",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+        let standard = NSColor(
+            TabBarColors.activeTabBackground(for: appearance)
+        ).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(invalid.redComponent, standard.redComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.greenComponent, standard.greenComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.blueComponent, standard.blueComponent, accuracy: 0.0001)
+        XCTAssertEqual(invalid.alphaComponent, standard.alphaComponent, accuracy: 0.0001)
+    }
+
+    func testTransparentPerTabBackgroundRemainsExplicit() {
+        let appearance = BonsplitConfiguration.Appearance()
+        let transparent = NSColor(TabBarColors.tabBackground(
+            for: appearance,
+            backgroundHex: "#33669900",
+            isSelected: true,
+            isHovered: false
+        )).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(transparent.alphaComponent, 0, accuracy: 0.0001)
+        XCTAssertNotNil(TabBarColors.customTabControlColors(
+            for: appearance,
+            backgroundHex: "#33669900",
+            isSelected: true,
+            isHovered: false
+        ))
+    }
+
+    func testTabAppearanceColorParsesAndSerializesAlphaHex() throws {
+        let color = try XCTUnwrap(TabAppearanceColor.nsColor(hex: "#33669980"))
+            .usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(color.redComponent, 0x33 / 255, accuracy: 0.0001)
+        XCTAssertEqual(color.greenComponent, 0x66 / 255, accuracy: 0.0001)
+        XCTAssertEqual(color.blueComponent, 0x99 / 255, accuracy: 0.0001)
+        XCTAssertEqual(color.alphaComponent, 0x80 / 255, accuracy: 0.0001)
+        XCTAssertEqual(TabAppearanceColor.hex(from: color), "#33669980")
+        XCTAssertNil(TabAppearanceColor.nsColor(hex: "#not-a-color"))
+    }
+
+    @MainActor
+    func testTabColorRailPaintsTheFullSquareLeftBorder() throws {
+        let samples = try XCTUnwrap(renderedTabColorRailSamples())
+        XCTAssertEqual(samples.count, 3)
+
+        for sample in samples {
+            let color = try XCTUnwrap(sample.usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(
+                color.redComponent - max(color.greenComponent, color.blueComponent),
+                0.4
+            )
+            XCTAssertGreaterThan(color.alphaComponent, 0.8)
+        }
+    }
+
+    @MainActor
+    func testTabColorRailMatchesSelectedIndicatorWeight() throws {
+        let weights = try XCTUnwrap(renderedTabColorRailAndSelectedIndicatorWeights())
+
+        XCTAssertEqual(
+            weights.railWidth,
+            weights.indicatorHeight,
+            accuracy: 0.01
+        )
+    }
+
+    @MainActor
+    func testTabIconCatalogOffersBroadAvailableSelection() {
+        XCTAssertGreaterThanOrEqual(TabIconCatalog.availableNames.count, 40)
+        XCTAssertTrue(TabIconCatalog.availableNames.contains("terminal.fill"))
+        XCTAssertTrue(TabIconCatalog.availableNames.contains("star.fill"))
+    }
+
     func testPaneBackgroundHexOverrideCanDifferFromChromeBackground() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(
@@ -1839,8 +2131,14 @@ final class BonsplitTests: XCTestCase {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?
         var selectedDestinationId: String?
+        var customizeIconRequestCount = 0
+        var selectedTabColors: [String?] = []
+        var customColorRequestCount = 0
         target.onContextAction = { selectedAction = $0 }
         target.onMoveDestination = { selectedDestinationId = $0 }
+        target.onCustomizeIcon = { customizeIconRequestCount += 1 }
+        target.onTabColor = { selectedTabColors.append($0) }
+        target.onChooseCustomTabColor = { customColorRequestCount += 1 }
         let state = TabContextMenuState(
             isPinned: false,
             isUnread: false,
@@ -1863,6 +2161,13 @@ final class BonsplitTests: XCTestCase {
         let snapshot = TabContextMenuSnapshot(
             tabId: UUID(),
             state: state,
+            colorHexOverride: "#1565C0",
+            colorPaletteProvider: {
+                [
+                    TabColorPaletteEntry(name: "Blue", hex: "#1565C0"),
+                    TabColorPaletteEntry(name: "Purple", hex: "#6A1B9A"),
+                ]
+            },
             moveDestinationsProvider: {
                 moveDestinationRequestCount += 1
                 return [
@@ -1874,8 +2179,16 @@ final class BonsplitTests: XCTestCase {
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
         let moveItem = menu.items.first { $0.title == "Move Tab" }
+        let tabIconItem = menu.items.first { $0.title == "Tab Icon…" }
+        let tabColorItem = menu.items.first { $0.title == "Tab Color" }
 
         XCTAssertEqual(moveDestinationRequestCount, 1)
+        XCTAssertNotNil(tabIconItem)
+        XCTAssertEqual(
+            tabColorItem?.submenu?.items.map(\.title),
+            ["Clear Color", "Choose Custom Color…", "", "Blue", "Purple"]
+        )
+        XCTAssertEqual(tabColorItem?.submenu?.items[3].state, .on)
         XCTAssertNotNil(moveItem)
         XCTAssertTrue(moveItem?.isEnabled ?? false)
         XCTAssertEqual(moveItem?.submenu?.items.map(\.title), ["Move Tab to New Workspace", "Workspace A"])
@@ -1888,6 +2201,22 @@ final class BonsplitTests: XCTestCase {
         let workspaceItem = try XCTUnwrap(moveItem?.submenu?.items.dropFirst().first)
         target.performMoveDestination(workspaceItem)
         XCTAssertEqual(selectedDestinationId, "workspace:abc")
+
+        target.performCustomizeIcon(try XCTUnwrap(tabIconItem))
+        XCTAssertEqual(customizeIconRequestCount, 1)
+
+        let clearColorItem = try XCTUnwrap(tabColorItem?.submenu?.items.first)
+        target.performTabColor(clearColorItem)
+        XCTAssertEqual(selectedTabColors.count, 1)
+        XCTAssertNil(selectedTabColors[0])
+
+        let blueItem = try XCTUnwrap(tabColorItem?.submenu?.items[3])
+        target.performTabColor(blueItem)
+        XCTAssertEqual(selectedTabColors.last!, "#1565C0")
+
+        let customColorItem = try XCTUnwrap(tabColorItem?.submenu?.items[1])
+        target.performChooseCustomTabColor(customColorItem)
+        XCTAssertEqual(customColorRequestCount, 1)
     }
 
     @MainActor
@@ -5369,6 +5698,93 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    private func renderedTabColorRailSamples() -> [NSColor]? {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#000000",
+                tabBarBackgroundHex: "#000000",
+                borderHex: "#00000000"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: false,
+            appearance: appearance,
+            size: NSSize(width: 160, height: TabBarMetrics.barHeight),
+            configurePane: { pane in
+                let styled = TabItem(
+                    title: "",
+                    icon: nil,
+                    colorHexOverride: "#FF0000"
+                )
+                let selected = TabItem(title: "", icon: nil)
+                pane.tabs = [styled, selected]
+                pane.selectedTabId = selected.id
+            }
+        ) { hostingView in
+            let x: CGFloat = 0.25
+            let samplePoints = [
+                NSPoint(x: x, y: 0.25),
+                NSPoint(x: x, y: TabBarMetrics.barHeight / 2),
+                NSPoint(x: x, y: TabBarMetrics.barHeight - 0.25)
+            ]
+            return samplePoints.compactMap {
+                renderedColorInViewCoordinates(in: hostingView, at: $0)
+            }
+        }
+    }
+
+    @MainActor
+    private func renderedTabColorRailAndSelectedIndicatorWeights() -> (
+        railWidth: CGFloat,
+        indicatorHeight: CGFloat
+    )? {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#000000",
+                tabBarBackgroundHex: "#000000",
+                borderHex: "#00000000"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: true,
+            appearance: appearance,
+            size: NSSize(width: 160, height: TabBarMetrics.barHeight),
+            configurePane: { pane in
+                let styled = TabItem(
+                    title: "",
+                    icon: nil,
+                    colorHexOverride: "#FF0000"
+                )
+                let selected = TabItem(title: "", icon: nil)
+                pane.tabs = [styled, selected]
+                pane.selectedTabId = selected.id
+            }
+        ) { hostingView in
+            guard let railWidth = highSaturationWidth(
+                in: hostingView,
+                sampleRect: NSRect(
+                    x: 0,
+                    y: 4,
+                    width: TabBarMetrics.tabMinWidth,
+                    height: TabBarMetrics.barHeight - 8
+                )
+            ),
+                  let indicatorHeight = highSaturationHeight(
+                    in: hostingView,
+                    sampleRect: NSRect(
+                        x: TabBarMetrics.tabMinWidth + 8,
+                        y: 0,
+                        width: 8,
+                        height: TabBarMetrics.barHeight
+                    )
+                  ) else {
+                return nil
+            }
+            return (railWidth: railWidth, indicatorHeight: indicatorHeight)
+        }
+    }
+
+    @MainActor
     private func renderedColorInViewCoordinates(in view: NSView, at point: NSPoint) -> NSColor? {
         let integralBounds = view.bounds.integral
         guard let bitmap = view.bitmapImageRepForCachingDisplay(in: integralBounds) else { return nil }
@@ -5668,6 +6084,46 @@ final class BonsplitTests: XCTestCase {
             }
         }
         return CGFloat(activeColumnCount) / scaleX
+    }
+
+    @MainActor
+    private func highSaturationHeight(in view: NSView, sampleRect: NSRect) -> CGFloat? {
+        let integralBounds = view.bounds.integral
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: integralBounds) else { return nil }
+        bitmap.size = integralBounds.size
+        view.cacheDisplay(in: integralBounds, to: bitmap)
+
+        let scaleX = CGFloat(bitmap.pixelsWide) / max(1, integralBounds.width)
+        let scaleY = CGFloat(bitmap.pixelsHigh) / max(1, integralBounds.height)
+        let minX = max(0, Int(floor(sampleRect.minX * scaleX)))
+        let maxX = min(bitmap.pixelsWide, Int(ceil(sampleRect.maxX * scaleX)))
+        let minY = max(0, Int(floor(sampleRect.minY * scaleY)))
+        let maxY = min(bitmap.pixelsHigh, Int(ceil(sampleRect.maxY * scaleY)))
+
+        var activeRowCount = 0
+        for y in minY..<maxY {
+            var hasIndicatorPixel = false
+            for x in minX..<maxX {
+                guard let color = bitmap.colorAt(x: x, y: y),
+                      let rgb = color.usingColorSpace(.sRGB),
+                      rgb.alphaComponent > 0.05 else { continue }
+                let alpha = min(max(rgb.alphaComponent, 0), 1)
+                let red = rgb.redComponent * alpha
+                let green = rgb.greenComponent * alpha
+                let blue = rgb.blueComponent * alpha
+                let high = max(red, green, blue)
+                guard high > 0.01 else { continue }
+                let low = min(red, green, blue)
+                if (high - low) / high > 0.4 {
+                    hasIndicatorPixel = true
+                    break
+                }
+            }
+            if hasIndicatorPixel {
+                activeRowCount += 1
+            }
+        }
+        return CGFloat(activeRowCount) / scaleY
     }
 
     @MainActor

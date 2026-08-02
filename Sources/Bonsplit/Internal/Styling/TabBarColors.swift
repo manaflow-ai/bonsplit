@@ -3,6 +3,11 @@ import AppKit
 
 /// Native macOS colors for the tab bar
 enum TabBarColors {
+    struct TabControlColorPair {
+        let foreground: Color
+        let background: Color
+    }
+
     private enum Constants {
         static let darkTextAlpha: CGFloat = 0.82
         static let darkSecondaryTextAlpha: CGFloat = 0.62
@@ -14,7 +19,7 @@ enum TabBarColors {
         for appearance: BonsplitConfiguration.Appearance
     ) -> NSColor? {
         guard let value = appearance.chromeColors.backgroundHex else { return nil }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func paneBackgroundColor(
@@ -23,7 +28,7 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.paneBackgroundHex else {
             return chromeBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func tabBarBackgroundColor(
@@ -32,7 +37,7 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.tabBarBackgroundHex else {
             return chromeBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func nonClearColor(_ color: NSColor?) -> NSColor? {
@@ -54,14 +59,14 @@ enum TabBarColors {
         guard let value = appearance.chromeColors.splitButtonBackdropHex else {
             return tabBarBackgroundColor(for: appearance)
         }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func chromeBorderColor(
         for appearance: BonsplitConfiguration.Appearance
     ) -> NSColor? {
         guard let value = appearance.chromeColors.borderHex else { return nil }
-        return NSColor(bonsplitHex: value)
+        return TabAppearanceColor.nsColor(hex: value)
     }
 
     private static func effectiveBackgroundColor(
@@ -102,6 +107,92 @@ enum TabBarColors {
             return NSColor.black.withAlphaComponent(alpha)
         }
 
+        let alpha = secondary ? Constants.lightSecondaryTextAlpha : Constants.lightTextAlpha
+        return NSColor.white.withAlphaComponent(alpha)
+    }
+
+    private static func tabBackgroundColor(from value: String?) -> NSColor? {
+        guard let value else { return nil }
+        return TabAppearanceColor.nsColor(hex: value)
+    }
+
+    private static func compositedColor(
+        _ foreground: NSColor,
+        over background: NSColor
+    ) -> NSColor {
+        guard let foreground = foreground.usingColorSpace(.sRGB),
+              let background = background.usingColorSpace(.sRGB) else {
+            return foreground.withAlphaComponent(1)
+        }
+        let foregroundAlpha = foreground.alphaComponent
+        let backgroundAlpha = background.alphaComponent
+        let outputAlpha = foregroundAlpha + backgroundAlpha * (1 - foregroundAlpha)
+        guard outputAlpha > 0.001 else { return .clear }
+        let backgroundContribution = backgroundAlpha * (1 - foregroundAlpha)
+        return NSColor(
+            red: (
+                foreground.redComponent * foregroundAlpha
+                    + background.redComponent * backgroundContribution
+            ) / outputAlpha,
+            green: (
+                foreground.greenComponent * foregroundAlpha
+                    + background.greenComponent * backgroundContribution
+            ) / outputAlpha,
+            blue: (
+                foreground.blueComponent * foregroundAlpha
+                    + background.blueComponent * backgroundContribution
+            ) / outputAlpha,
+            alpha: outputAlpha
+        )
+    }
+
+    private static func effectiveTabBarSurface(
+        for appearance: BonsplitConfiguration.Appearance
+    ) -> NSColor {
+        let paneSurface = compositedColor(
+            nsColorPaneBackground(for: appearance),
+            over: .windowBackgroundColor
+        )
+        return compositedColor(
+            nsColorBarBackground(for: appearance),
+            over: paneSurface
+        )
+    }
+
+    private static func resolvedTabBackgroundColor(
+        from value: String?,
+        isSelected: Bool,
+        isHovered: Bool
+    ) -> NSColor? {
+        guard let custom = tabBackgroundColor(from: value) else { return nil }
+        guard isHovered && !isSelected else { return custom }
+        return custom.isBonsplitLightColor
+            ? custom.bonsplitDarken(by: 0.03)
+            : custom.bonsplitLighten(by: 0.07)
+    }
+
+    private static func effectiveTabTextColor(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool,
+        secondary: Bool
+    ) -> NSColor {
+        guard let customBackground = resolvedTabBackgroundColor(
+            from: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered
+        ) else {
+            return effectiveTextColor(for: appearance, secondary: secondary)
+        }
+        let contrastBackground = compositedColor(
+            customBackground,
+            over: effectiveTabBarSurface(for: appearance)
+        )
+        if contrastBackground.isBonsplitLightColor {
+            let alpha = secondary ? Constants.darkSecondaryTextAlpha : Constants.darkTextAlpha
+            return NSColor.black.withAlphaComponent(alpha)
+        }
         let alpha = secondary ? Constants.lightSecondaryTextAlpha : Constants.lightTextAlpha
         return NSColor.white.withAlphaComponent(alpha)
     }
@@ -201,6 +292,32 @@ enum TabBarColors {
         .clear
     }
 
+    /// Resolves a tab's background, including its selected and hover states.
+    ///
+    /// A valid per-tab color remains visible in every state. Hovering adjusts its
+    /// lightness slightly; selection continues to use the tab strip's indicator.
+    static func tabBackground(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool
+    ) -> Color {
+        if let custom = resolvedTabBackgroundColor(
+            from: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered
+        ) {
+            return Color(nsColor: custom)
+        }
+        if isSelected {
+            return activeTabBackground(for: appearance)
+        }
+        if isHovered {
+            return hoveredTabBackground(for: appearance)
+        }
+        return inactiveTabBackground
+    }
+
     // MARK: - Text Colors
 
     static var activeText: Color {
@@ -225,6 +342,66 @@ enum TabBarColors {
 
     static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
         effectiveTextColor(for: appearance, secondary: true)
+    }
+
+    /// Resolves readable tab text and symbol color against a per-tab background.
+    static func tabText(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool = false,
+        isSecondary: Bool? = nil
+    ) -> Color {
+        Color(nsColor: nsColorTabText(
+            for: appearance,
+            backgroundHex: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered,
+            isSecondary: isSecondary
+        ))
+    }
+
+    static func nsColorTabText(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool = false,
+        isSecondary: Bool? = nil
+    ) -> NSColor {
+        effectiveTabTextColor(
+            for: appearance,
+            backgroundHex: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered,
+            secondary: isSecondary ?? !isSelected
+        )
+    }
+
+    /// Resolves a matched foreground and overlay for controls drawn on a custom tab.
+    /// Returns `nil` so callers can preserve their standard, non-custom control styling.
+    static func customTabControlColors(
+        for appearance: BonsplitConfiguration.Appearance,
+        backgroundHex: String?,
+        isSelected: Bool,
+        isHovered: Bool,
+        prominent: Bool = false
+    ) -> TabControlColorPair? {
+        guard resolvedTabBackgroundColor(
+            from: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered
+        ) != nil else { return nil }
+        let foreground = effectiveTabTextColor(
+            for: appearance,
+            backgroundHex: backgroundHex,
+            isSelected: isSelected,
+            isHovered: isHovered,
+            secondary: false
+        )
+        return TabControlColorPair(
+            foreground: Color(nsColor: foreground),
+            background: Color(nsColor: foreground.withAlphaComponent(prominent ? 0.22 : 0.14))
+        )
     }
 
     static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
@@ -310,34 +487,6 @@ enum TabBarColors {
 }
 
 private extension NSColor {
-    private static let bonsplitHexDigits = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
-
-    convenience init?(bonsplitHex value: String) {
-        var hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if hex.hasPrefix("#") {
-            hex.removeFirst()
-        }
-        guard hex.count == 6 || hex.count == 8 else { return nil }
-        guard hex.unicodeScalars.allSatisfy({ Self.bonsplitHexDigits.contains($0) }) else { return nil }
-        guard let rgba = UInt64(hex, radix: 16) else { return nil }
-        let red: CGFloat
-        let green: CGFloat
-        let blue: CGFloat
-        let alpha: CGFloat
-        if hex.count == 8 {
-            red = CGFloat((rgba & 0xFF000000) >> 24) / 255.0
-            green = CGFloat((rgba & 0x00FF0000) >> 16) / 255.0
-            blue = CGFloat((rgba & 0x0000FF00) >> 8) / 255.0
-            alpha = CGFloat(rgba & 0x000000FF) / 255.0
-        } else {
-            red = CGFloat((rgba & 0xFF0000) >> 16) / 255.0
-            green = CGFloat((rgba & 0x00FF00) >> 8) / 255.0
-            blue = CGFloat(rgba & 0x0000FF) / 255.0
-            alpha = 1.0
-        }
-        self.init(red: red, green: green, blue: blue, alpha: alpha)
-    }
-
     var isBonsplitLightColor: Bool {
         var red: CGFloat = 0
         var green: CGFloat = 0

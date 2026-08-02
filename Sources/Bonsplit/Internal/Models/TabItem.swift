@@ -21,6 +21,9 @@ struct TabItem: Identifiable, Hashable, Codable {
     var icon: String?
     var iconImageData: Data?
     var iconAsset: String?
+    var backgroundHex: String?
+    var iconOverride: String?
+    var colorHexOverride: String?
     var kind: String?
     var isDirty: Bool
     var showsNotificationBadge: Bool
@@ -32,6 +35,10 @@ struct TabItem: Identifiable, Hashable, Codable {
     var isPinned: Bool
     var showsRemoteIndicator: Bool
 
+    var resolvedIconName: String? {
+        iconOverride ?? icon
+    }
+
     init(
         id: UUID = UUID(),
         title: String,
@@ -39,6 +46,9 @@ struct TabItem: Identifiable, Hashable, Codable {
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        backgroundHex: String? = nil,
+        iconOverride: String? = nil,
+        colorHexOverride: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -54,6 +64,9 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.icon = icon
         self.iconImageData = iconImageData
         self.iconAsset = iconAsset
+        self.backgroundHex = backgroundHex
+        self.iconOverride = iconOverride
+        self.colorHexOverride = colorHexOverride
         self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
@@ -79,6 +92,11 @@ struct TabItem: Identifiable, Hashable, Codable {
         case icon
         case iconImageData
         case iconAsset
+        case backgroundHex
+        case iconOverride
+        case colorHexOverride
+        // Legacy dogfood builds stored the user color under this key.
+        case backgroundHexOverride
         case kind
         case isDirty
         case showsNotificationBadge
@@ -97,6 +115,13 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
         self.iconImageData = try c.decodeIfPresent(Data.self, forKey: .iconImageData)
         self.iconAsset = try c.decodeIfPresent(String.self, forKey: .iconAsset)
+        self.backgroundHex = try c.decodeIfPresent(String.self, forKey: .backgroundHex)
+        self.iconOverride = try c.decodeIfPresent(String.self, forKey: .iconOverride)
+        if let colorHexOverride = try c.decodeIfPresent(String.self, forKey: .colorHexOverride) {
+            self.colorHexOverride = colorHexOverride
+        } else {
+            self.colorHexOverride = try c.decodeIfPresent(String.self, forKey: .backgroundHexOverride)
+        }
         self.kind = try c.decodeIfPresent(String.self, forKey: .kind)
         self.isDirty = try c.decodeIfPresent(Bool.self, forKey: .isDirty) ?? false
         self.showsNotificationBadge = try c.decodeIfPresent(Bool.self, forKey: .showsNotificationBadge) ?? false
@@ -115,6 +140,9 @@ struct TabItem: Identifiable, Hashable, Codable {
         try c.encodeIfPresent(icon, forKey: .icon)
         try c.encodeIfPresent(iconImageData, forKey: .iconImageData)
         try c.encodeIfPresent(iconAsset, forKey: .iconAsset)
+        try c.encodeIfPresent(backgroundHex, forKey: .backgroundHex)
+        try c.encodeIfPresent(iconOverride, forKey: .iconOverride)
+        try c.encodeIfPresent(colorHexOverride, forKey: .colorHexOverride)
         try c.encodeIfPresent(kind, forKey: .kind)
         try c.encode(isDirty, forKey: .isDirty)
         try c.encode(showsNotificationBadge, forKey: .showsNotificationBadge)

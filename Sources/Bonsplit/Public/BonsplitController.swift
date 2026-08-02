@@ -97,6 +97,19 @@ public final class BonsplitController {
     /// the provider) to hide it.
     @ObservationIgnored public var tabContextDisconnectRemoteAvailabilityProvider: ((TabID, PaneID) -> Bool)?
 
+    /// Supplies the named colors shown in the tab color context menu.
+    ///
+    /// Hosts can return their live workspace palette so both menus stay in sync.
+    @ObservationIgnored public var tabColorPaletteProvider: @MainActor () -> [TabColorPaletteEntry] = {
+        TabColorPaletteEntry.defaultPalette
+    }
+
+    /// Optionally registers a custom color selected from the tab color picker.
+    ///
+    /// Return the normalized color to apply, or `nil` to reject it. When omitted,
+    /// Bonsplit applies the selected color directly without registering it.
+    @ObservationIgnored public var tabColorCustomColorRegistrationHandler: (@MainActor (String) -> String?)?
+
     /// Called when the user explicitly requests to close a tab from the tab strip UI.
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID, _ source: TabCloseRequestSource) -> Void)?
@@ -162,6 +175,9 @@ public final class BonsplitController {
     ///   - icon: Optional SF Symbol name for the tab icon
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - iconAsset: Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
+    ///   - backgroundHex: Optional per-tab background color as `#RRGGBB` or `#RRGGBBAA`.
+    ///   - iconOverride: Optional user-selected SF Symbol that takes precedence over host-provided icons.
+    ///   - colorHexOverride: Optional user-selected color rendered as a leading accent rail.
     ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
     ///   - hasCustomTitle: Whether the tab title came from a custom user override
     ///   - isDirty: Whether the tab shows a dirty indicator
@@ -178,6 +194,9 @@ public final class BonsplitController {
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        backgroundHex: String? = nil,
+        iconOverride: String? = nil,
+        colorHexOverride: String? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -196,6 +215,9 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            backgroundHex: backgroundHex,
+            iconOverride: iconOverride,
+            colorHexOverride: colorHexOverride,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -237,6 +259,9 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            backgroundHex: backgroundHex,
+            iconOverride: iconOverride,
+            colorHexOverride: colorHexOverride,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -289,6 +314,9 @@ public final class BonsplitController {
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - iconAsset: New asset-catalog icon name (pass nil to keep current, pass .some(nil) to remove)
+    ///   - backgroundHex: New per-tab background color (pass nil to keep current, pass .some(nil) to remove)
+    ///   - iconOverride: New user-selected SF Symbol (pass nil to keep current, pass .some(nil) to restore the host icon)
+    ///   - colorHexOverride: New user-selected accent color (pass nil to keep current, pass .some(nil) to clear)
     ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
     ///   - hasCustomTitle: New custom-title state (pass nil to keep current)
     ///   - isDirty: New dirty state (pass nil to keep current)
@@ -303,6 +331,9 @@ public final class BonsplitController {
         icon: String?? = nil,
         iconImageData: Data?? = nil,
         iconAsset: String?? = nil,
+        backgroundHex: String?? = nil,
+        iconOverride: String?? = nil,
+        colorHexOverride: String?? = nil,
         kind: String?? = nil,
         hasCustomTitle: Bool? = nil,
         isDirty: Bool? = nil,
@@ -320,6 +351,9 @@ public final class BonsplitController {
             icon.map { currentTab.icon != $0 } ?? false ||
             iconImageData.map { currentTab.iconImageData != $0 } ?? false ||
             iconAsset.map { currentTab.iconAsset != $0 } ?? false ||
+            backgroundHex.map { currentTab.backgroundHex != $0 } ?? false ||
+            iconOverride.map { currentTab.iconOverride != $0 } ?? false ||
+            colorHexOverride.map { currentTab.colorHexOverride != $0 } ?? false ||
             kind.map { currentTab.kind != $0 } ?? false ||
             hasCustomTitle.map { currentTab.hasCustomTitle != $0 } ?? false ||
             isDirty.map { currentTab.isDirty != $0 } ?? false ||
@@ -342,6 +376,15 @@ public final class BonsplitController {
         }
         if let iconAsset = iconAsset {
             pane.tabs[tabIndex].iconAsset = iconAsset
+        }
+        if let backgroundHex = backgroundHex {
+            pane.tabs[tabIndex].backgroundHex = backgroundHex
+        }
+        if let iconOverride = iconOverride {
+            pane.tabs[tabIndex].iconOverride = iconOverride
+        }
+        if let colorHexOverride = colorHexOverride {
+            pane.tabs[tabIndex].colorHexOverride = colorHexOverride
         }
         if let kind = kind {
             pane.tabs[tabIndex].kind = kind
@@ -533,6 +576,9 @@ public final class BonsplitController {
                 icon: tab.icon,
                 iconImageData: tab.iconImageData,
                 iconAsset: tab.iconAsset,
+                backgroundHex: tab.backgroundHex,
+                iconOverride: tab.iconOverride,
+                colorHexOverride: tab.colorHexOverride,
                 kind: tab.kind,
                 isDirty: tab.isDirty,
                 showsNotificationBadge: tab.showsNotificationBadge,
@@ -602,6 +648,9 @@ public final class BonsplitController {
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
+            backgroundHex: tab.backgroundHex,
+            iconOverride: tab.iconOverride,
+            colorHexOverride: tab.colorHexOverride,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,
