@@ -18,7 +18,7 @@ enum TabBarMetrics {
     static let activeIndicatorHeight: CGFloat = 1.5
     static let activeIndicatorTrailingInset: CGFloat = 1
     static let selectedTabLeftSeparatorBottomInset: CGFloat = 1
-    static let tabColorRailWidth: CGFloat = 3
+    static let tabColorRailWidth: CGFloat = activeIndicatorHeight
 
     // MARK: - Tab Content
 
