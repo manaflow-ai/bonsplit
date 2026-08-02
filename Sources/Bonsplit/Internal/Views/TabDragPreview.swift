@@ -40,11 +40,9 @@ struct TabDragPreview: View {
                     if let railColor = tab.colorHexOverride.flatMap({
                         TabAppearanceColor.railNSColor(hex: $0)
                     }) {
-                        Capsule(style: .continuous)
+                        Rectangle()
                             .fill(Color(nsColor: railColor).opacity(0.95))
-                            .frame(width: 3)
-                            .padding(.leading, 4)
-                            .padding(.vertical, 5)
+                            .frame(width: TabBarMetrics.tabColorRailWidth)
                     }
                 }
                 .shadow(color: .black.opacity(0.2), radius: 4, y: 2)

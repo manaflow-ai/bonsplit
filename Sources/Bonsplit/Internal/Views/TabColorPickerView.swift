@@ -26,9 +26,6 @@ struct TabColorPickerView: View {
                 .font(.headline)
 
             HStack(spacing: 10) {
-                Capsule(style: .continuous)
-                    .fill(railColor)
-                    .frame(width: 3, height: 26)
                 Text(tabTitle)
                     .lineLimit(1)
             }
@@ -38,6 +35,11 @@ struct TabColorPickerView: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
             )
+            .overlay(alignment: .leading) {
+                Rectangle()
+                    .fill(railColor)
+                    .frame(width: TabBarMetrics.tabColorRailWidth)
+            }
 
             ColorPicker(
                 localized("tabColor.color", defaultValue: "Color"),

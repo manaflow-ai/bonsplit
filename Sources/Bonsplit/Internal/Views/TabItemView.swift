@@ -1107,11 +1107,9 @@ struct TabItemView: View {
                 TabAppearanceColor.railNSColor(hex: $0)
             }) {
                 HStack {
-                    Capsule(style: .continuous)
+                    Rectangle()
                         .fill(Color(nsColor: railColor).opacity(0.95))
-                        .frame(width: 3)
-                        .padding(.leading, 4)
-                        .padding(.vertical, 5)
+                        .frame(width: TabBarMetrics.tabColorRailWidth)
                     Spacer(minLength: 0)
                 }
             }
