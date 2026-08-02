@@ -1398,6 +1398,21 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabColorRailPaintsTheFullSquareLeftBorder() throws {
+        let samples = try XCTUnwrap(renderedTabColorRailSamples())
+        XCTAssertEqual(samples.count, 3)
+
+        for sample in samples {
+            let color = try XCTUnwrap(sample.usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(
+                color.redComponent - max(color.greenComponent, color.blueComponent),
+                0.4
+            )
+            XCTAssertGreaterThan(color.alphaComponent, 0.8)
+        }
+    }
+
+    @MainActor
     func testTabIconCatalogOffersBroadAvailableSelection() {
         XCTAssertGreaterThanOrEqual(TabIconCatalog.availableNames.count, 40)
         XCTAssertTrue(TabIconCatalog.availableNames.contains("terminal.fill"))
@@ -5668,6 +5683,42 @@ final class BonsplitTests: XCTestCase {
                 return nil
             }
             return (top: top, bottom: bottom)
+        }
+    }
+
+    @MainActor
+    private func renderedTabColorRailSamples() -> [NSColor]? {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#000000",
+                tabBarBackgroundHex: "#000000",
+                borderHex: "#00000000"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: false,
+            appearance: appearance,
+            size: NSSize(width: 160, height: TabBarMetrics.barHeight),
+            configurePane: { pane in
+                let styled = TabItem(
+                    title: "",
+                    icon: nil,
+                    colorHexOverride: "#FF0000"
+                )
+                let selected = TabItem(title: "", icon: nil)
+                pane.tabs = [styled, selected]
+                pane.selectedTabId = selected.id
+            }
+        ) { hostingView in
+            let x: CGFloat = 0.25
+            let samplePoints = [
+                NSPoint(x: x, y: 0.25),
+                NSPoint(x: x, y: TabBarMetrics.barHeight / 2),
+                NSPoint(x: x, y: TabBarMetrics.barHeight - 0.25)
+            ]
+            return samplePoints.compactMap {
+                renderedColorInViewCoordinates(in: hostingView, at: $0)
+            }
         }
     }
 
