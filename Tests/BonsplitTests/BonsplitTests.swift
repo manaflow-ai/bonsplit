@@ -1413,6 +1413,17 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabColorRailMatchesSelectedIndicatorWeight() throws {
+        let width = try XCTUnwrap(renderedTabColorRailWidth())
+
+        XCTAssertEqual(
+            width,
+            TabBarMetrics.activeIndicatorHeight,
+            accuracy: 0.01
+        )
+    }
+
+    @MainActor
     func testTabIconCatalogOffersBroadAvailableSelection() {
         XCTAssertGreaterThanOrEqual(TabIconCatalog.availableNames.count, 40)
         XCTAssertTrue(TabIconCatalog.availableNames.contains("terminal.fill"))
@@ -5719,6 +5730,42 @@ final class BonsplitTests: XCTestCase {
             return samplePoints.compactMap {
                 renderedColorInViewCoordinates(in: hostingView, at: $0)
             }
+        }
+    }
+
+    @MainActor
+    private func renderedTabColorRailWidth() -> CGFloat? {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                backgroundHex: "#000000",
+                tabBarBackgroundHex: "#000000",
+                borderHex: "#00000000"
+            )
+        )
+        return renderedTabBarValue(
+            isFocused: false,
+            appearance: appearance,
+            size: NSSize(width: 160, height: TabBarMetrics.barHeight),
+            configurePane: { pane in
+                let styled = TabItem(
+                    title: "",
+                    icon: nil,
+                    colorHexOverride: "#FF0000"
+                )
+                let selected = TabItem(title: "", icon: nil)
+                pane.tabs = [styled, selected]
+                pane.selectedTabId = selected.id
+            }
+        ) { hostingView in
+            highSaturationWidth(
+                in: hostingView,
+                sampleRect: NSRect(
+                    x: 0,
+                    y: 4,
+                    width: TabBarMetrics.tabMinWidth,
+                    height: TabBarMetrics.barHeight - 8
+                )
+            )
         }
     }
 
