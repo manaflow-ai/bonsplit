@@ -3202,10 +3202,20 @@ struct TabDropDelegate: DropDelegate {
               let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             if let transfer = decodeTransfer(from: info),
                transfer.isFromCurrentProcess {
+                let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+                if sourcePaneId == pane.id {
+#if DEBUG
+                    dlog(
+                        "tab.drop.skip pane=\(pane.id.id.uuidString.prefix(5)) " +
+                        "targetIndex=\(targetIndex) reason=stale_same_pane_transfer"
+                    )
+#endif
+                    return false
+                }
                 guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
                 let request = BonsplitController.ExternalTabDropRequest(
                     tabId: TabID(id: transfer.tab.id),
-                    sourcePaneId: PaneID(id: transfer.sourcePaneId),
+                    sourcePaneId: sourcePaneId,
                     destination: .insert(targetPane: pane.id, targetIndex: targetIndex)
                 )
                 let handled = bonsplitController.onExternalTabDrop?(request) ?? false
