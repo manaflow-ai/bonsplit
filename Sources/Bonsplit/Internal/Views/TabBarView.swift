@@ -3200,10 +3200,20 @@ struct TabDropDelegate: DropDelegate {
         // may not have propagated yet when performDrop runs.
         guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
               let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
-            if let transfer = decodeTransfer(from: info),
-               transfer.isFromCurrentProcess {
-                let sourcePaneId = PaneID(id: transfer.sourcePaneId)
-                if sourcePaneId == pane.id {
+            if let transfer = decodeTransfer(from: info) {
+                if let request = Self.sameProcessFallbackRequest(
+                    transfer: transfer,
+                    targetPane: pane.id,
+                    targetIndex: targetIndex,
+                    allowCrossPaneTabMove: bonsplitController.configuration.allowCrossPaneTabMove
+                ) {
+                    let handled = bonsplitController.onExternalTabDrop?(request) ?? false
+                    if handled {
+                        clearDropState()
+                    }
+                    return handled
+                }
+                if transfer.isFromCurrentProcess {
 #if DEBUG
                     dlog(
                         "tab.drop.skip pane=\(pane.id.id.uuidString.prefix(5)) " +
@@ -3212,17 +3222,6 @@ struct TabDropDelegate: DropDelegate {
 #endif
                     return false
                 }
-                guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
-                let request = BonsplitController.ExternalTabDropRequest(
-                    tabId: TabID(id: transfer.tab.id),
-                    sourcePaneId: sourcePaneId,
-                    destination: .insert(targetPane: pane.id, targetIndex: targetIndex)
-                )
-                let handled = bonsplitController.onExternalTabDrop?(request) ?? false
-                if handled {
-                    clearDropState()
-                }
-                return handled
             }
 
             return performFileDrop(info: info)
@@ -3384,6 +3383,25 @@ struct TabDropDelegate: DropDelegate {
     private func clearDropState() {
         dropLifecycle = .idle
         dropTargetIndex = nil
+    }
+
+    static func sameProcessFallbackRequest(
+        transfer: TabTransferData,
+        targetPane: PaneID,
+        targetIndex: Int,
+        allowCrossPaneTabMove: Bool
+    ) -> BonsplitController.ExternalTabDropRequest? {
+        guard transfer.isFromCurrentProcess else { return nil }
+        let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+        guard sourcePaneId != targetPane,
+              allowCrossPaneTabMove else {
+            return nil
+        }
+        return BonsplitController.ExternalTabDropRequest(
+            tabId: TabID(id: transfer.tab.id),
+            sourcePaneId: sourcePaneId,
+            destination: .insert(targetPane: targetPane, targetIndex: targetIndex)
+        )
     }
 
     private func dropOperation(for info: DropInfo) -> DropOperation {

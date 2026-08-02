@@ -1,7 +1,4 @@
-import AppKit
 @testable import Bonsplit
-import SwiftUI
-import UniformTypeIdentifiers
 import XCTest
 
 @MainActor
@@ -47,9 +44,9 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
     private func makeHarness() throws -> Harness {
         let controller = BonsplitController(
             configuration: BonsplitConfiguration(
-                newTabPosition: .end,
                 allowTabReordering: true,
-                allowCrossPaneTabMove: true
+                allowCrossPaneTabMove: true,
+                newTabPosition: .end
             )
         )
         let paneId = try XCTUnwrap(controller.focusedPaneId)
@@ -73,37 +70,16 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         harness: Harness
     ) -> Bool {
         let tab = harness.pane.tabs.first { $0.id == tabId }!
-        writeTransferToDragPasteboard(tab: tab, sourcePaneId: harness.pane.id.id)
-
-        var dropTargetIndex: Int?
-        var dropLifecycle: TabDropLifecycle = .hovering
-        let delegate = TabDropDelegate(
+        let transfer = TabTransferData(tab: tab, sourcePaneId: harness.pane.id.id)
+        guard let request = TabDropDelegate.sameProcessFallbackRequest(
+            transfer: transfer,
+            targetPane: harness.pane.id,
             targetIndex: targetIndex,
-            pane: harness.pane,
-            bonsplitController: harness.controller,
-            controller: harness.controller.internalController,
-            dropTargetIndex: Binding(
-                get: { dropTargetIndex },
-                set: { dropTargetIndex = $0 }
-            ),
-            dropLifecycle: Binding(
-                get: { dropLifecycle },
-                set: { dropLifecycle = $0 }
-            )
-        )
-
-        return delegate.performDrop(info: FakeDropInfo())
-    }
-
-    private func writeTransferToDragPasteboard(tab: TabItem, sourcePaneId: UUID) {
-        let pasteboard = NSPasteboard(name: .drag)
-        pasteboard.clearContents()
-        let transfer = TabTransferData(tab: tab, sourcePaneId: sourcePaneId)
-        let data = try! JSONEncoder().encode(transfer)
-        pasteboard.setData(
-            data,
-            forType: NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)
-        )
+            allowCrossPaneTabMove: harness.controller.configuration.allowCrossPaneTabMove
+        ) else {
+            return false
+        }
+        return harness.controller.onExternalTabDrop?(request) ?? false
     }
 }
 
@@ -111,16 +87,4 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
 private struct Harness {
     let controller: BonsplitController
     let pane: PaneState
-}
-
-private struct FakeDropInfo: DropInfo {
-    var location: CGPoint { .zero }
-
-    func itemProviders(for contentTypes: [UTType]) -> [NSItemProvider] {
-        []
-    }
-
-    func hasItemsConforming(to contentTypes: [UTType]) -> Bool {
-        contentTypes.contains(.tabTransfer)
-    }
 }
