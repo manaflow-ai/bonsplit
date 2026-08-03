@@ -8,11 +8,11 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         let initialIds = harness.pane.tabs.map(\.id)
         let movedTabId = initialIds[0]
 
-        let targetIndex = swiftUISamePaneDropTarget(
+        let targetIndex = try XCTUnwrap(swiftUISamePaneDropTarget(
             tabId: movedTabId,
             targetIndex: 3,
             harness: harness
-        )
+        ))
 
         XCTAssertEqual(targetIndex, 3)
         XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
@@ -24,11 +24,11 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         let initialIds = harness.pane.tabs.map(\.id)
         let movedTabId = initialIds[3]
 
-        let targetIndex = swiftUISamePaneDropTarget(
+        let targetIndex = try XCTUnwrap(swiftUISamePaneDropTarget(
             tabId: movedTabId,
             targetIndex: 1,
             harness: harness
-        )
+        ))
 
         XCTAssertEqual(targetIndex, 1)
         XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
