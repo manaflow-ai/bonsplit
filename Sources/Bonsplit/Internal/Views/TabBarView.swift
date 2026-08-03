@@ -803,7 +803,6 @@ struct TabBarView: View {
     @AppStorage("debugFadeColorStyle") private var fadeColorStyle = -1
     @State private var isHoveringTabBar = false
     @State private var dropTargetIndex: Int?
-    @State private var manualDropTargetIndex: Int?
     @State private var dropLifecycle: TabDropLifecycle = .idle
     @State private var scrollOffset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
@@ -1016,21 +1015,6 @@ struct TabBarView: View {
         )
     }
 
-    @ViewBuilder
-    private var manualReorderTracker: some View {
-        if controller.configuration.allowTabReordering {
-            TabBarManualReorderTrackingView(
-                pane: pane,
-                bonsplitController: controller,
-                splitViewController: splitViewController,
-                geometryRegistry: tabItemGeometryRegistry,
-                dropTargetIndex: $dropTargetIndex,
-                manualDropTargetIndex: $manualDropTargetIndex,
-                dropLifecycle: $dropLifecycle
-            )
-        }
-    }
-
     private func focusPaneFromTabBarChrome() -> Bool {
         guard !isFocused else { return false }
         withTransaction(Transaction(animation: nil)) {
@@ -1116,7 +1100,6 @@ struct TabBarView: View {
                                 bonsplitController: controller,
                                 controller: splitViewController,
                                 dropTargetIndex: $dropTargetIndex,
-                                manualDropTargetIndex: $manualDropTargetIndex,
                                 dropLifecycle: $dropLifecycle
                             ))
                         }
@@ -1166,7 +1149,6 @@ struct TabBarView: View {
         .overlay(
             TabBarHoverTrackingView { updateTabBarHover($0) }
         )
-        .overlay(manualReorderTracker)
         .background {
             if splitViewController.tabShortcutHintsEnabled {
                 TabBarHostWindowReader { window in
@@ -1186,7 +1168,6 @@ struct TabBarView: View {
 #endif
             if newValue == nil {
                 dropTargetIndex = nil
-                manualDropTargetIndex = nil
                 dropLifecycle = .idle
             }
         }
@@ -1304,7 +1285,6 @@ struct TabBarView: View {
             bonsplitController: controller,
             controller: splitViewController,
             dropTargetIndex: $dropTargetIndex,
-            manualDropTargetIndex: $manualDropTargetIndex,
             dropLifecycle: $dropLifecycle
         ))
         .overlay(alignment: .leading) {
@@ -1331,7 +1311,6 @@ struct TabBarView: View {
     private func createItemProvider(for tab: TabItem) -> NSItemProvider {
         splitViewController.makeTabDragItemProvider(for: tab, from: pane.id) {
             dropTargetIndex = nil
-            manualDropTargetIndex = nil
             dropLifecycle = .idle
         }
     }
@@ -1372,7 +1351,6 @@ struct TabBarView: View {
             bonsplitController: controller,
             controller: splitViewController,
             dropTargetIndex: $dropTargetIndex,
-            manualDropTargetIndex: $manualDropTargetIndex,
             dropLifecycle: $dropLifecycle
         ))
         .overlay(alignment: .leading) {
@@ -1983,271 +1961,6 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
             guard isHovering != newValue else { return }
             isHovering = newValue
             onHoverChanged?(newValue)
-        }
-    }
-}
-
-private struct TabBarManualReorderTrackingView: NSViewRepresentable {
-    let pane: PaneState
-    let bonsplitController: BonsplitController
-    let splitViewController: SplitViewController
-    let geometryRegistry: TabBarItemGeometryRegistry
-    @Binding var dropTargetIndex: Int?
-    @Binding var manualDropTargetIndex: Int?
-    @Binding var dropLifecycle: TabDropLifecycle
-
-    func makeNSView(context: Context) -> ManualReorderNSView {
-        let view = ManualReorderNSView()
-        update(view)
-        return view
-    }
-
-    func updateNSView(_ nsView: ManualReorderNSView, context: Context) {
-        update(nsView)
-    }
-
-    private func update(_ view: ManualReorderNSView) {
-        view.pane = pane
-        view.bonsplitController = bonsplitController
-        view.splitViewController = splitViewController
-        view.geometryRegistry = geometryRegistry
-        view.onDropStateChanged = { targetIndex, lifecycle in
-            manualDropTargetIndex = targetIndex
-            dropTargetIndex = targetIndex
-            dropLifecycle = lifecycle
-        }
-    }
-
-    final class ManualReorderNSView: NSView {
-        weak var pane: PaneState?
-        weak var bonsplitController: BonsplitController?
-        weak var splitViewController: SplitViewController?
-        weak var geometryRegistry: TabBarItemGeometryRegistry?
-        var onDropStateChanged: ((Int?, TabDropLifecycle) -> Void)?
-
-        private var localMouseMonitor: Any?
-        private var session: ManualDragSession?
-
-        private static let dragStartDistanceSquared: CGFloat = 16
-        private static let trailingDropSlop: CGFloat = 30
-
-        override var mouseDownCanMoveWindow: Bool { false }
-
-        deinit {
-            removeLocalMouseMonitor()
-        }
-
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            nil
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            if window != nil {
-                installLocalMouseMonitorIfNeeded()
-            } else {
-                removeLocalMouseMonitor()
-                clearManualDrag()
-            }
-        }
-
-        private func installLocalMouseMonitorIfNeeded() {
-            guard localMouseMonitor == nil else { return }
-            localMouseMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
-            ) { [weak self] event in
-                self?.handle(event)
-                return event
-            }
-        }
-
-        private func removeLocalMouseMonitor() {
-            if let localMouseMonitor {
-                NSEvent.removeMonitor(localMouseMonitor)
-                self.localMouseMonitor = nil
-            }
-        }
-
-        private func handle(_ event: NSEvent) {
-            guard let window else {
-                clearManualDrag()
-                return
-            }
-            guard event.window == nil || event.window === window else {
-                if session != nil {
-                    clearManualDrag()
-                }
-                return
-            }
-
-            let windowPoint = event.window === window
-                ? event.locationInWindow
-                : window.mouseLocationOutsideOfEventStream
-            let point = convert(windowPoint, from: nil)
-
-            switch event.type {
-            case .leftMouseDown:
-                beginTrackingIfNeeded(at: point)
-            case .leftMouseDragged:
-                updateTracking(at: point)
-            case .leftMouseUp:
-                finishTracking()
-            default:
-                break
-            }
-        }
-
-        private func beginTrackingIfNeeded(at point: NSPoint) {
-            guard bounds.contains(point),
-                  let pane,
-                  let splitViewController,
-                  splitViewController.isInteractive,
-                  let source = tab(at: point, in: pane) else {
-                clearManualDrag()
-                return
-            }
-
-            session = ManualDragSession(
-                sourceTab: source,
-                sourcePaneId: pane.id,
-                startPoint: point,
-                currentTargetIndex: nil,
-                didStartDrag: false
-            )
-        }
-
-        private func updateTracking(at point: NSPoint) {
-            guard var session else { return }
-
-            let dx = point.x - session.startPoint.x
-            let dy = point.y - session.startPoint.y
-            if !session.didStartDrag {
-                guard dx * dx + dy * dy >= Self.dragStartDistanceSquared else { return }
-                beginManualDrag(for: session)
-                session.didStartDrag = true
-            }
-
-            let targetIndex = dropTargetIndex(at: point)
-            session.currentTargetIndex = targetIndex
-            self.session = session
-
-            if let targetIndex,
-               !shouldSuppressIndicator(sourceTabId: session.sourceTab.id, targetIndex: targetIndex) {
-                onDropStateChanged?(targetIndex, .hovering)
-            } else {
-                onDropStateChanged?(nil, .idle)
-            }
-        }
-
-        private func finishTracking() {
-            guard let session else {
-                clearManualDrag()
-                return
-            }
-
-            defer {
-                clearControllerDragStateIfNeeded(sourceTabId: session.sourceTab.id)
-                clearManualDrag()
-            }
-
-            guard session.didStartDrag,
-                  let pane,
-                  let bonsplitController,
-                  let targetIndex = session.currentTargetIndex,
-                  !shouldSuppressIndicator(sourceTabId: session.sourceTab.id, targetIndex: targetIndex),
-                  let currentSourceIndex = pane.tabs.firstIndex(where: { $0.id == session.sourceTab.id }) else {
-                return
-            }
-
-            let orderBeforeReorder = pane.tabs.map { $0.id }
-            withTransaction(Transaction(animation: nil)) {
-                pane.moveTab(from: currentSourceIndex, to: targetIndex)
-                bonsplitController.focusPane(pane.id)
-            }
-            if pane.tabs.map({ $0.id }) != orderBeforeReorder {
-                bonsplitController.delegate?.splitTabBar(
-                    bonsplitController,
-                    didReorderTabsInPane: pane.id,
-                    orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
-                )
-            }
-        }
-
-        private func beginManualDrag(for session: ManualDragSession) {
-            guard let splitViewController else { return }
-#if DEBUG
-            dlog(
-                "tab.manualDragStart pane=\(session.sourcePaneId.id.uuidString.prefix(5)) " +
-                    "tab=\(session.sourceTab.id.uuidString.prefix(5)) title=\"\(session.sourceTab.title)\""
-            )
-#endif
-            _ = splitViewController.beginTabDrag(session.sourceTab, from: session.sourcePaneId)
-        }
-
-        private func clearManualDrag() {
-            session = nil
-            onDropStateChanged?(nil, .idle)
-        }
-
-        private func clearControllerDragStateIfNeeded(sourceTabId: UUID) {
-            guard let splitViewController else { return }
-            if splitViewController.draggingTab?.id == sourceTabId {
-                splitViewController.draggingTab = nil
-                splitViewController.dragSourcePaneId = nil
-            }
-            if splitViewController.activeDragTab?.id == sourceTabId {
-                splitViewController.activeDragTab = nil
-                splitViewController.activeDragSourcePaneId = nil
-            }
-        }
-
-        private func tab(at point: NSPoint, in pane: PaneState) -> TabItem? {
-            for tab in pane.tabs {
-                guard let frame = geometryRegistry?.frame(for: tab.id, in: self) else { continue }
-                if point.x >= frame.minX, point.x <= frame.maxX {
-                    return tab
-                }
-            }
-            return nil
-        }
-
-        private func dropTargetIndex(at point: NSPoint) -> Int? {
-            guard bounds.insetBy(dx: 0, dy: -4).contains(point),
-                  let pane,
-                  !pane.tabs.isEmpty else {
-                return nil
-            }
-
-            var lastFrame: CGRect?
-            for (index, tab) in pane.tabs.enumerated() {
-                guard let frame = geometryRegistry?.frame(for: tab.id, in: self) else { continue }
-                lastFrame = frame
-                if point.x < frame.midX {
-                    return index
-                }
-            }
-
-            if let lastFrame,
-               point.x <= lastFrame.maxX + Self.trailingDropSlop {
-                return pane.tabs.count
-            }
-            return nil
-        }
-
-        private func shouldSuppressIndicator(sourceTabId: UUID, targetIndex: Int) -> Bool {
-            guard let pane,
-                  let sourceIndex = pane.tabs.firstIndex(where: { $0.id == sourceTabId }) else {
-                return false
-            }
-            return targetIndex == sourceIndex || targetIndex == sourceIndex + 1
-        }
-
-        private struct ManualDragSession {
-            let sourceTab: TabItem
-            let sourcePaneId: PaneID
-            let startPoint: NSPoint
-            var currentTargetIndex: Int?
-            var didStartDrag: Bool
         }
     }
 }
@@ -3179,7 +2892,6 @@ struct TabDropDelegate: DropDelegate {
     let bonsplitController: BonsplitController
     let controller: SplitViewController
     @Binding var dropTargetIndex: Int?
-    @Binding var manualDropTargetIndex: Int?
     @Binding var dropLifecycle: TabDropLifecycle
 
     func performDrop(info: DropInfo) -> Bool {
@@ -3189,7 +2901,7 @@ struct TabDropDelegate: DropDelegate {
 #if DEBUG
         dlog(
             "tab.drop pane=\(pane.id.id.uuidString.prefix(5)) " +
-            "targetIndex=\(targetIndex) manualTarget=\(manualDropTargetIndex.map(String.init) ?? "nil")"
+            "targetIndex=\(targetIndex)"
         )
 #endif
 
@@ -3206,26 +2918,8 @@ struct TabDropDelegate: DropDelegate {
         guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
               let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
             if let transfer = decodeTransfer(from: info) {
-                if let request = Self.sameProcessFallbackRequest(
-                    transfer: transfer,
-                    targetPane: pane.id,
-                    targetIndex: targetIndex,
-                    allowCrossPaneTabMove: bonsplitController.configuration.allowCrossPaneTabMove
-                ) {
-                    let handled = bonsplitController.onExternalTabDrop?(request) ?? false
-                    if handled {
-                        clearDropState()
-                    }
-                    return handled
-                }
                 if transfer.isFromCurrentProcess {
-#if DEBUG
-                    dlog(
-                        "tab.drop.skip pane=\(pane.id.id.uuidString.prefix(5)) " +
-                        "targetIndex=\(targetIndex) reason=stale_same_pane_transfer"
-                    )
-#endif
-                    return false
+                    return performSameProcessTransfer(transfer)
                 }
             }
 
@@ -3238,61 +2932,26 @@ struct TabDropDelegate: DropDelegate {
             guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
         }
 
-        // Execute synchronously when possible so the dragged tab disappears immediately.
-        let applyMove = {
-            // Pre-move order, captured inside the transaction below; the delegate is
-            // fired AFTER the transaction (mirroring the manual-drag path) and only when
-            // the order actually changed, so a no-op move never pushes a spurious
-            // reorder to consumers (e.g. a redundant tmux swap-window).
-            var orderBeforeReorder: [UUID]?
-            // Ensure the move itself doesn't animate.
+        var handled = false
+        if sourcePaneId == pane.id {
+            handled = performSamePaneReorder(tabId: draggedTab.id)
+        } else {
             withTransaction(Transaction(animation: nil)) {
-                if sourcePaneId == pane.id {
-                    guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else { return }
-                    let destinationIndex = Self.effectiveLocalDropTargetIndex(
-                        staticTargetIndex: targetIndex,
-                        manualTargetIndex: manualDropTargetIndex,
-                        sourcePaneMatchesTarget: true,
-                        sourceIndex: sourceIndex
-                    )
-                    // Same-pane no-op: don't mutate the model (and don't show an indicator).
-                    if Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: destinationIndex) {
-                        return
-                    }
-                    orderBeforeReorder = pane.tabs.map { $0.id }
-                    pane.moveTab(from: sourceIndex, to: destinationIndex)
-                } else {
-                    _ = bonsplitController.moveTab(
-                        TabID(id: draggedTab.id),
-                        toPane: pane.id,
-                        atIndex: targetIndex
-                    )
-                }
-            }
-            // Outside the transaction, matching the manual-drag path's delegate timing.
-            if sourcePaneId == pane.id,
-               let orderBeforeReorder,
-               pane.tabs.map({ $0.id }) != orderBeforeReorder {
-                bonsplitController.delegate?.splitTabBar(
-                    bonsplitController,
-                    didReorderTabsInPane: pane.id,
-                    orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
+                handled = bonsplitController.moveTab(
+                    TabID(id: draggedTab.id),
+                    toPane: pane.id,
+                    atIndex: targetIndex
                 )
             }
         }
-
-        applyMove()
 
         // Clear visual state immediately to prevent lingering indicators.
         // Must happen synchronously before returning, not in async callback.
         // Setting dropLifecycle to idle prevents dropUpdated from re-setting dropTargetIndex.
         clearDropState()
-        controller.draggingTab = nil
-        controller.dragSourcePaneId = nil
-        controller.activeDragTab = nil
-        controller.activeDragSourcePaneId = nil
+        clearControllerDragState()
 
-        return true
+        return handled
     }
 
     func dropEntered(info: DropInfo) {
@@ -3315,7 +2974,7 @@ struct TabDropDelegate: DropDelegate {
         #endif
         dropLifecycle = .idle
         if samePaneLocalDragSourceIndex() != nil {
-            dropTargetIndex = manualDropTargetIndex
+            dropTargetIndex = nil
         } else if dropTargetIndex == targetIndex {
             dropTargetIndex = nil
         }
@@ -3335,7 +2994,6 @@ struct TabDropDelegate: DropDelegate {
 #if DEBUG
         dlog(
             "tab.dropUpdated pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
-            "manualTarget=\(manualDropTargetIndex.map(String.init) ?? "nil") " +
             "dropTarget=\(dropTargetIndex.map(String.init) ?? "nil")"
         )
 #endif
@@ -3367,12 +3025,18 @@ struct TabDropDelegate: DropDelegate {
             return bonsplitController.configuration.allowCrossPaneTabMove
         }
 
-        // External drags (another Bonsplit controller) must include a payload from this process.
+        // Drops whose live drag state has already been cleared must still include
+        // a same-process payload so we can distinguish tab moves from file drops.
         guard let transfer = decodeTransfer(from: info),
               transfer.isFromCurrentProcess else {
             return false
         }
-        guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
+        let sourcePaneID = PaneID(id: transfer.sourcePaneId)
+        if sourcePaneID == pane.id {
+            guard bonsplitController.configuration.allowTabReordering else { return false }
+        } else {
+            guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
+        }
 #if DEBUG
         let hasDrag = controller.draggingTab != nil
         let hasActive = controller.activeDragTab != nil
@@ -3387,22 +3051,17 @@ struct TabDropDelegate: DropDelegate {
     private func clearDropState() {
         dropLifecycle = .idle
         dropTargetIndex = nil
-        manualDropTargetIndex = nil
     }
 
-    static func effectiveLocalDropTargetIndex(
-        staticTargetIndex: Int,
-        manualTargetIndex: Int?,
-        sourcePaneMatchesTarget: Bool,
-        sourceIndex: Int?
-    ) -> Int {
-        if sourcePaneMatchesTarget,
-           let sourceIndex,
-           let manualTargetIndex,
-           !isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: manualTargetIndex) {
-            return manualTargetIndex
-        }
-        return staticTargetIndex
+    private func clearControllerDragState() {
+        controller.draggingTab = nil
+        controller.dragSourcePaneId = nil
+        controller.activeDragTab = nil
+        controller.activeDragSourcePaneId = nil
+    }
+
+    static func samePaneDropTarget(sourceIndex: Int, targetIndex: Int) -> Int? {
+        isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) ? nil : targetIndex
     }
 
     static func isNoopSamePaneTarget(sourceIndex: Int, targetIndex: Int) -> Bool {
@@ -3428,6 +3087,56 @@ struct TabDropDelegate: DropDelegate {
             sourcePaneId: sourcePaneId,
             destination: .insert(targetPane: targetPane, targetIndex: targetIndex)
         )
+    }
+
+    private func performSameProcessTransfer(_ transfer: TabTransferData) -> Bool {
+        let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+        if sourcePaneId == pane.id {
+            guard bonsplitController.configuration.allowTabReordering else { return false }
+            let handled = performSamePaneReorder(tabId: transfer.tab.id)
+            if handled {
+                clearDropState()
+                clearControllerDragState()
+            }
+            return handled
+        }
+
+        guard let request = Self.sameProcessFallbackRequest(
+            transfer: transfer,
+            targetPane: pane.id,
+            targetIndex: targetIndex,
+            allowCrossPaneTabMove: bonsplitController.configuration.allowCrossPaneTabMove
+        ) else {
+            return false
+        }
+        let handled = bonsplitController.onExternalTabDrop?(request) ?? false
+        if handled {
+            clearDropState()
+            clearControllerDragState()
+        }
+        return handled
+    }
+
+    private func performSamePaneReorder(tabId: UUID) -> Bool {
+        guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == tabId }) else {
+            return false
+        }
+        guard let destinationIndex = Self.samePaneDropTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) else {
+            return true
+        }
+
+        let orderBeforeReorder = pane.tabs.map { $0.id }
+        withTransaction(Transaction(animation: nil)) {
+            pane.moveTab(from: sourceIndex, to: destinationIndex)
+        }
+        if pane.tabs.map({ $0.id }) != orderBeforeReorder {
+            bonsplitController.delegate?.splitTabBar(
+                bonsplitController,
+                didReorderTabsInPane: pane.id,
+                orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
+            )
+        }
+        return true
     }
 
     private func dropOperation(for info: DropInfo) -> DropOperation {
@@ -3460,12 +3169,7 @@ struct TabDropDelegate: DropDelegate {
 
     private func updateDropTargetForHover() {
         if let sourceIndex = samePaneLocalDragSourceIndex() {
-            if let manualDropTargetIndex,
-               !Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: manualDropTargetIndex) {
-                dropTargetIndex = manualDropTargetIndex
-            } else {
-                dropTargetIndex = nil
-            }
+            dropTargetIndex = Self.samePaneDropTarget(sourceIndex: sourceIndex, targetIndex: targetIndex)
             return
         }
 
