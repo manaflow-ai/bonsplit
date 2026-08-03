@@ -15,7 +15,12 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         ))
 
         XCTAssertEqual(targetIndex, 3)
-        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
+        XCTAssertTrue(TabDropDelegate.performSamePaneReorder(
+            tabId: movedTabId,
+            targetIndex: targetIndex,
+            pane: harness.pane,
+            bonsplitController: harness.controller
+        ))
         XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[1], initialIds[2], movedTabId, initialIds[3]])
     }
 
@@ -31,7 +36,12 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         ))
 
         XCTAssertEqual(targetIndex, 1)
-        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
+        XCTAssertTrue(TabDropDelegate.performSamePaneReorder(
+            tabId: movedTabId,
+            targetIndex: targetIndex,
+            pane: harness.pane,
+            bonsplitController: harness.controller
+        ))
         XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[0], movedTabId, initialIds[1], initialIds[2]])
     }
 

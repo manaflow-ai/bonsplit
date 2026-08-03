@@ -3118,10 +3118,25 @@ struct TabDropDelegate: DropDelegate {
     }
 
     private func performSamePaneReorder(tabId: UUID) -> Bool {
+        Self.performSamePaneReorder(
+            tabId: tabId,
+            targetIndex: targetIndex,
+            pane: pane,
+            bonsplitController: bonsplitController
+        )
+    }
+
+    @discardableResult
+    static func performSamePaneReorder(
+        tabId: UUID,
+        targetIndex: Int,
+        pane: PaneState,
+        bonsplitController: BonsplitController
+    ) -> Bool {
         guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == tabId }) else {
             return false
         }
-        guard let destinationIndex = Self.samePaneDropTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) else {
+        guard let destinationIndex = samePaneDropTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) else {
             return true
         }
 
