@@ -87,6 +87,14 @@ public final class BonsplitViewController: NSViewController {
     render()
   }
 
+  /// Re-renders the split tree while preserving cached host controllers.
+  /// Controllers conforming to ``BonsplitContentUpdating`` receive the latest
+  /// tab and pane snapshots, so hosts can refresh appearance or unread state
+  /// without tearing down terminal and browser content.
+  public func refreshContent() {
+    render()
+  }
+
   private func removeCachedControllers<Key: Hashable>(
     _ controllers: inout [Key: NSViewController]
   ) {
