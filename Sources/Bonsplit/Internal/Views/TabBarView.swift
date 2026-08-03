@@ -171,6 +171,9 @@ enum TabBarStyling {
     }
 
     static func splitActionSystemImage(for name: String) -> SplitActionSystemImage {
+#if DEBUG
+        BonsplitDebugCounters.recordSplitActionSystemImageLookup()
+#endif
         if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
             return SplitActionSystemImage(name: name, rotationDegrees: 0, pointSize: 12)
         }

@@ -218,6 +218,9 @@ enum TabItemStyling {
 
     static func resolvedFaviconImage(existing: NSImage?, incomingData: Data?) -> NSImage? {
         guard let incomingData else { return nil }
+#if DEBUG
+        BonsplitDebugCounters.recordFaviconImageDecode()
+#endif
         if let decoded = NSImage(data: incomingData) {
             // Favicon bitmaps must never be treated as template/tintable symbols.
             decoded.isTemplate = false
@@ -696,7 +699,12 @@ struct TabItemView: View {
             ? TabBarColors.nsColorActiveText(for: appearance)
             : TabBarColors.nsColorInactiveText(for: appearance)
         let iconTint = Color(nsColor: iconTintColor)
-        let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
+        let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { data in
+#if DEBUG
+            BonsplitDebugCounters.recordFaviconImageDecode()
+#endif
+            return NSImage(data: data)
+        }
 
         Group {
             if tab.isLoading {

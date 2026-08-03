@@ -5,11 +5,17 @@ import UniformTypeIdentifiers
 /// Custom UTTypes for tab drag and drop
 extension UTType {
     static var tabItem: UTType {
-        UTType(exportedAs: "com.splittabbar.tabitem")
+#if DEBUG
+        BonsplitDebugCounters.recordTabItemTypeConstruction()
+#endif
+        return UTType(exportedAs: "com.splittabbar.tabitem")
     }
 
     static var tabTransfer: UTType {
-        UTType(exportedAs: "com.splittabbar.tabtransfer", conformingTo: .data)
+#if DEBUG
+        BonsplitDebugCounters.recordTabTransferTypeConstruction()
+#endif
+        return UTType(exportedAs: "com.splittabbar.tabtransfer", conformingTo: .data)
     }
 }
 
