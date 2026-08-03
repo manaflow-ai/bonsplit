@@ -1,21 +1,17 @@
 import AppKit
 @testable import Bonsplit
-import SwiftUI
 import XCTest
 
 #if DEBUG
 @MainActor
 final class TabBarLayoutFeedbackTests: XCTestCase {
     func testScrollingManyTabsKeepsPlatformGeometryLive() throws {
-        let size = NSSize(width: 420, height: TabBarMetrics.barHeight)
-        let controller = BonsplitController(
-            configuration: BonsplitConfiguration(appearance: .default)
-        )
-        controller.tabShortcutHintsEnabled = false
+        let size = NSSize(width: 420, height: 180)
+        let controller = BonsplitController(configuration: .init(appearance: .default))
         let pane = try XCTUnwrap(controller.internalController.rootNode.allPanes.first)
         let tabs = (0..<50).map { index in
             TabItem(
-                title: "Terminal \(index + 1) — \(String(repeating: "x", count: index % 17))",
+                title: "Terminal \(index + 1) \(String(repeating: "x", count: index % 17))",
                 icon: "terminal.fill",
                 kind: "terminal"
             )
@@ -23,11 +19,11 @@ final class TabBarLayoutFeedbackTests: XCTestCase {
         pane.tabs = tabs
         pane.selectedTabId = tabs.first?.id
 
-        let hostingView = NSHostingView(
-            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: false)
-                .environment(controller)
-                .environment(controller.internalController)
-        )
+        let renderer = BonsplitViewController(controller: controller) { _, _ in
+            let child = NSViewController()
+            child.view = NSView()
+            return child
+        }
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.titled, .closable],
@@ -35,77 +31,44 @@ final class TabBarLayoutFeedbackTests: XCTestCase {
             defer: false
         )
         defer { window.orderOut(nil) }
-        let contentView = try XCTUnwrap(window.contentView)
-        hostingView.frame = NSRect(origin: .zero, size: size)
-        hostingView.autoresizingMask = [.width, .height]
-        contentView.addSubview(hostingView)
+        window.contentViewController = renderer
+        window.setContentSize(size)
         window.makeKeyAndOrderFront(nil)
+        settleLayout(in: window, root: renderer.view)
 
-        settleLayout(in: window, hostingView: hostingView)
-        let scrollView = try XCTUnwrap(tabBarScrollView(in: hostingView))
-        let chromeView = try XCTUnwrap(
-            descendants(ofType: TabBarSelectionChromeView.ChromeNSView.self, in: hostingView).first
-        )
-        let initialFirstFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: tabs[0].id, in: chromeView)
-        )
+        let tabBar = try XCTUnwrap(descendants(ofType: BonsplitNativeTabBarView.self, in: renderer.view).first)
+        let scrollView = tabBar.scrollViewForTesting
+        let firstView = try XCTUnwrap(tabBar.tabViewsForTesting[tabs[0].id])
+        let initialFrame = tabBar.convert(firstView.bounds, from: firstView)
         let maximumOffset = max(
             0,
-            max(
-                scrollView.documentView?.frame.width ?? 0,
-                scrollView.documentView?.bounds.width ?? 0
-            ) - scrollView.contentView.bounds.width
+            max(scrollView.documentView?.frame.width ?? 0, scrollView.documentView?.bounds.width ?? 0)
+                - scrollView.contentView.bounds.width
         )
         XCTAssertGreaterThan(maximumOffset, 0)
 
-        NotificationCenter.default.post(
-            name: NSScrollView.willStartLiveScrollNotification,
-            object: scrollView
-        )
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
         for step in 1...8 {
-            let offset = maximumOffset * CGFloat(step) / 8
-            scrollView.contentView.scroll(to: NSPoint(x: offset, y: 0))
+            scrollView.contentView.scroll(to: NSPoint(x: maximumOffset * CGFloat(step) / 8, y: 0))
             scrollView.reflectScrolledClipView(scrollView.contentView)
-            settleLayout(in: window, hostingView: hostingView, passes: 2)
+            settleLayout(in: window, root: renderer.view, passes: 2)
         }
 
-        let registeredFrames = try XCTUnwrap(chromeView.geometryRegistry?.frames(
-            for: tabs.map(\.id),
-            in: chromeView
-        ))
-        let scrolledFirstFrame = try XCTUnwrap(registeredFrames[tabs[0].id])
-        XCTAssertEqual(registeredFrames.count, tabs.count)
-        XCTAssertLessThanOrEqual(
-            abs((initialFirstFrame.minX - maximumOffset) - scrolledFirstFrame.minX),
-            1
-        )
+        let scrolledFrame = tabBar.convert(firstView.bounds, from: firstView)
+        XCTAssertEqual(tabBar.tabViewsForTesting.count, tabs.count)
+        XCTAssertEqual(scrolledFrame.minX, initialFrame.minX - maximumOffset, accuracy: 1)
     }
 
-    private func settleLayout(in window: NSWindow, hostingView: NSView, passes: Int = 6) {
+    private func settleLayout(in window: NSWindow, root: NSView, passes: Int = 8) {
         for _ in 0..<passes {
             window.contentView?.layoutSubtreeIfNeeded()
-            hostingView.layoutSubtreeIfNeeded()
-            RunLoop.current.run(mode: .default, before: Date.now.addingTimeInterval(0.01))
-        }
-    }
-
-    private func tabBarScrollView(in root: NSView) -> NSScrollView? {
-        descendants(ofType: NSScrollView.self, in: root).first { scrollView in
-            let documentHeight = max(
-                scrollView.documentView?.frame.height ?? 0,
-                scrollView.documentView?.bounds.height ?? 0
-            )
-            return abs(scrollView.frame.height - TabBarMetrics.barHeight) <= 0.5
-                && abs(documentHeight - TabBarMetrics.barHeight) <= 0.5
-                && scrollView.frame.width > 0
+            root.layoutSubtreeIfNeeded()
+            RunLoop.current.run(mode: .default, before: Date.now.addingTimeInterval(0.005))
         }
     }
 
     private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
-        var matches: [T] = []
-        if let match = root as? T {
-            matches.append(match)
-        }
+        var matches = (root as? T).map { [$0] } ?? []
         for subview in root.subviews {
             matches.append(contentsOf: descendants(ofType: type, in: subview))
         }

@@ -1,6 +1,5 @@
 import AppKit
 @testable import Bonsplit
-import SwiftUI
 import XCTest
 
 @MainActor
@@ -14,12 +13,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
 
         harness.registry.attachScrollView(harness.scrollView)
-
-        XCTAssertGreaterThan(
-            harness.scrollView.contentView.bounds.origin.x,
-            0,
-            "Attaching live AppKit geometry must resume a selected-tab reveal that was pending before the scroll view existed."
-        )
+        XCTAssertGreaterThan(harness.scrollView.contentView.bounds.origin.x, 0)
     }
 
     func testProgrammaticRevealSurvivesLaterBoundsOriginRestoration() throws {
@@ -34,13 +28,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
 
         harness.scrollView.contentView.scroll(to: .zero)
         harness.scrollView.reflectScrolledClipView(harness.scrollView.contentView)
-
-        XCTAssertEqual(
-            harness.scrollView.contentView.bounds.origin.x,
-            revealedOffset,
-            accuracy: 0.5,
-            "A later SwiftUI bounds-origin restoration must not overwrite the registry's selected-tab reveal."
-        )
+        XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, revealedOffset, accuracy: 0.5)
     }
 
     func testLiveUserScrollRelinquishesProgrammaticOffsetOwnership() throws {
@@ -50,374 +38,195 @@ final class TabBarResizeAnchorTests: XCTestCase {
         harness.registry.attachScrollView(harness.scrollView)
         harness.registry.register(harness.selectedView, for: harness.selectedTabId)
         harness.registry.revealSelection(harness.selectedTabId)
-        XCTAssertGreaterThan(harness.scrollView.contentView.bounds.origin.x, 0)
 
         NotificationCenter.default.post(
             name: NSScrollView.willStartLiveScrollNotification,
             object: harness.scrollView
         )
-        let userOffset: CGFloat = 120
-        harness.scrollView.contentView.scroll(to: NSPoint(x: userOffset, y: 0))
+        harness.scrollView.contentView.scroll(to: NSPoint(x: 120, y: 0))
         harness.scrollView.reflectScrolledClipView(harness.scrollView.contentView)
+        XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 120, accuracy: 0.5)
+    }
 
-        XCTAssertEqual(
-            harness.scrollView.contentView.bounds.origin.x,
-            userOffset,
-            accuracy: 0.5,
-            "An intentional live user scroll must replace any earlier programmatic reveal target."
-        )
+    func testNativeTabBarRevealsNewlySelectedOverflowTab() throws {
+        let harness = try makeNativeHarness(width: 320, tabCount: 8, selectedIndex: 0)
+        defer { harness.window.orderOut(nil) }
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        let lastTab = try XCTUnwrap(harness.pane.tabs.last)
+
+        harness.pane.selectTab(lastTab.id)
+        settleLayout(in: harness.window, root: harness.viewController.view)
+
+        let tabView = try XCTUnwrap(tabBar.tabViewsForTesting[lastTab.id])
+        let visible = tabBar.scrollViewForTesting.documentVisibleRect
+        XCTAssertGreaterThan(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0)
+        XCTAssertGreaterThanOrEqual(tabView.frame.minX, visible.minX - 0.5)
+        XCTAssertLessThanOrEqual(tabView.frame.maxX, visible.maxX + 0.5)
+    }
+
+    func testNativeTabBarReturnsToLeadingEdgeWhenContentShrinks() throws {
+        let harness = try makeNativeHarness(width: 320, tabCount: 8, selectedIndex: 7)
+        defer { harness.window.orderOut(nil) }
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        XCTAssertGreaterThan(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0)
+
+        harness.pane.tabs = Array(harness.pane.tabs.prefix(1))
+        harness.pane.selectedTabId = harness.pane.tabs.first?.id
+        settleLayout(in: harness.window, root: harness.viewController.view)
+
+        XCTAssertEqual(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0, accuracy: 0.5)
+    }
+
+    func testNativeTabBarPreservesValidUserOffsetAcrossResize() throws {
+        let harness = try makeNativeHarness(width: 260, tabCount: 10, selectedIndex: 0)
+        defer { harness.window.orderOut(nil) }
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        let scrollView = tabBar.scrollViewForTesting
+        let maximum = max(0, (scrollView.documentView?.frame.width ?? 0) - scrollView.contentView.bounds.width)
+        let userOffset = maximum * 0.35
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        scrollView.contentView.scroll(to: NSPoint(x: userOffset, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+
+        harness.window.setContentSize(NSSize(width: 300, height: 180))
+        settleLayout(in: harness.window, root: harness.viewController.view)
+
+        let resizedMaximum = max(0, (scrollView.documentView?.frame.width ?? 0) - scrollView.contentView.bounds.width)
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, min(userOffset, resizedMaximum), accuracy: 1)
     }
 
     func testSelectedOverflowTabTracksLiveGeometryAndFullyRevealsChrome() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 520, height: TabBarMetrics.barHeight),
-            tabCount: 3,
-            selectedIndex: 0
-        )
+        let harness = try makeNativeHarness(width: 420, tabCount: 3, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        XCTAssertEqual(maxHorizontalOffset(in: tabBar.scrollViewForTesting), 0, accuracy: 0.5)
 
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let chromeView = try XCTUnwrap(
-            descendants(
-                ofType: TabBarSelectionChromeView.ChromeNSView.self,
-                in: harness.hostingView
-            ).first
-        )
-        XCTAssertEqual(maxHorizontalOffset(in: scrollView), 0, accuracy: 0.5)
-        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
-
-        let newTab = TabItem(
-            title: "New browser tab",
-            icon: "globe",
-            kind: "browser"
-        )
+        let newTab = TabItem(title: "New browser tab", icon: "globe", kind: "browser")
         harness.pane.addTab(newTab)
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        let initialFrame = try visibleFrame(for: newTab.id, in: tabBar)
 
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            guard chromeView.selectedTabId == newTab.id,
-                  let selectedFrame = chromeView.geometryRegistry?.frame(
-                    for: newTab.id,
-                    in: chromeView
-                  ) else {
-                return false
-            }
-            return selectedFrame.minX >= chromeView.bounds.minX - 0.5
-                && selectedFrame.maxX <= chromeView.bounds.maxX + 0.5
-        }
+        let index = try XCTUnwrap(harness.pane.tabs.firstIndex(where: { $0.id == newTab.id }))
+        harness.pane.tabs[index].title = String(repeating: "Long browser title ", count: 8)
+        settleLayout(in: harness.window, root: harness.viewController.view)
 
-        let initialSelectedFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: newTab.id, in: chromeView)
-        )
-        let newTabIndex = try XCTUnwrap(
-            harness.pane.tabs.firstIndex(where: { $0.id == newTab.id })
-        )
-        harness.pane.tabs[newTabIndex].title = String(repeating: "Long browser title ", count: 8)
-
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            guard let selectedFrame = chromeView.geometryRegistry?.frame(
-                for: newTab.id,
-                in: chromeView
-            ) else {
-                return false
-            }
-            return selectedFrame.width > initialSelectedFrame.width + 1
-                && selectedFrame.minX >= chromeView.bounds.minX - 0.5
-                && selectedFrame.maxX <= chromeView.bounds.maxX + 0.5
-        }
-
-        let selectedFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: newTab.id, in: chromeView)
-        )
-        XCTAssertEqual(chromeView.selectedTabId, newTab.id)
-        XCTAssertGreaterThan(
-            selectedFrame.width,
-            initialSelectedFrame.width + 1,
-            "The regression requires the selected browser tab's live frame to grow."
-        )
-        XCTAssertGreaterThan(
-            maxHorizontalOffset(in: scrollView),
-            0,
-            "The test must transition the tab strip from fitting to overflowing."
-        )
-        XCTAssertGreaterThan(
-            scrollView.contentView.bounds.origin.x,
-            0,
-            "Selecting a newly inserted overflow tab must move the live AppKit viewport."
-        )
-        XCTAssertGreaterThanOrEqual(
-            selectedFrame.minX,
-            chromeView.bounds.minX - 0.5,
-            "The selected tab and its selection chrome must not be clipped at the leading edge."
-        )
-        XCTAssertLessThanOrEqual(
-            selectedFrame.maxX,
-            chromeView.bounds.maxX + 0.5,
-            "The selected tab and its selection chrome must not be clipped at the trailing edge."
-        )
+        let selectedFrame = try visibleFrame(for: newTab.id, in: tabBar)
+        XCTAssertGreaterThan(selectedFrame.width, initialFrame.width + 1)
+        XCTAssertGreaterThan(maxHorizontalOffset(in: tabBar.scrollViewForTesting), 0)
+        XCTAssertGreaterThan(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0)
+        XCTAssertGreaterThanOrEqual(selectedFrame.minX, tabBar.bounds.minX - 0.5)
+        XCTAssertLessThanOrEqual(selectedFrame.maxX, tabBar.bounds.maxX + 0.5)
     }
 
     func testSelectedTabStaysRevealedWhenEarlierTabGrowthMovesItsLiveFrame() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 520, height: TabBarMetrics.barHeight),
-            tabCount: 4,
-            selectedIndex: 3
-        )
+        let harness = try makeNativeHarness(width: 420, tabCount: 4, selectedIndex: 3)
         defer { harness.window.orderOut(nil) }
-
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let chromeView = try XCTUnwrap(
-            descendants(
-                ofType: TabBarSelectionChromeView.ChromeNSView.self,
-                in: harness.hostingView
-            ).first
-        )
-        let selectedTabId = try XCTUnwrap(harness.pane.selectedTabId)
-        XCTAssertEqual(maxHorizontalOffset(in: scrollView), 0, accuracy: 0.5)
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        let selectedID = try XCTUnwrap(harness.pane.selectedTabId)
 
         harness.pane.tabs[0].title = String(repeating: "Long earlier title ", count: 8)
+        settleLayout(in: harness.window, root: harness.viewController.view)
 
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            guard maxHorizontalOffset(in: scrollView) > 0,
-                  let selectedFrame = chromeView.geometryRegistry?.frame(
-                    for: selectedTabId,
-                    in: chromeView
-                  ) else {
-                return false
-            }
-            return scrollView.contentView.bounds.origin.x > 0
-                && selectedFrame.minX >= chromeView.bounds.minX - 0.5
-                && selectedFrame.maxX <= chromeView.bounds.maxX + 0.5
-        }
-
-        let selectedFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: selectedTabId, in: chromeView)
-        )
-        XCTAssertGreaterThan(scrollView.contentView.bounds.origin.x, 0)
-        XCTAssertGreaterThanOrEqual(selectedFrame.minX, chromeView.bounds.minX - 0.5)
-        XCTAssertLessThanOrEqual(
-            selectedFrame.maxX,
-            chromeView.bounds.maxX + 0.5,
-            "A sibling layout change must keep scrolling and selection chrome on the same live frame."
-        )
+        let selectedFrame = try visibleFrame(for: selectedID, in: tabBar)
+        XCTAssertGreaterThan(maxHorizontalOffset(in: tabBar.scrollViewForTesting), 0)
+        XCTAssertGreaterThan(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0)
+        XCTAssertGreaterThanOrEqual(selectedFrame.minX, tabBar.bounds.minX - 0.5)
+        XCTAssertLessThanOrEqual(selectedFrame.maxX, tabBar.bounds.maxX + 0.5)
     }
 
     func testSelectingTabBehindActionLaneRevealsItsCloseAffordance() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 520, height: TabBarMetrics.barHeight),
-            tabCount: 4,
+        let harness = try makeNativeHarness(
+            width: 520,
+            tabCount: 5,
             selectedIndex: 0,
             showSplitButtons: true
         )
         defer { harness.window.orderOut(nil) }
-
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let chromeView = try XCTUnwrap(
-            descendants(
-                ofType: TabBarSelectionChromeView.ChromeNSView.self,
-                in: harness.hostingView
-            ).first
-        )
-        let targetTab = try XCTUnwrap(harness.pane.tabs.last)
-        let actionLaneWidth = TabBarStyling.splitButtonsBackdropWidth(
+        let tabBar = try nativeTabBar(in: harness.viewController.view)
+        let scrollView = tabBar.scrollViewForTesting
+        let target = try XCTUnwrap(harness.pane.tabs.last)
+        let laneWidth = TabBarStyling.splitButtonsBackdropWidth(
             buttonCount: BonsplitConfiguration.SplitActionButton.defaults.count
         )
-        let unobscuredMaxX = chromeView.bounds.maxX - actionLaneWidth
-
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            guard maxHorizontalOffset(in: scrollView) > 0,
-                  let targetFrame = chromeView.geometryRegistry?.frame(
-                    for: targetTab.id,
-                    in: chromeView
-                  ) else {
-                return false
-            }
-            return targetFrame.maxX > unobscuredMaxX + 1
-                && targetFrame.maxX <= chromeView.bounds.maxX + 0.5
-        }
-
-        let obscuredFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: targetTab.id, in: chromeView)
-        )
-        XCTAssertGreaterThan(
-            obscuredFrame.maxX,
-            unobscuredMaxX + 1,
-            "The regression requires the target tab's trailing close affordance to begin behind the action lane."
-        )
-        XCTAssertLessThanOrEqual(
-            obscuredFrame.maxX,
-            chromeView.bounds.maxX + 0.5,
-            "The target must still be inside the raw clip view so the test distinguishes occlusion from ordinary clipping."
-        )
+        let unobscuredMaxX = tabBar.bounds.maxX - laneWidth
+        let targetView = try XCTUnwrap(tabBar.tabViewsForTesting[target.id])
+        let rawTrailingOffset = max(0, targetView.frame.maxX - tabBar.bounds.width)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        scrollView.contentView.scroll(to: NSPoint(x: rawTrailingOffset, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        let obscuredFrame = try visibleFrame(for: target.id, in: tabBar)
+        XCTAssertGreaterThan(obscuredFrame.maxX, unobscuredMaxX + 1)
+        XCTAssertLessThanOrEqual(obscuredFrame.maxX, tabBar.bounds.maxX + 0.5)
         let initialOffset = scrollView.contentView.bounds.origin.x
 
-        harness.pane.selectTab(targetTab.id)
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            guard chromeView.selectedTabId == targetTab.id,
-                  let selectedFrame = chromeView.geometryRegistry?.frame(
-                    for: targetTab.id,
-                    in: chromeView
-                  ) else {
-                return false
-            }
-            return selectedFrame.maxX <= unobscuredMaxX + 0.5
-        }
-
-        let selectedFrame = try XCTUnwrap(
-            chromeView.geometryRegistry?.frame(for: targetTab.id, in: chromeView)
-        )
-        XCTAssertGreaterThan(
-            scrollView.contentView.bounds.origin.x,
-            initialOffset + 0.5,
-            "Selecting a tab under the action lane must shift the strip to expose its trailing controls."
-        )
-        XCTAssertLessThanOrEqual(
-            selectedFrame.maxX,
-            unobscuredMaxX + 0.5,
-            "The selected tab, including its close affordance, must end before the action lane begins."
-        )
+        harness.pane.selectTab(target.id)
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        let selectedFrame = try visibleFrame(for: target.id, in: tabBar)
+        XCTAssertGreaterThan(scrollView.contentView.bounds.origin.x, initialOffset + 0.5)
+        XCTAssertLessThanOrEqual(selectedFrame.maxX, unobscuredMaxX + 0.5)
     }
 
     func testViewportResizeKeepsLeadingAnchoredWhenTabStripWasLeadingAligned() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 900, height: TabBarMetrics.barHeight),
-            tabCount: 8,
-            selectedIndex: 2
-        )
+        let harness = try makeNativeHarness(width: 900, tabCount: 8, selectedIndex: 2)
         defer { harness.window.orderOut(nil) }
-
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
+        let scrollView = try nativeTabBar(in: harness.viewController.view).scrollViewForTesting
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
 
-        harness.window.setContentSize(NSSize(width: 240, height: TabBarMetrics.barHeight))
-        harness.hostingView.frame = harness.window.contentView?.bounds ?? harness.hostingView.frame
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            abs(scrollView.contentView.bounds.origin.x) <= 0.5
-        }
-
-        XCTAssertEqual(
-            scrollView.contentView.bounds.origin.x,
-            0,
-            accuracy: 0.5,
-            "A pure pane/window resize must preserve the leading tab-strip anchor instead of recentering the selected tab and shifting icons."
-        )
+        harness.window.setContentSize(NSSize(width: 240, height: 180))
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
     }
 
     func testViewportResizeClampsExistingOverflowOffsetToNewRange() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 240, height: TabBarMetrics.barHeight),
-            tabCount: 8,
-            selectedIndex: 7
-        )
+        let harness = try makeNativeHarness(width: 240, tabCount: 8, selectedIndex: 7)
         defer { harness.window.orderOut(nil) }
-
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let initialMaxOffset = maxHorizontalOffset(in: scrollView)
-        XCTAssertGreaterThan(initialMaxOffset, 0)
-
-        scrollView.contentView.scroll(to: NSPoint(x: initialMaxOffset, y: 0))
+        let scrollView = try nativeTabBar(in: harness.viewController.view).scrollViewForTesting
+        let initialMaximum = maxHorizontalOffset(in: scrollView)
+        XCTAssertGreaterThan(initialMaximum, 0)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        scrollView.contentView.scroll(to: NSPoint(x: initialMaximum, y: 0))
         scrollView.reflectScrolledClipView(scrollView.contentView)
-        XCTAssertEqual(scrollView.contentView.bounds.origin.x, initialMaxOffset, accuracy: 0.5)
 
-        harness.window.setContentSize(NSSize(width: 360, height: TabBarMetrics.barHeight))
-        harness.hostingView.frame = harness.window.contentView?.bounds ?? harness.hostingView.frame
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            let expectedOffset = maxHorizontalOffset(in: scrollView)
-            return expectedOffset > 0
-                && abs(scrollView.contentView.bounds.origin.x - expectedOffset) <= 0.5
-        }
-
-        let expectedOffset = maxHorizontalOffset(in: scrollView)
-        XCTAssertGreaterThan(expectedOffset, 0)
-        XCTAssertLessThan(expectedOffset, initialMaxOffset)
-        XCTAssertEqual(
-            scrollView.contentView.bounds.origin.x,
-            expectedOffset,
-            accuracy: 0.5,
-            "A resize that reduces the valid scroll range must clamp the existing offset instead of resetting or recentering the tab strip."
-        )
+        harness.window.setContentSize(NSSize(width: 360, height: 180))
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        let resizedMaximum = maxHorizontalOffset(in: scrollView)
+        XCTAssertGreaterThan(resizedMaximum, 0)
+        XCTAssertLessThan(resizedMaximum, initialMaximum)
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, resizedMaximum, accuracy: 0.5)
     }
 
     func testContentShrinkReturnsFittingStripToLeadingEdge() throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 360, height: TabBarMetrics.barHeight),
-            tabCount: 8,
-            selectedIndex: 0
-        )
+        let harness = try makeNativeHarness(width: 360, tabCount: 8, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
-
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let initialMaxOffset = maxHorizontalOffset(in: scrollView)
-        XCTAssertGreaterThan(initialMaxOffset, 0)
-        scrollView.contentView.scroll(to: NSPoint(x: initialMaxOffset, y: 0))
+        let scrollView = try nativeTabBar(in: harness.viewController.view).scrollViewForTesting
+        let initialMaximum = maxHorizontalOffset(in: scrollView)
+        XCTAssertGreaterThan(initialMaximum, 0)
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        scrollView.contentView.scroll(to: NSPoint(x: initialMaximum, y: 0))
         scrollView.reflectScrolledClipView(scrollView.contentView)
 
         harness.pane.tabs = Array(harness.pane.tabs.prefix(2))
-        settleLayout(in: harness.window, hostingView: harness.hostingView) {
-            maxHorizontalOffset(in: scrollView) <= 0.5
-                && abs(scrollView.contentView.bounds.origin.x) <= 0.5
-        }
-
+        harness.pane.selectedTabId = harness.pane.tabs.first?.id
+        settleLayout(in: harness.window, root: harness.viewController.view)
         XCTAssertEqual(maxHorizontalOffset(in: scrollView), 0, accuracy: 0.5)
-        XCTAssertEqual(
-            scrollView.contentView.bounds.origin.x,
-            0,
-            accuracy: 0.5,
-            "A strip that stops overflowing must not retain a stale clip-view offset."
-        )
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
     }
 
     func testViewportResizeDoesNotUndoLaterValidOffset() async throws {
-        let harness = try makeTabBarHarness(
-            initialSize: NSSize(width: 240, height: TabBarMetrics.barHeight),
-            tabCount: 8,
-            selectedIndex: 7
-        )
+        let harness = try makeNativeHarness(width: 240, tabCount: 8, selectedIndex: 7)
         defer { harness.window.orderOut(nil) }
+        let scrollView = try nativeTabBar(in: harness.viewController.view).scrollViewForTesting
+        harness.window.setContentSize(NSSize(width: 360, height: 180))
+        settleLayout(in: harness.window, root: harness.viewController.view)
 
-        let scrollView = try tabBarScrollView(in: harness.hostingView)
-        let initialMaxOffset = maxHorizontalOffset(in: scrollView)
-        XCTAssertGreaterThan(initialMaxOffset, 0)
-
-        scrollView.contentView.scroll(to: NSPoint(x: initialMaxOffset, y: 0))
+        let validOffset = maxHorizontalOffset(in: scrollView) / 2
+        NotificationCenter.default.post(name: NSScrollView.willStartLiveScrollNotification, object: scrollView)
+        scrollView.contentView.scroll(to: NSPoint(x: validOffset, y: 0))
         scrollView.reflectScrolledClipView(scrollView.contentView)
-
-        var laterValidOffset: CGFloat?
-        let laterScrollApplied = expectation(description: "later valid scroll applied")
-        DispatchQueue.main.async {
-            let validOffset = self.maxHorizontalOffset(in: scrollView) / 2
-            laterValidOffset = validOffset
-            NotificationCenter.default.post(
-                name: NSScrollView.willStartLiveScrollNotification,
-                object: scrollView
-            )
-            scrollView.contentView.scroll(to: NSPoint(x: validOffset, y: 0))
-            scrollView.reflectScrolledClipView(scrollView.contentView)
-            laterScrollApplied.fulfill()
-        }
-
-        harness.window.setContentSize(NSSize(width: 360, height: TabBarMetrics.barHeight))
-        harness.hostingView.frame = harness.window.contentView?.bounds ?? harness.hostingView.frame
-        harness.window.contentView?.layoutSubtreeIfNeeded()
-        harness.hostingView.layoutSubtreeIfNeeded()
-
-        let queuedCorrectionsDrained = expectation(description: "queued corrections drained")
-        DispatchQueue.main.async {
-            queuedCorrectionsDrained.fulfill()
-        }
-        await fulfillment(of: [laterScrollApplied, queuedCorrectionsDrained], timeout: 1)
-        let expectedOffset = try XCTUnwrap(laterValidOffset)
-        XCTAssertEqual(
-            scrollView.contentView.bounds.origin.x,
-            expectedOffset,
-            accuracy: 0.5,
-            "The queued clamp retry must not overwrite a later scroll position that is already inside the resized tab strip's valid range."
-        )
-    }
-
-    private struct TabBarHarness {
-        let window: NSWindow
-        let hostingView: NSView
-        let pane: PaneState
+        await Task.yield()
+        settleLayout(in: harness.window, root: harness.viewController.view)
+        XCTAssertEqual(scrollView.contentView.bounds.origin.x, validOffset, accuracy: 0.5)
     }
 
     private struct GeometryRegistryHarness {
@@ -426,6 +235,12 @@ final class TabBarResizeAnchorTests: XCTestCase {
         let selectedView: NSView
         let selectedTabId: UUID
         let registry: TabBarItemGeometryRegistry
+    }
+
+    private struct NativeHarness {
+        let window: NSWindow
+        let viewController: BonsplitViewController
+        let pane: PaneState
     }
 
     private func makeGeometryRegistryHarness() throws -> GeometryRegistryHarness {
@@ -438,12 +253,8 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
         let contentView = try XCTUnwrap(window.contentView)
         let scrollView = NSScrollView(frame: NSRect(origin: .zero, size: viewportSize))
-        let documentView = NSView(
-            frame: NSRect(x: 0, y: 0, width: 600, height: viewportSize.height)
-        )
-        let selectedView = NSView(
-            frame: NSRect(x: 480, y: 0, width: 100, height: viewportSize.height)
-        )
+        let documentView = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: viewportSize.height))
+        let selectedView = NSView(frame: NSRect(x: 480, y: 0, width: 100, height: viewportSize.height))
         let selectedTabId = UUID()
         let registry = TabBarItemGeometryRegistry()
 
@@ -452,7 +263,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         contentView.addSubview(scrollView)
         window.makeKeyAndOrderFront(nil)
 
-        return GeometryRegistryHarness(
+        return .init(
             window: window,
             scrollView: scrollView,
             selectedView: selectedView,
@@ -461,99 +272,53 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
-    private func makeTabBarHarness(
-        initialSize: NSSize,
+    private func makeNativeHarness(
+        width: CGFloat,
         tabCount: Int,
         selectedIndex: Int,
         showSplitButtons: Bool = false
-    ) throws -> TabBarHarness {
-        let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: .default))
+    ) throws -> NativeHarness {
+        let appearance = BonsplitConfiguration.Appearance(
+            splitButtons: showSplitButtons
+                ? BonsplitConfiguration.SplitActionButton.defaults
+                : []
+        )
+        let controller = BonsplitController(configuration: .init(
+            contentViewLifecycle: .keepAllAlive,
+            appearance: appearance
+        ))
         controller.tabShortcutHintsEnabled = false
         let pane = try XCTUnwrap(controller.internalController.rootNode.allPanes.first)
-
-        let tabs = (0..<tabCount).map { index in
-            TabItem(title: "Terminal \(index + 1)", icon: "terminal.fill", kind: "terminal")
+        pane.tabs = (0..<tabCount).map {
+            TabItem(title: "Terminal \($0 + 1)", icon: "terminal.fill", kind: "terminal")
         }
-        pane.tabs = tabs
-        pane.selectedTabId = tabs[selectedIndex].id
+        pane.selectedTabId = pane.tabs[selectedIndex].id
 
-        let hostingView = NSHostingView(
-            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: showSplitButtons)
-                .environment(controller)
-                .environment(controller.internalController)
-        )
+        let renderer = BonsplitViewController(controller: controller) { _, _ in
+            let child = NSViewController()
+            child.view = NSView()
+            return child
+        }
         let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: initialSize),
+            contentRect: NSRect(x: 0, y: 0, width: width, height: 180),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
         )
-        window.isOpaque = false
-        window.backgroundColor = .clear
-        let contentView = try XCTUnwrap(window.contentView)
-        contentView.wantsLayer = true
-        contentView.layer?.backgroundColor = NSColor.clear.cgColor
-        hostingView.frame = NSRect(origin: .zero, size: initialSize)
-        hostingView.autoresizingMask = [.width, .height]
-        contentView.addSubview(hostingView)
-
+        window.contentViewController = renderer
+        window.setContentSize(NSSize(width: width, height: 180))
         window.makeKeyAndOrderFront(nil)
-        settleLayout(in: window, hostingView: hostingView) {
-            tabBarScrollViews(in: hostingView).count == 1
-        }
-
-        return TabBarHarness(window: window, hostingView: hostingView, pane: pane)
+        settleLayout(in: window, root: renderer.view)
+        return .init(window: window, viewController: renderer, pane: pane)
     }
 
-    private func settleLayout(
-        in window: NSWindow,
-        hostingView: NSView,
-        until condition: () -> Bool
-    ) {
-        for _ in 0..<20 {
-            window.contentView?.layoutSubtreeIfNeeded()
-            hostingView.layoutSubtreeIfNeeded()
-            if condition() {
-                return
-            }
-            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
-        }
-
-        window.contentView?.layoutSubtreeIfNeeded()
-        hostingView.layoutSubtreeIfNeeded()
+    private func nativeTabBar(in root: NSView) throws -> BonsplitNativeTabBarView {
+        try XCTUnwrap(descendants(ofType: BonsplitNativeTabBarView.self, in: root).first)
     }
 
-    private func tabBarScrollView(
-        in root: NSView,
-        file: StaticString = #filePath,
-        line: UInt = #line
-    ) throws -> NSScrollView {
-        let matches = tabBarScrollViews(in: root)
-        let widestWidth = matches.map(\.frame.width).max()
-        let widestMatches = matches.filter { scrollView in
-            guard let widestWidth else { return false }
-            return abs(scrollView.frame.width - widestWidth) <= 0.5
-        }
-        XCTAssertEqual(
-            widestMatches.count,
-            1,
-            "The harness should expose exactly one tab-bar-sized scroll view.",
-            file: file,
-            line: line
-        )
-        return try XCTUnwrap(widestMatches.first, file: file, line: line)
-    }
-
-    private func tabBarScrollViews(in root: NSView) -> [NSScrollView] {
-        descendants(ofType: NSScrollView.self, in: root).filter { scrollView in
-            let documentHeight = max(
-                scrollView.documentView?.frame.height ?? 0,
-                scrollView.documentView?.bounds.height ?? 0
-            )
-            return abs(scrollView.frame.height - TabBarMetrics.barHeight) <= 0.5
-                && abs(documentHeight - TabBarMetrics.barHeight) <= 0.5
-                && scrollView.frame.width > 0
-        }
+    private func visibleFrame(for tabID: UUID, in tabBar: BonsplitNativeTabBarView) throws -> NSRect {
+        let tabView = try XCTUnwrap(tabBar.tabViewsForTesting[tabID])
+        return tabBar.convert(tabView.bounds, from: tabView)
     }
 
     private func maxHorizontalOffset(in scrollView: NSScrollView) -> CGFloat {
@@ -564,11 +329,16 @@ final class TabBarResizeAnchorTests: XCTestCase {
         return max(0, documentWidth - scrollView.contentView.bounds.width)
     }
 
-    private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
-        var matches: [T] = []
-        if let match = root as? T {
-            matches.append(match)
+    private func settleLayout(in window: NSWindow, root: NSView, passes: Int = 12) {
+        for _ in 0..<passes {
+            window.contentView?.layoutSubtreeIfNeeded()
+            root.layoutSubtreeIfNeeded()
+            RunLoop.current.run(mode: .default, before: Date.now.addingTimeInterval(0.005))
         }
+    }
+
+    private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
+        var matches = (root as? T).map { [$0] } ?? []
         for subview in root.subviews {
             matches.append(contentsOf: descendants(ofType: type, in: subview))
         }

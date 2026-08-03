@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 /// Direction from which a new split animates in
 enum SplitAnimationOrigin {
@@ -30,7 +30,7 @@ final class SplitState: Identifiable {
     /// target that AppKit permanently refuses.
     var imposedEpoch: Int = 0
     /// Imperative hook the live split view's coordinator installs so divider
-    /// authority changes apply immediately. Routing them through SwiftUI
+    /// authority changes apply immediately. Routing them through a render pass
     /// observation is not reliable for representables: a split whose only
     /// change is an extent update may never get another updateNSView, and its
     /// divider then renders a previous layout until some unrelated event

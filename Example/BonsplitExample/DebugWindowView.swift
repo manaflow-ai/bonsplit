@@ -1,198 +1,235 @@
-import SwiftUI
 import AppKit
 import Bonsplit
 
-struct DebugWindowView: View {
-    let debugState: DebugState
+@MainActor
+final class DebugWindowController: NSWindowController {
+  init(debugState: DebugState) {
+    let content = DebugViewController(debugState: debugState)
+    let window = NSPanel(
+      contentRect: NSRect(x: 0, y: 0, width: 400, height: 600),
+      styleMask: [.titled, .closable, .resizable, .utilityWindow],
+      backing: .buffered,
+      defer: false
+    )
+    window.title = exampleLocalized(
+      "example.debug.windowTitle",
+      defaultValue: "Geometry Debug"
+    )
+    window.minSize = NSSize(width: 350, height: 400)
+    window.contentViewController = content
+    super.init(window: window)
+  }
 
-    var body: some View {
-        VStack(spacing: 0) {
-            // Split between geometry and logs
-            VSplitView {
-                // Pane Geometry Section
-                if let snapshot = debugState.currentSnapshot {
-                    GeometrySection(snapshot: snapshot, debugState: debugState)
-                } else {
-                    Text("No snapshot - waiting for layout")
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-
-                // Live Log Section
-                LogSection(logs: debugState.logs, onClear: { debugState.logs.removeAll() })
-            }
-        }
-        .frame(minWidth: 350, minHeight: 400)
-        .modifier(UtilityWindowModifier())
-    }
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
 }
 
-struct GeometrySection: View {
-    let snapshot: LayoutSnapshot
-    let debugState: DebugState
+@MainActor
+private final class DebugViewController: NSViewController {
+  private let debugState: DebugState
+  private let geometryStack = NSStackView()
+  private let logTextView = NSTextView()
 
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Layout Snapshot").font(.subheadline)
-                Text("Container: \(Int(snapshot.containerFrame.width)) x \(Int(snapshot.containerFrame.height)) at (\(Int(snapshot.containerFrame.x)), \(Int(snapshot.containerFrame.y)))")
-                    .font(.caption2.monospaced())
+  init(debugState: DebugState) {
+    self.debugState = debugState
+    super.init(nibName: nil, bundle: nil)
+  }
 
-                Divider()
+  @available(*, unavailable)
+  required init?(coder: NSCoder) {
+    fatalError("init(coder:) has not been implemented")
+  }
 
-                Text("Panes (\(snapshot.panes.count))").font(.caption)
+  isolated deinit {
+    debugState.onChange = nil
+  }
 
-                ForEach(snapshot.panes, id: \.paneId) { pane in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(String(pane.paneId.prefix(8)) + "...")
-                                    .font(.caption2.monospaced())
-                                if pane.paneId == snapshot.focusedPaneId {
-                                    Image(systemName: "star.fill")
-                                        .foregroundColor(.yellow)
-                                        .font(.caption2)
-                                }
-                            }
-                            Text("pos: (\(Int(pane.frame.x)), \(Int(pane.frame.y)))")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                            Text("size: \(Int(pane.frame.width)) x \(Int(pane.frame.height))")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                            Text("tabs: \(pane.tabIds.count)")
-                                .font(.caption2.monospaced())
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                    }
-                    .padding(.vertical, 4)
-                }
+  override func loadView() {
+    let split = NSSplitView()
+    split.isVertical = false
+    split.dividerStyle = .thin
 
-                // Divider controls (if splits exist)
-                if let tree = debugState.currentTree {
-                    Divider()
-                    Text("Splits").font(.caption)
-                    SplitControlsView(node: tree, debugState: debugState)
-                }
-            }
-            .padding(8)
-        }
+    geometryStack.orientation = .vertical
+    geometryStack.alignment = .leading
+    geometryStack.spacing = 8
+    geometryStack.edgeInsets = NSEdgeInsets(top: 8, left: 8, bottom: 8, right: 8)
+    let geometryScroll = NSScrollView()
+    geometryScroll.hasVerticalScroller = true
+    geometryScroll.documentView = geometryStack
+
+    let logContainer = NSView()
+    let header = NSTextField(
+      labelWithString: exampleLocalized(
+        "example.debug.eventLog",
+        defaultValue: "Event Log"
+      ))
+    header.font = .preferredFont(forTextStyle: .subheadline)
+    header.translatesAutoresizingMaskIntoConstraints = false
+    let clearButton = NSButton(
+      title: exampleLocalized("example.debug.clear", defaultValue: "Clear"),
+      target: self,
+      action: #selector(clearLogs(_:))
+    )
+    clearButton.bezelStyle = .inline
+    clearButton.translatesAutoresizingMaskIntoConstraints = false
+    let logScroll = NSScrollView()
+    logScroll.hasVerticalScroller = true
+    logScroll.translatesAutoresizingMaskIntoConstraints = false
+    logTextView.isEditable = false
+    logTextView.isSelectable = true
+    logTextView.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+    logScroll.documentView = logTextView
+    logContainer.addSubview(header)
+    logContainer.addSubview(clearButton)
+    logContainer.addSubview(logScroll)
+    NSLayoutConstraint.activate([
+      header.leadingAnchor.constraint(equalTo: logContainer.leadingAnchor, constant: 8),
+      header.topAnchor.constraint(equalTo: logContainer.topAnchor, constant: 8),
+      clearButton.trailingAnchor.constraint(equalTo: logContainer.trailingAnchor, constant: -8),
+      clearButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+      logScroll.leadingAnchor.constraint(equalTo: logContainer.leadingAnchor),
+      logScroll.trailingAnchor.constraint(equalTo: logContainer.trailingAnchor),
+      logScroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
+      logScroll.bottomAnchor.constraint(equalTo: logContainer.bottomAnchor),
+    ])
+
+    split.addArrangedSubview(geometryScroll)
+    split.addArrangedSubview(logContainer)
+    view = split
+
+    debugState.onChange = { [weak self] in
+      self?.refresh()
     }
-}
+    refresh()
+  }
 
-struct SplitControlsView: View {
-    let node: ExternalTreeNode
-    let debugState: DebugState
+  @objc private func clearLogs(_ sender: Any?) {
+    debugState.logs.removeAll()
+    refresh()
+  }
 
-    var body: some View {
-        switch node {
-        case .pane:
-            EmptyView()
-        case .split(let split):
-            VStack(alignment: .leading, spacing: 4) {
-                DividerSlider(split: split, debugState: debugState)
-                SplitControlsView(node: split.first, debugState: debugState)
-                SplitControlsView(node: split.second, debugState: debugState)
-            }
-        }
-    }
-}
+  @objc private func dividerChanged(_ sender: NSSlider) {
+    guard let identifier = sender.identifier?.rawValue,
+      let splitID = UUID(uuidString: identifier)
+    else { return }
+    debugState.setDividerPosition(CGFloat(sender.doubleValue), splitId: splitID)
+  }
 
-struct DividerSlider: View {
-    let split: ExternalSplitNode
-    let debugState: DebugState
-    @State private var position: Double
-
-    init(split: ExternalSplitNode, debugState: DebugState) {
-        self.split = split
-        self.debugState = debugState
-        self._position = State(initialValue: split.dividerPosition)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(split.id.prefix(8))...")
-                    .font(.caption2.monospaced())
-                Text("(\(split.orientation))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(String(format: "%.2f", position))
-                    .font(.caption2.monospaced())
-            }
-            Slider(value: $position, in: 0.1...0.9)
-                .onChange(of: position) { _, newValue in
-                    if let id = UUID(uuidString: split.id) {
-                        debugState.setDividerPosition(CGFloat(newValue), splitId: id)
-                    }
-                }
-        }
-        .padding(.vertical, 2)
-        .onChange(of: split.dividerPosition) { _, newValue in
-            position = newValue
-        }
-    }
-}
-
-struct LogSection: View {
-    let logs: [String]
-    let onClear: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("Event Log").font(.subheadline)
-                Spacer()
-                Button("Clear") { onClear() }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-            }
-            .padding(8)
-            Divider()
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(Array(logs.enumerated()), id: \.offset) { index, log in
-                            Text(log)
-                                .font(.caption2.monospaced())
-                                .textSelection(.enabled)
-                                .id(index)
-                        }
-                    }
-                    .padding(8)
-                }
-                .onChange(of: logs.count) { _, _ in
-                    if let last = logs.indices.last {
-                        proxy.scrollTo(last, anchor: .bottom)
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct UtilityWindowModifier: ViewModifier {
-    func body(content: Content) -> some View {
-        content.background(WindowAccessor())
-    }
-}
-
-struct WindowAccessor: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async {
-            if let window = view.window {
-                window.styleMask.insert(.utilityWindow)
-            }
-        }
-        return view
+  private func refresh() {
+    geometryStack.arrangedSubviews.forEach {
+      geometryStack.removeArrangedSubview($0)
+      $0.removeFromSuperview()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
+    guard let snapshot = debugState.currentSnapshot else {
+      geometryStack.addArrangedSubview(
+        label(
+          exampleLocalized(
+            "example.debug.noSnapshot",
+            defaultValue: "No snapshot, waiting for layout"
+          ),
+          color: .secondaryLabelColor
+        ))
+      refreshLogs()
+      return
+    }
 
-#Preview {
-    DebugWindowView(debugState: DebugState())
+    geometryStack.addArrangedSubview(
+      label(
+        exampleLocalized("example.debug.layoutSnapshot", defaultValue: "Layout Snapshot"),
+        font: .preferredFont(forTextStyle: .subheadline)
+      ))
+    geometryStack.addArrangedSubview(
+      label(
+        String(
+          format: exampleLocalized(
+            "example.debug.containerFormat",
+            defaultValue: "Container: %d x %d at (%d, %d)"
+          ),
+          Int(snapshot.containerFrame.width),
+          Int(snapshot.containerFrame.height),
+          Int(snapshot.containerFrame.x),
+          Int(snapshot.containerFrame.y)
+        ),
+        font: .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+      ))
+    geometryStack.addArrangedSubview(
+      label(
+        String(
+          format: exampleLocalized("example.debug.panesFormat", defaultValue: "Panes (%d)"),
+          snapshot.panes.count
+        )))
+    for pane in snapshot.panes {
+      let focused = pane.paneId == snapshot.focusedPaneId ? " ★" : ""
+      geometryStack.addArrangedSubview(
+        label(
+          String(
+            format: exampleLocalized(
+              "example.debug.paneFormat",
+              defaultValue: "%@…%@\n  pos: (%d, %d)\n  size: %d x %d\n  tabs: %d"
+            ),
+            String(pane.paneId.prefix(8)),
+            focused,
+            Int(pane.frame.x),
+            Int(pane.frame.y),
+            Int(pane.frame.width),
+            Int(pane.frame.height),
+            pane.tabIds.count
+          ),
+          font: .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        ))
+    }
+    if let tree = debugState.currentTree {
+      geometryStack.addArrangedSubview(
+        label(
+          exampleLocalized("example.debug.splits", defaultValue: "Splits")
+        ))
+      appendSplitControls(for: tree)
+    }
+    refreshLogs()
+  }
+
+  private func appendSplitControls(for node: ExternalTreeNode) {
+    guard case .split(let split) = node else { return }
+    let row = NSStackView()
+    row.orientation = .horizontal
+    row.spacing = 6
+    row.addArrangedSubview(
+      label(
+        String(
+          format: exampleLocalized(
+            "example.debug.splitFormat",
+            defaultValue: "%@… (%@)"
+          ),
+          String(split.id.prefix(8)),
+          split.orientation
+        )))
+    let slider = NSSlider(
+      value: split.dividerPosition, minValue: 0.1, maxValue: 0.9, target: self,
+      action: #selector(dividerChanged(_:)))
+    slider.identifier = NSUserInterfaceItemIdentifier(split.id)
+    row.addArrangedSubview(slider)
+    row.addArrangedSubview(label(String(format: "%.2f", split.dividerPosition)))
+    geometryStack.addArrangedSubview(row)
+    appendSplitControls(for: split.first)
+    appendSplitControls(for: split.second)
+  }
+
+  private func refreshLogs() {
+    logTextView.string = debugState.logs.joined(separator: "\n")
+    logTextView.scrollToEndOfDocument(nil)
+  }
+
+  private func label(
+    _ value: String,
+    font: NSFont = .systemFont(ofSize: NSFont.smallSystemFontSize),
+    color: NSColor = .labelColor
+  ) -> NSTextField {
+    let field = NSTextField(wrappingLabelWithString: value)
+    field.font = font
+    field.textColor = color
+    return field
+  }
 }

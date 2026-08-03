@@ -7,6 +7,7 @@ import AppKit
 /// split id from the AppKit view, then write positions through
 /// `BonsplitController.setDividerPosition(_:forSplit:)` so the model stays
 /// the source of truth and never snaps the view back.
+@MainActor
 public protocol BonsplitManagedSplitView: AnyObject {
     var bonsplitController: BonsplitController? { get }
     var bonsplitSplitId: UUID? { get }

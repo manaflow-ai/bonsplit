@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 
 import PackageDescription
 
@@ -28,5 +28,6 @@ let package = Package(
             dependencies: ["Bonsplit"],
             path: "Tests/BonsplitTests"
         ),
-    ]
+    ],
+    swiftLanguageModes: [.v6]
 )

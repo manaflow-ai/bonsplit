@@ -1,346 +1,223 @@
 # Bonsplit
 
-A native macOS tab bar library with split pane support for SwiftUI applications.
+Bonsplit is a native AppKit tab bar and split-pane library for macOS.
 
 ## Features
 
-- Native macOS look and feel using system colors
-- Drag-and-drop tab reordering within and between panes
-- Horizontal and vertical split panes with smooth 120fps animations
+- Native `NSViewController`, `NSSplitView`, scrolling, menus, drag and drop, and accessibility
+- Tab reordering within and between panes
+- Horizontal and vertical panes
 - Configurable appearance and behavior
-- Delegate callbacks for all tab and pane events
-- Keyboard navigation between panes
-- Optional macOS-like tab state preservation (scroll position, focus, @State)
+- Delegate callbacks for tab, pane, focus, and geometry events
+- Directional keyboard navigation
+- Selectable content-controller lifecycle for state preservation or lower memory use
 
 ## Requirements
 
 - macOS 14.0+
-- Swift 5.9+
-- Xcode 15.0+
+- Swift 6.3+
+- Xcode 26.3+
 
 ## Installation
 
-### Swift Package Manager
-
-Add to your `Package.swift`:
+Add Bonsplit with Swift Package Manager:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/almonk/bonsplit.git", from: "1.1.1")
+    .package(url: "https://github.com/manaflow-ai/bonsplit.git", branch: "main")
 ]
 ```
 
-Or in Xcode: File → Add Package Dependencies → Enter the repository URL.
+## Quick start
 
-## Quick Start
+Create one `BonsplitController` for the model and one `BonsplitViewController` for its native view hierarchy:
 
 ```swift
-import SwiftUI
+import AppKit
 import Bonsplit
 
-struct ContentView: View {
-    @State private var controller = BonsplitController()
-    @State private var documents: [TabID: Document] = [:]
+@MainActor
+final class WorkspaceViewController: NSViewController {
+    private let splitModel = BonsplitController()
+    private lazy var splitViewController = BonsplitViewController(
+        controller: splitModel,
+        content: { tab, pane in
+            DocumentViewController(tab: tab, pane: pane)
+        },
+        emptyPane: { pane in
+            EmptyPaneViewController(pane: pane)
+        }
+    )
 
-    var body: some View {
-        BonsplitView(controller: controller) { tab in
-            // Content for each tab
-            if let document = documents[tab.id] {
-                DocumentEditor(document: document)
-            }
-        } emptyPane: { paneId in
-            // Custom view for empty panes (optional)
-            VStack {
-                Text("No Open Files")
-                Button("New File") {
-                    createDocument(inPane: paneId)
-                }
-            }
-        }
-        .onAppear {
-            // Create initial tab
-            if let tabId = controller.createTab(title: "Untitled", icon: "doc.text") {
-                documents[tabId] = Document()
-            }
-        }
+    override func loadView() {
+        let root = NSView()
+        addChild(splitViewController)
+        splitViewController.view.frame = root.bounds
+        splitViewController.view.autoresizingMask = [.width, .height]
+        root.addSubview(splitViewController.view)
+        view = root
+
+        _ = splitModel.createTab(title: "Untitled", icon: "doc.text")
     }
 }
 ```
 
-**Note:** Splits create empty panes by default, giving you full control. Use the `didSplitPane` delegate method to auto-create tabs if desired.
+Splits create empty panes by default. Implement `didSplitPane` on `BonsplitDelegate` to create a tab automatically.
 
-## API Reference
+## Native content lifecycle
 
-### BonsplitController
-
-The main controller for managing tabs and panes.
-
-#### Tab Operations
+The content provider returns an `NSViewController`. Use `BonsplitContentUpdating` when a cached controller needs current tab metadata or its current pane:
 
 ```swift
-// Create a new tab
-let tabId = controller.createTab(
+@MainActor
+final class DocumentViewController: NSViewController, BonsplitContentUpdating {
+    private var tab: Tab
+    private var pane: PaneID
+
+    init(tab: Tab, pane: PaneID) {
+        self.tab = tab
+        self.pane = pane
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func updateBonsplitContent(tab: Tab, pane: PaneID) {
+        self.tab = tab
+        self.pane = pane
+        updateLabels()
+    }
+}
+```
+
+Choose the lifetime in `BonsplitConfiguration`:
+
+```swift
+let configuration = BonsplitConfiguration(
+    contentViewLifecycle: .keepAllAlive
+)
+```
+
+| Mode | Behavior |
+| --- | --- |
+| `.recreateOnSwitch` | Keeps only selected content alive. Returning to a tab asks the provider for a new controller. |
+| `.keepAllAlive` | Keeps every tab controller attached and hides unselected views. Scroll, selection, and responder state remain intact. |
+
+Call `reloadContent()` to discard every cached tab and empty-pane controller. Call `updateProviders(content:emptyPane:)` to replace providers and rebuild their cached controllers.
+
+## Controller API
+
+### Tabs
+
+```swift
+let tabID = controller.createTab(
     title: "Document.swift",
-    icon: "swift",           // SF Symbol name (optional)
-    isDirty: false,          // Show dirty indicator (optional)
-    inPane: paneId           // Target pane (optional, defaults to focused)
+    icon: "swift",
+    isDirty: false,
+    inPane: paneID
 )
 
-// Update tab properties
-controller.updateTab(tabId, title: "NewName.swift")
-controller.updateTab(tabId, isDirty: true)
-controller.updateTab(tabId, icon: "doc.text")
-
-// Close a tab
-controller.closeTab(tabId)
-
-// Select a tab
-controller.selectTab(tabId)
-
-// Navigate tabs
+controller.updateTab(tabID, title: "NewName.swift")
+controller.updateTab(tabID, isDirty: true)
+controller.selectTab(tabID)
 controller.selectPreviousTab()
 controller.selectNextTab()
+controller.closeTab(tabID)
 ```
 
-#### Split Operations
+### Splits
 
 ```swift
-// Split the focused pane (creates empty pane)
-let newPaneId = controller.splitPane(orientation: .horizontal)  // Side-by-side
-let newPaneId = controller.splitPane(orientation: .vertical)    // Stacked
-
-// Split a specific pane
-controller.splitPane(paneId, orientation: .horizontal)
-
-// Split with a tab already in the new pane
-controller.splitPane(orientation: .horizontal, withTab: Tab(title: "New", icon: "doc"))
-
-// Close a pane
-controller.closePane(paneId)
+let rightPane = controller.splitPane(orientation: .horizontal)
+let lowerPane = controller.splitPane(orientation: .vertical)
+controller.splitPane(paneID, orientation: .horizontal)
+controller.splitPane(
+    orientation: .horizontal,
+    withTab: Tab(title: "New", icon: "doc.text")
+)
+controller.closePane(paneID)
 ```
 
-**Note:** By default, `splitPane()` creates an empty pane. You have full control over when and how to add tabs. Use the `didSplitPane` delegate callback to create a tab in the new pane if you want automatic tab creation.
-
-#### Focus Management
+### Focus
 
 ```swift
-// Get focused pane
 let focusedPane = controller.focusedPaneId
-
-// Focus a specific pane
-controller.focusPane(paneId)
-
-// Navigate between panes
+controller.focusPane(paneID)
 controller.navigateFocus(direction: .left)
 controller.navigateFocus(direction: .right)
 controller.navigateFocus(direction: .up)
 controller.navigateFocus(direction: .down)
 ```
 
-#### Query Methods
+### Queries
 
 ```swift
-// Get all tabs
 let allTabs = controller.allTabIds
-
-// Get all panes
 let allPanes = controller.allPaneIds
-
-// Get tab info
-if let tab = controller.tab(tabId) {
-    print(tab.title, tab.icon, tab.isDirty)
-}
-
-// Get tabs in a pane
-let paneTabs = controller.tabs(inPane: paneId)
-
-// Get selected tab in a pane
-let selected = controller.selectedTab(inPane: paneId)
+let tab = controller.tab(tabID)
+let paneTabs = controller.tabs(inPane: paneID)
+let selected = controller.selectedTab(inPane: paneID)
 ```
 
-#### Geometry & Synchronization
-
-Query pane geometry and save/restore layout configurations:
+### Geometry and synchronization
 
 ```swift
-// Get flat list of pane geometries with pixel coordinates
 let snapshot = controller.layoutSnapshot()
-for pane in snapshot.panes {
-    print("Pane \(pane.paneId): \(pane.frame.width)x\(pane.frame.height)")
-}
-
-// Get full tree structure
 let tree = controller.treeSnapshot()
 
-// Set divider position programmatically (0.0-1.0)
-controller.setDividerPosition(0.3, forSplit: splitId, fromExternal: true)
-
-// Update container frame when window moves
+controller.setDividerPosition(0.3, forSplit: splitID, fromExternal: true)
+controller.setImposedFirstExtent(420, forSplit: splitID, fromExternal: true)
 controller.setContainerFrame(newFrame)
 ```
 
-| Method | Description |
-|--------|-------------|
-| `layoutSnapshot()` | Get current pane geometry with pixel coordinates |
-| `treeSnapshot()` | Get full tree structure for external consumption |
-| `findSplit(_:)` | Check if a split exists by UUID |
-| `setDividerPosition(_:forSplit:fromExternal:)` | Programmatically set divider position |
-| `setContainerFrame(_:)` | Update container frame |
+Pass `fromExternal: true` when restoring host-owned geometry. Bonsplit applies the model change without echoing it through the delegate. A normal call publishes one geometry snapshot synchronously.
 
-### Tab
+## Delegate
 
-Read-only snapshot of tab metadata.
+All `BonsplitDelegate` methods have default implementations.
 
 ```swift
-public struct Tab {
-    public let id: TabID
-    public let title: String
-    public let icon: String?
-    public let isDirty: Bool
-}
-```
-
-### BonsplitDelegate
-
-Implement this protocol to receive callbacks about tab bar events.
-
-```swift
-class MyDelegate: BonsplitDelegate {
-    // Veto tab creation
-    func splitTabBar(_ controller: BonsplitController,
-                     shouldCreateTab tab: Tab,
-                     inPane pane: PaneID) -> Bool {
-        return true  // Return false to prevent
+@MainActor
+final class WorkspaceDelegate: BonsplitDelegate {
+    func splitTabBar(
+        _ controller: BonsplitController,
+        shouldCloseTab tab: Tab,
+        inPane pane: PaneID
+    ) -> Bool {
+        !tab.isDirty || confirmDiscard(tab)
     }
 
-    // Veto tab close (e.g., prompt to save)
-    func splitTabBar(_ controller: BonsplitController,
-                     shouldCloseTab tab: Tab,
-                     inPane pane: PaneID) -> Bool {
-        if tab.isDirty {
-            return showSaveConfirmation()
-        }
-        return true
-    }
-
-    // React to tab selection
-    func splitTabBar(_ controller: BonsplitController,
-                     didSelectTab tab: Tab,
-                     inPane pane: PaneID) {
-        updateWindowTitle(tab.title)
-    }
-
-    // React to splits - new panes are empty by default
-    func splitTabBar(_ controller: BonsplitController,
-                     didSplitPane originalPane: PaneID,
-                     newPane: PaneID,
-                     orientation: SplitOrientation) {
-        // Option 1: Auto-create a tab
+    func splitTabBar(
+        _ controller: BonsplitController,
+        didSplitPane originalPane: PaneID,
+        newPane: PaneID,
+        orientation: SplitOrientation
+    ) {
         controller.createTab(title: "Untitled", icon: "doc.text", inPane: newPane)
+    }
 
-        // Option 2: Leave empty - the emptyPane view will be shown
+    func splitTabBar(
+        _ controller: BonsplitController,
+        didChangeGeometry snapshot: LayoutSnapshot
+    ) {
+        save(snapshot)
+    }
+
+    func splitTabBar(
+        _ controller: BonsplitController,
+        shouldNotifyDuringDrag: Bool
+    ) -> Bool {
+        true
     }
 }
 ```
 
-All delegate methods have default implementations and are optional.
+Delegate hooks cover creation, close vetoes, selection, moves, splits, pane closure, focus, and geometry.
 
-#### Available Delegate Methods
-
-| Method | Description |
-|--------|-------------|
-| `shouldCreateTab` | Called before creating a tab. Return `false` to prevent. |
-| `didCreateTab` | Called after a tab is created. |
-| `shouldCloseTab` | Called before closing a tab. Return `false` to prevent. |
-| `didCloseTab` | Called after a tab is closed. |
-| `didSelectTab` | Called when a tab is selected. |
-| `didMoveTab` | Called when a tab is moved between panes. |
-| `shouldSplitPane` | Called before creating a split. Return `false` to prevent. |
-| `didSplitPane` | Called after a split is created. Use this to create a tab in the new empty pane. |
-| `shouldClosePane` | Called before closing a pane. Return `false` to prevent. |
-| `didClosePane` | Called after a pane is closed. |
-| `didFocusPane` | Called when focus changes to a different pane. |
-| `didChangeGeometry` | Called when any pane geometry changes (resize, split, close). |
-| `shouldNotifyDuringDrag` | Return `true` for real-time notifications during divider drag. |
-
-#### Geometry Notifications
-
-Receive callbacks when pane geometry changes:
-
-```swift
-func splitTabBar(_ controller: BonsplitController,
-                 didChangeGeometry snapshot: LayoutSnapshot) {
-    // Save layout configuration
-    let encoder = JSONEncoder()
-    if let data = try? encoder.encode(snapshot) {
-        UserDefaults.standard.set(data, forKey: "savedLayout")
-    }
-}
-
-// Opt-in to real-time notifications during divider drag
-func splitTabBar(_ controller: BonsplitController,
-                 shouldNotifyDuringDrag: Bool) -> Bool {
-    return true  // Enable frame-by-frame updates
-}
-```
-
-### BonsplitConfiguration
-
-Configure behavior and appearance.
-
-```swift
-let config = BonsplitConfiguration(
-    allowSplits: true,           // Enable split buttons and drag-to-split
-    allowCloseTabs: true,        // Show close buttons on tabs
-    allowCloseLastPane: false,   // Prevent closing the last pane
-    allowTabReordering: true,    // Enable drag-to-reorder
-    allowCrossPaneTabMove: true, // Enable moving tabs between panes
-    autoCloseEmptyPanes: true,   // Close panes when last tab is closed
-    contentViewLifecycle: .recreateOnSwitch,  // How tab views are managed
-    newTabPosition: .current,    // Where new tabs are inserted
-    appearance: .default
-)
-
-let controller = BonsplitController(configuration: config)
-```
-
-#### Content View Lifecycle
-
-Controls how tab content views are managed when switching between tabs:
-
-```swift
-// Memory efficient (default) - only selected tab is rendered
-// Loses scroll position, @State, focus when switching tabs
-contentViewLifecycle: .recreateOnSwitch
-
-// macOS-like behavior - all tab views stay in memory
-// Preserves scroll position, @State, focus, text selection, etc.
-contentViewLifecycle: .keepAllAlive
-```
-
-| Mode | Memory | State Preservation | Use Case |
-|------|--------|-------------------|----------|
-| `.recreateOnSwitch` | Low | None | Simple content, external state management |
-| `.keepAllAlive` | Higher | Full | Complex views, scroll positions, form inputs |
-
-#### New Tab Position
-
-Controls where new tabs are inserted in the tab list:
-
-```swift
-// Insert after currently focused tab (default)
-newTabPosition: .current
-
-// Always insert at the end of the tab list
-newTabPosition: .end
-```
-
-| Mode | Behavior |
-|------|----------|
-| `.current` | Insert after the currently focused tab, or at the end if no tab is focused |
-| `.end` | Always insert at the end of the tab list |
-
-#### Appearance Configuration
+## Configuration
 
 ```swift
 let appearance = BonsplitConfiguration.Appearance(
@@ -355,268 +232,39 @@ let appearance = BonsplitConfiguration.Appearance(
     enableAnimations: true
 )
 
-let config = BonsplitConfiguration(appearance: appearance)
+let configuration = BonsplitConfiguration(
+    allowSplits: true,
+    allowCloseTabs: true,
+    allowCloseLastPane: false,
+    allowTabReordering: true,
+    allowCrossPaneTabMove: true,
+    autoCloseEmptyPanes: true,
+    contentViewLifecycle: .recreateOnSwitch,
+    newTabPosition: .current,
+    appearance: appearance
+)
 ```
 
-#### Configuration Presets
+Presets are available as `.default`, `.singlePane`, and `.readOnly`.
+
+## AppKit menu commands
+
+Bonsplit does not install application-global menu items. Route `NSMenuItem` actions to the same controller methods used by buttons and other entry points:
 
 ```swift
-// Default configuration
-BonsplitConfiguration.default
+let nextTab = NSMenuItem(
+    title: "Show Next Tab",
+    action: #selector(showNextTab(_:)),
+    keyEquivalent: "]"
+)
+nextTab.keyEquivalentModifierMask = [.command, .shift]
 
-// Single pane mode (no splits)
-BonsplitConfiguration.singlePane
-
-// Read-only mode (no modifications)
-BonsplitConfiguration.readOnly
-```
-
-## Examples
-
-### Preserving Tab State
-
-Use `.keepAllAlive` to preserve scroll position, focus, and `@State` when switching tabs:
-
-```swift
-struct EditorApp: View {
-    @State private var controller: BonsplitController
-
-    init() {
-        let config = BonsplitConfiguration(
-            contentViewLifecycle: .keepAllAlive  // Preserve state across tab switches
-        )
-        _controller = State(initialValue: BonsplitController(configuration: config))
-    }
-
-    var body: some View {
-        BonsplitView(controller: controller) { tab, paneId in
-            ScrollView {
-                // Scroll position is preserved when switching tabs!
-                LongDocumentView(tabId: tab.id)
-            }
-        }
-    }
+@objc func showNextTab(_ sender: Any?) {
+    controller.selectNextTab()
 }
 ```
 
-With `.keepAllAlive`:
-- Scroll positions are preserved
-- Text selections remain intact
-- `@State` variables keep their values
-- Focus stays where you left it
-- Form inputs don't reset
-
-### Document Editor
-
-```swift
-struct DocumentEditorApp: View {
-    @State private var controller = BonsplitController()
-    @State private var documents: [TabID: Document] = [:]
-    @StateObject private var delegate = DocumentDelegate()
-
-    var body: some View {
-        BonsplitView(controller: controller) { tab in
-            if let doc = documents[tab.id] {
-                TextEditor(text: Binding(
-                    get: { doc.content },
-                    set: { newValue in
-                        doc.content = newValue
-                        controller.updateTab(tab.id, isDirty: true)
-                    }
-                ))
-            }
-        }
-        .onAppear {
-            controller.delegate = delegate
-            delegate.documents = $documents
-            delegate.controller = controller
-            newDocument()
-        }
-        .toolbar {
-            Button("New") { newDocument() }
-            Button("Save") { saveCurrentDocument() }
-        }
-    }
-
-    func newDocument() {
-        let doc = Document()
-        if let tabId = controller.createTab(title: doc.name, icon: "doc.text") {
-            documents[tabId] = doc
-        }
-    }
-}
-
-class DocumentDelegate: ObservableObject, BonsplitDelegate {
-    var documents: Binding<[TabID: Document]>?
-    weak var controller: BonsplitController?
-
-    func splitTabBar(_ controller: BonsplitController,
-                     shouldCloseTab tab: Tab,
-                     inPane pane: PaneID) -> Bool {
-        guard tab.isDirty else { return true }
-
-        let alert = NSAlert()
-        alert.messageText = "Save \(tab.title)?"
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
-        alert.addButton(withTitle: "Cancel")
-
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
-            // Save then close
-            return true
-        case .alertSecondButtonReturn:
-            // Close without saving
-            return true
-        default:
-            // Cancel
-            return false
-        }
-    }
-
-    func splitTabBar(_ controller: BonsplitController,
-                     didCloseTab tabId: TabID,
-                     fromPane pane: PaneID) {
-        documents?.wrappedValue.removeValue(forKey: tabId)
-    }
-}
-```
-
-### Menu Commands
-
-```swift
-struct AppCommands: Commands {
-    @FocusedObject var controller: BonsplitController?
-
-    var body: some Commands {
-        CommandGroup(replacing: .newItem) {
-            Button("New Tab") {
-                controller?.createTab(title: "Untitled", icon: "doc.text")
-            }
-            .keyboardShortcut("t", modifiers: .command)
-
-            Button("Close Tab") {
-                if let pane = controller?.focusedPaneId,
-                   let tab = controller?.selectedTab(inPane: pane) {
-                    controller?.closeTab(tab.id)
-                }
-            }
-            .keyboardShortcut("w", modifiers: .command)
-        }
-
-        CommandMenu("View") {
-            Button("Split Right") {
-                controller?.splitPane(orientation: .horizontal)
-            }
-            .keyboardShortcut("d", modifiers: [.command, .shift])
-
-            Button("Split Down") {
-                controller?.splitPane(orientation: .vertical)
-            }
-            .keyboardShortcut("d", modifiers: [.command, .option])
-        }
-    }
-}
-```
-
-### Custom Empty Pane View
-
-Customize what users see when a pane has no tabs:
-
-```swift
-struct MyApp: View {
-    @State private var controller = BonsplitController()
-
-    var body: some View {
-        BonsplitView(controller: controller) { tab in
-            TabContentView(tab: tab)
-        } emptyPane: { paneId in
-            // Fully customizable empty state
-            VStack(spacing: 20) {
-                Image(systemName: "doc.badge.plus")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.tertiary)
-
-                Text("No Open Files")
-                    .font(.title2)
-
-                HStack {
-                    Button("New File") {
-                        controller.createTab(title: "Untitled", icon: "doc", inPane: paneId)
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    if controller.allPaneIds.count > 1 {
-                        Button("Close Pane") {
-                            controller.closePane(paneId)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-```
-
-If you don't provide an `emptyPane` builder, a default minimal view is shown.
-
-### Auto-Create Tabs on Split
-
-Use the delegate to automatically create a tab when a pane is split:
-
-```swift
-class MyDelegate: BonsplitDelegate {
-    func splitTabBar(_ controller: BonsplitController,
-                     didSplitPane originalPane: PaneID,
-                     newPane: PaneID,
-                     orientation: SplitOrientation) {
-        // Automatically create a tab in the new pane
-        controller.createTab(title: "Untitled", icon: "doc.text", inPane: newPane)
-    }
-}
-```
-
-### Custom Tab Content
-
-```swift
-enum TabContent {
-    case editor(Document)
-    case preview(URL)
-    case settings
-}
-
-struct MyApp: View {
-    @State private var controller = BonsplitController()
-    @State private var content: [TabID: TabContent] = [:]
-
-    var body: some View {
-        BonsplitView(controller: controller) { tab in
-            switch content[tab.id] {
-            case .editor(let doc):
-                DocumentEditor(document: doc)
-            case .preview(let url):
-                WebView(url: url)
-            case .settings:
-                SettingsView()
-            case .none:
-                EmptyView()
-            }
-        }
-    }
-
-    func openDocument(_ doc: Document) {
-        if let tabId = controller.createTab(title: doc.name, icon: "doc.text") {
-            content[tabId] = .editor(doc)
-        }
-    }
-
-    func openPreview(_ url: URL) {
-        if let tabId = controller.createTab(title: "Preview", icon: "globe") {
-            content[tabId] = .preview(url)
-        }
-    }
-}
-```
+See `Example/BonsplitExample` for a complete native application, including editable tab content, empty panes, keyboard commands, and a geometry inspector.
 
 ## License
 

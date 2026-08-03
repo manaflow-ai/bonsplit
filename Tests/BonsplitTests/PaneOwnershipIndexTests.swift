@@ -15,7 +15,7 @@ final class PaneOwnershipIndexTests: XCTestCase {
         XCTAssertEqual(controller.paneId(containing: firstTabId), paneId)
         XCTAssertEqual(controller.paneId(containing: secondTabId), paneId)
 
-        // TabBarView selects through PaneState directly. The indexed query must
+        // The native tab bar selects through PaneState directly. The indexed query must
         // reflect that UI path without requiring a controller rescan or callback.
         let paneState = try! XCTUnwrap(controller.internalController.paneState(for: paneId))
         paneState.selectTab(firstTabId.uuid)

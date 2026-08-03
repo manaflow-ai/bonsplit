@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 struct TabContextMenuSnapshot {
     let tabId: UUID
@@ -44,15 +43,18 @@ final class TabContextMenuActionTarget: NSObject {
 @MainActor
 final class TabContextMenu: NSMenu, NSMenuDelegate {
     let snapshot: TabContextMenuSnapshot
+    private let actionTarget: TabContextMenuActionTarget
     private(set) var forkConversationAvailability: TabContextForkConversationAvailability
     private var refreshTask: Task<Void, Never>?
 
     init(
         snapshot: TabContextMenuSnapshot,
-        forkConversationAvailability: TabContextForkConversationAvailability
+        forkConversationAvailability: TabContextForkConversationAvailability,
+        actionTarget: TabContextMenuActionTarget
     ) {
         self.snapshot = snapshot
         self.forkConversationAvailability = forkConversationAvailability
+        self.actionTarget = actionTarget
         super.init(title: "")
         autoenablesItems = false
         delegate = self
@@ -93,71 +95,5 @@ final class TabContextMenu: NSMenu, NSMenuDelegate {
         let availability = snapshot.forkConversationAvailabilityProvider()
         forkConversationAvailability = availability
         TabContextMenuBuilder.updateForkConversationAvailability(availability, in: self)
-    }
-}
-
-struct TabContextMenuPresenter: NSViewRepresentable {
-    let snapshot: TabContextMenuSnapshot
-    let onContextAction: (TabContextAction) -> Void
-    let onMoveDestination: (String) -> Void
-
-    @MainActor
-    final class Coordinator {
-        var snapshot: TabContextMenuSnapshot
-        let actionTarget = TabContextMenuActionTarget()
-        weak var view: NSView?
-        var monitor: Any?
-
-        init(snapshot: TabContextMenuSnapshot) {
-            self.snapshot = snapshot
-        }
-
-        deinit {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-        }
-
-        func presentMenu(at point: NSPoint, in view: NSView) {
-            let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: actionTarget)
-            menu.popUp(positioning: nil, at: point, in: view)
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        let coordinator = Coordinator(snapshot: snapshot)
-        coordinator.actionTarget.onContextAction = onContextAction
-        coordinator.actionTarget.onMoveDestination = onMoveDestination
-        return coordinator
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-
-        context.coordinator.view = view
-
-        let coordinator = context.coordinator
-        coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak coordinator] event in
-            guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return event }
-            guard let coordinator, let view = coordinator.view, let window = view.window else { return event }
-            guard event.window === window else { return event }
-
-            let point = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(point) else { return event }
-
-            coordinator.presentMenu(at: point, in: view)
-            return nil
-        }
-
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.view = nsView
-        context.coordinator.snapshot = snapshot
-        context.coordinator.actionTarget.onContextAction = onContextAction
-        context.coordinator.actionTarget.onMoveDestination = onMoveDestination
     }
 }

@@ -41,3 +41,14 @@
 "tabContext.forkConversation.newWorkspace" = "新規ワークスペース";
 "tabContext.disconnectRemote" = "SSH接続を解除";
 "tabContext.remoteConnectedAccessibility" = "SSH接続中";
+"tab.close" = "タブを閉じる";
+"tab.accessibility.loading" = "読み込み中";
+"tab.accessibility.pinned" = "ピン留め中";
+"tab.accessibility.unread" = "未読";
+"tab.accessibility.modified" = "変更あり";
+"tab.accessibility.zoomed" = "ズーム中";
+"emptyPane.noOpenTabs" = "開いているタブはありません";
+"splitButton.newTerminal" = "新しいターミナル";
+"splitButton.newBrowser" = "新しいブラウザー";
+"splitButton.splitRight" = "右に分割";
+"splitButton.splitDown" = "下に分割";
