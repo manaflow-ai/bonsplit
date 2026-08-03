@@ -803,6 +803,7 @@ struct TabBarView: View {
     @AppStorage("debugFadeColorStyle") private var fadeColorStyle = -1
     @State private var isHoveringTabBar = false
     @State private var dropTargetIndex: Int?
+    @State private var manualDropTargetIndex: Int?
     @State private var dropLifecycle: TabDropLifecycle = .idle
     @State private var scrollOffset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
@@ -1007,6 +1008,7 @@ struct TabBarView: View {
             bonsplitController: controller,
             controller: splitViewController,
             dropTargetIndex: $dropTargetIndex,
+            manualDropTargetIndex: $manualDropTargetIndex,
             dropLifecycle: $dropLifecycle
         ))
     }
@@ -1032,6 +1034,7 @@ struct TabBarView: View {
                 splitViewController: splitViewController,
                 geometryRegistry: tabItemGeometryRegistry,
                 dropTargetIndex: $dropTargetIndex,
+                manualDropTargetIndex: $manualDropTargetIndex,
                 dropLifecycle: $dropLifecycle
             )
         }
@@ -1122,6 +1125,7 @@ struct TabBarView: View {
                                 bonsplitController: controller,
                                 controller: splitViewController,
                                 dropTargetIndex: $dropTargetIndex,
+                                manualDropTargetIndex: $manualDropTargetIndex,
                                 dropLifecycle: $dropLifecycle
                             ))
                         }
@@ -1191,6 +1195,7 @@ struct TabBarView: View {
 #endif
             if newValue == nil {
                 dropTargetIndex = nil
+                manualDropTargetIndex = nil
                 dropLifecycle = .idle
             }
         }
@@ -1308,6 +1313,7 @@ struct TabBarView: View {
             bonsplitController: controller,
             controller: splitViewController,
             dropTargetIndex: $dropTargetIndex,
+            manualDropTargetIndex: $manualDropTargetIndex,
             dropLifecycle: $dropLifecycle
         ))
         .overlay(alignment: .leading) {
@@ -1334,6 +1340,7 @@ struct TabBarView: View {
     private func createItemProvider(for tab: TabItem) -> NSItemProvider {
         splitViewController.makeTabDragItemProvider(for: tab, from: pane.id) {
             dropTargetIndex = nil
+            manualDropTargetIndex = nil
             dropLifecycle = .idle
         }
     }
@@ -1374,6 +1381,7 @@ struct TabBarView: View {
             bonsplitController: controller,
             controller: splitViewController,
             dropTargetIndex: $dropTargetIndex,
+            manualDropTargetIndex: $manualDropTargetIndex,
             dropLifecycle: $dropLifecycle
         ))
         .overlay(alignment: .leading) {
@@ -1994,6 +2002,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
     let splitViewController: SplitViewController
     let geometryRegistry: TabBarItemGeometryRegistry
     @Binding var dropTargetIndex: Int?
+    @Binding var manualDropTargetIndex: Int?
     @Binding var dropLifecycle: TabDropLifecycle
 
     func makeNSView(context: Context) -> ManualReorderNSView {
@@ -2012,6 +2021,7 @@ private struct TabBarManualReorderTrackingView: NSViewRepresentable {
         view.splitViewController = splitViewController
         view.geometryRegistry = geometryRegistry
         view.onDropStateChanged = { targetIndex, lifecycle in
+            manualDropTargetIndex = targetIndex
             dropTargetIndex = targetIndex
             dropLifecycle = lifecycle
         }
@@ -3178,6 +3188,7 @@ struct TabDropDelegate: DropDelegate {
     let bonsplitController: BonsplitController
     let controller: SplitViewController
     @Binding var dropTargetIndex: Int?
+    @Binding var manualDropTargetIndex: Int?
     @Binding var dropLifecycle: TabDropLifecycle
 
     func performDrop(info: DropInfo) -> Bool {
@@ -3185,7 +3196,10 @@ struct TabDropDelegate: DropDelegate {
         NSLog("[Bonsplit Drag] performDrop called, targetIndex: \(targetIndex)")
         #endif
 #if DEBUG
-        dlog("tab.drop pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
+        dlog(
+            "tab.drop pane=\(pane.id.id.uuidString.prefix(5)) " +
+            "targetIndex=\(targetIndex) manualTarget=\(manualDropTargetIndex.map(String.init) ?? "nil")"
+        )
 #endif
 
         // Ensure all drag/drop side-effects run on the main actor. SwiftUI can call these
@@ -3244,12 +3258,18 @@ struct TabDropDelegate: DropDelegate {
             withTransaction(Transaction(animation: nil)) {
                 if sourcePaneId == pane.id {
                     guard let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else { return }
+                    let destinationIndex = Self.effectiveLocalDropTargetIndex(
+                        staticTargetIndex: targetIndex,
+                        manualTargetIndex: manualDropTargetIndex,
+                        sourcePaneMatchesTarget: true,
+                        sourceIndex: sourceIndex
+                    )
                     // Same-pane no-op: don't mutate the model (and don't show an indicator).
-                    if targetIndex == sourceIndex || targetIndex == sourceIndex + 1 {
+                    if Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: destinationIndex) {
                         return
                     }
                     orderBeforeReorder = pane.tabs.map { $0.id }
-                    pane.moveTab(from: sourceIndex, to: targetIndex)
+                    pane.moveTab(from: sourceIndex, to: destinationIndex)
                 } else {
                     _ = bonsplitController.moveTab(
                         TabID(id: draggedTab.id),
@@ -3294,11 +3314,7 @@ struct TabDropDelegate: DropDelegate {
         )
         #endif
         dropLifecycle = .hovering
-        if shouldSuppressIndicatorForNoopSamePaneDrop() {
-            dropTargetIndex = nil
-        } else {
-            dropTargetIndex = targetIndex
-        }
+        updateDropTargetForHover()
     }
 
     func dropExited(info: DropInfo) {
@@ -3307,7 +3323,9 @@ struct TabDropDelegate: DropDelegate {
         dlog("tab.dropExited pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
         #endif
         dropLifecycle = .idle
-        if dropTargetIndex == targetIndex {
+        if samePaneLocalDragSourceIndex() != nil {
+            dropTargetIndex = manualDropTargetIndex
+        } else if dropTargetIndex == targetIndex {
             dropTargetIndex = nil
         }
     }
@@ -3322,16 +3340,11 @@ struct TabDropDelegate: DropDelegate {
             return DropProposal(operation: dropOperation(for: info))
         }
         // Only update if this is the active target, and suppress same-pane no-op indicators.
-        if shouldSuppressIndicatorForNoopSamePaneDrop() {
-            if dropTargetIndex == targetIndex {
-                dropTargetIndex = nil
-            }
-        } else if dropTargetIndex != targetIndex {
-            dropTargetIndex = targetIndex
-        }
+        updateDropTargetForHover()
 #if DEBUG
         dlog(
             "tab.dropUpdated pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
+            "manualTarget=\(manualDropTargetIndex.map(String.init) ?? "nil") " +
             "dropTarget=\(dropTargetIndex.map(String.init) ?? "nil")"
         )
 #endif
@@ -3383,6 +3396,7 @@ struct TabDropDelegate: DropDelegate {
     private func clearDropState() {
         dropLifecycle = .idle
         dropTargetIndex = nil
+        manualDropTargetIndex = nil
     }
 
     static func effectiveLocalDropTargetIndex(
@@ -3391,7 +3405,19 @@ struct TabDropDelegate: DropDelegate {
         sourcePaneMatchesTarget: Bool,
         sourceIndex: Int?
     ) -> Int {
+        if sourcePaneMatchesTarget,
+           let sourceIndex,
+           let manualTargetIndex,
+           !isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: manualTargetIndex) {
+            return manualTargetIndex
+        }
         staticTargetIndex
+    }
+
+    static func isNoopSamePaneTarget(sourceIndex: Int, targetIndex: Int) -> Bool {
+        // Insertion indices are expressed in "original array" coordinates; after removal,
+        // inserting at `sourceIndex` or `sourceIndex + 1` results in no change.
+        targetIndex == sourceIndex || targetIndex == sourceIndex + 1
     }
 
     static func sameProcessFallbackRequest(
@@ -3441,15 +3467,39 @@ struct TabDropDelegate: DropDelegate {
         return handled
     }
 
+    private func updateDropTargetForHover() {
+        if let sourceIndex = samePaneLocalDragSourceIndex() {
+            if let manualDropTargetIndex,
+               !Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: manualDropTargetIndex) {
+                dropTargetIndex = manualDropTargetIndex
+            } else {
+                dropTargetIndex = nil
+            }
+            return
+        }
+
+        if shouldSuppressIndicatorForNoopSamePaneDrop() {
+            if dropTargetIndex == targetIndex {
+                dropTargetIndex = nil
+            }
+        } else if dropTargetIndex != targetIndex {
+            dropTargetIndex = targetIndex
+        }
+    }
+
+    private func samePaneLocalDragSourceIndex() -> Int? {
+        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
+              (controller.activeDragSourcePaneId ?? controller.dragSourcePaneId) == pane.id else {
+            return nil
+        }
+        return pane.tabs.firstIndex(where: { $0.id == draggedTab.id })
+    }
+
     private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {
-        guard let draggedTab = controller.draggingTab,
-              controller.dragSourcePaneId == pane.id,
-              let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }) else {
+        guard let sourceIndex = samePaneLocalDragSourceIndex() else {
             return false
         }
-        // Insertion indices are expressed in "original array" coordinates; after removal,
-        // inserting at `sourceIndex` or `sourceIndex + 1` results in no change.
-        return targetIndex == sourceIndex || targetIndex == sourceIndex + 1
+        return Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: targetIndex)
     }
 
     private func decodeTransfer(from string: String) -> TabTransferData? {
