@@ -3411,7 +3411,7 @@ struct TabDropDelegate: DropDelegate {
            !isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: manualTargetIndex) {
             return manualTargetIndex
         }
-        staticTargetIndex
+        return staticTargetIndex
     }
 
     static func isNoopSamePaneTarget(sourceIndex: Int, targetIndex: Int) -> Bool {
