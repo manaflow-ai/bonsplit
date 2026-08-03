@@ -1000,6 +1000,29 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabItemHitProviderUsesStaticMainActorIsolation() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let sourceURL = repositoryRoot
+            .appendingPathComponent("Sources/Bonsplit/Internal/Views/TabBarView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("@MainActor\npublic protocol BonsplitTabItemHitRegionProviding"),
+            "AppKit hit providers must use static UI isolation instead of a runtime executor assumption"
+        )
+        XCTAssertFalse(
+            source.contains("nonisolated func containsBonsplitTabItemHit"),
+            "Hit testing must not cross out of the main actor"
+        )
+        XCTAssertFalse(
+            source.contains("MainActor.assumeIsolated"),
+            "AppKit hit testing must not enter Swift's dynamic main-executor check"
+        )
+    }
+
     @MainActor
     func testTabItemHitRegionRegistryIgnoresHiddenProviders() {
         let window = NSWindow(
