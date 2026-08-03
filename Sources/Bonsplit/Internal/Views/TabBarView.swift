@@ -2973,9 +2973,7 @@ struct TabDropDelegate: DropDelegate {
         dlog("tab.dropExited pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex)")
         #endif
         dropLifecycle = .idle
-        if samePaneLocalDragSourceIndex() != nil {
-            dropTargetIndex = nil
-        } else if dropTargetIndex == targetIndex {
+        if dropTargetIndex == targetIndex {
             dropTargetIndex = nil
         }
     }
@@ -3092,13 +3090,11 @@ struct TabDropDelegate: DropDelegate {
     private func performSameProcessTransfer(_ transfer: TabTransferData) -> Bool {
         let sourcePaneId = PaneID(id: transfer.sourcePaneId)
         if sourcePaneId == pane.id {
-            guard bonsplitController.configuration.allowTabReordering else { return false }
-            let handled = performSamePaneReorder(tabId: transfer.tab.id)
-            if handled {
-                clearDropState()
-                clearControllerDragState()
-            }
-            return handled
+            // Same-pane reorders are applied while live drag state is still present.
+            // A pasteboard-only same-pane callback is stale and can otherwise apply
+            // the same transfer again through another drop target.
+            clearDropState()
+            return false
         }
 
         guard let request = Self.sameProcessFallbackRequest(
@@ -3150,6 +3146,8 @@ struct TabDropDelegate: DropDelegate {
                 didReorderTabsInPane: pane.id,
                 orderedTabIds: pane.tabs.map { TabID(id: $0.id) }
             )
+            bonsplitController.selectTab(TabID(id: tabId))
+            bonsplitController.notifyGeometryChange()
         }
         return true
     }

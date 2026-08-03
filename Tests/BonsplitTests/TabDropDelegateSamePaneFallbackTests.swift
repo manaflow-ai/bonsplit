@@ -45,6 +45,29 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[0], movedTabId, initialIds[1], initialIds[2]])
     }
 
+    func testSamePaneReorderPreservesControllerMoveContract() throws {
+        let harness = try makeHarness()
+        let delegate = ReorderDelegateSpy()
+        harness.controller.delegate = delegate
+        let initialIds = harness.pane.tabs.map(\.id)
+        let movedTabId = initialIds[3]
+
+        XCTAssertTrue(TabDropDelegate.performSamePaneReorder(
+            tabId: movedTabId,
+            targetIndex: 1,
+            pane: harness.pane,
+            bonsplitController: harness.controller
+        ))
+
+        let expectedOrder = [initialIds[0], movedTabId, initialIds[1], initialIds[2]]
+        XCTAssertEqual(harness.pane.tabs.map(\.id), expectedOrder)
+        XCTAssertEqual(harness.pane.selectedTabId, movedTabId)
+        XCTAssertEqual(harness.controller.focusedPaneId, harness.pane.id)
+        XCTAssertEqual(delegate.selectedTabIds, [TabID(id: movedTabId)])
+        XCTAssertEqual(delegate.reorderedTabIds, expectedOrder.map { TabID(id: $0) })
+        XCTAssertEqual(delegate.geometryChangeCount, 1)
+    }
+
     func testSwiftUIDropSuppressesSamePaneNoopTargets() throws {
         let harness = try makeHarness()
         let movedTabId = harness.pane.tabs[1].id
@@ -69,12 +92,6 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         _ = controller.createTab(title: "Fourth")
         let pane = try XCTUnwrap(controller.internalController.paneState(for: paneId))
         XCTAssertEqual(pane.tabs.count, 4)
-        controller.onExternalTabDrop = { request in
-            guard case .insert(let targetPane, let targetIndex) = request.destination else {
-                return false
-            }
-            return controller.moveTab(request.tabId, toPane: targetPane, atIndex: targetIndex)
-        }
         return Harness(controller: controller, pane: pane)
     }
 
@@ -92,4 +109,23 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
 private struct Harness {
     let controller: BonsplitController
     let pane: PaneState
+}
+
+@MainActor
+private final class ReorderDelegateSpy: BonsplitDelegate {
+    var selectedTabIds: [TabID] = []
+    var reorderedTabIds: [TabID] = []
+    var geometryChangeCount = 0
+
+    func splitTabBar(_ controller: BonsplitController, didSelectTab tab: Tab, inPane pane: PaneID) {
+        selectedTabIds.append(tab.id)
+    }
+
+    func splitTabBar(_ controller: BonsplitController, didReorderTabsInPane pane: PaneID, orderedTabIds: [TabID]) {
+        reorderedTabIds = orderedTabIds
+    }
+
+    func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {
+        geometryChangeCount += 1
+    }
 }
