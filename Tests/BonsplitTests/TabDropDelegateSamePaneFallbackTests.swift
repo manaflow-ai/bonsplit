@@ -3,15 +3,14 @@ import XCTest
 
 @MainActor
 final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
-    func testEarlierTabLocalDropUsesManualMiddleIndexInsteadOfStaticEndTarget() throws {
+    func testEarlierTabSwiftUIDropUsesMiddleTargetFromDelegate() throws {
         let harness = try makeHarness()
         let initialIds = harness.pane.tabs.map(\.id)
         let movedTabId = initialIds[0]
 
-        let targetIndex = effectiveSamePaneLocalDropTarget(
+        let targetIndex = swiftUISamePaneDropTarget(
             tabId: movedTabId,
-            staticTargetIndex: harness.pane.tabs.count,
-            manualTargetIndex: 3,
+            targetIndex: 3,
             harness: harness
         )
 
@@ -20,15 +19,14 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[1], initialIds[2], movedTabId, initialIds[3]])
     }
 
-    func testLaterActiveTabLocalDropUsesManualMiddleIndexInsteadOfStaticEndNoop() throws {
+    func testLaterTabSwiftUIDropUsesMiddleTargetFromDelegate() throws {
         let harness = try makeHarness()
         let initialIds = harness.pane.tabs.map(\.id)
         let movedTabId = initialIds[3]
 
-        let targetIndex = effectiveSamePaneLocalDropTarget(
+        let targetIndex = swiftUISamePaneDropTarget(
             tabId: movedTabId,
-            staticTargetIndex: harness.pane.tabs.count,
-            manualTargetIndex: 1,
+            targetIndex: 1,
             harness: harness
         )
 
@@ -37,42 +35,14 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[0], movedTabId, initialIds[1], initialIds[2]])
     }
 
-    func testEarlierTabManualMiddleReorderIgnoresStaleSamePaneEndFallback() throws {
+    func testSwiftUIDropSuppressesSamePaneNoopTargets() throws {
         let harness = try makeHarness()
-        let initialIds = harness.pane.tabs.map(\.id)
-        let movedTabId = initialIds[0]
+        let movedTabId = harness.pane.tabs[1].id
 
-        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: 3))
-        let expectedMiddleOrder = [initialIds[1], initialIds[2], movedTabId, initialIds[3]]
-        XCTAssertEqual(harness.pane.tabs.map(\.id), expectedMiddleOrder)
-
-        let handled = performStaleSamePaneFallbackDrop(
-            tabId: movedTabId,
-            targetIndex: harness.pane.tabs.count,
-            harness: harness
-        )
-
-        XCTAssertFalse(handled)
-        XCTAssertEqual(harness.pane.tabs.map(\.id), expectedMiddleOrder)
-    }
-
-    func testLaterTabManualMiddleReorderIgnoresStaleSamePaneEndFallback() throws {
-        let harness = try makeHarness()
-        let initialIds = harness.pane.tabs.map(\.id)
-        let movedTabId = initialIds[3]
-
-        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: 1))
-        let expectedMiddleOrder = [initialIds[0], movedTabId, initialIds[1], initialIds[2]]
-        XCTAssertEqual(harness.pane.tabs.map(\.id), expectedMiddleOrder)
-
-        let handled = performStaleSamePaneFallbackDrop(
-            tabId: movedTabId,
-            targetIndex: harness.pane.tabs.count,
-            harness: harness
-        )
-
-        XCTAssertFalse(handled)
-        XCTAssertEqual(harness.pane.tabs.map(\.id), expectedMiddleOrder)
+        XCTAssertNil(swiftUISamePaneDropTarget(tabId: movedTabId, targetIndex: 1, harness: harness))
+        XCTAssertNil(swiftUISamePaneDropTarget(tabId: movedTabId, targetIndex: 2, harness: harness))
+        XCTAssertEqual(swiftUISamePaneDropTarget(tabId: movedTabId, targetIndex: 0, harness: harness), 0)
+        XCTAssertEqual(swiftUISamePaneDropTarget(tabId: movedTabId, targetIndex: 3, harness: harness), 3)
     }
 
     private func makeHarness() throws -> Harness {
@@ -98,37 +68,13 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
         return Harness(controller: controller, pane: pane)
     }
 
-    private func performStaleSamePaneFallbackDrop(
+    private func swiftUISamePaneDropTarget(
         tabId: UUID,
         targetIndex: Int,
         harness: Harness
-    ) -> Bool {
-        let tab = harness.pane.tabs.first { $0.id == tabId }!
-        let transfer = TabTransferData(tab: tab, sourcePaneId: harness.pane.id.id)
-        guard let request = TabDropDelegate.sameProcessFallbackRequest(
-            transfer: transfer,
-            targetPane: harness.pane.id,
-            targetIndex: targetIndex,
-            allowCrossPaneTabMove: harness.controller.configuration.allowCrossPaneTabMove
-        ) else {
-            return false
-        }
-        return harness.controller.onExternalTabDrop?(request) ?? false
-    }
-
-    private func effectiveSamePaneLocalDropTarget(
-        tabId: UUID,
-        staticTargetIndex: Int,
-        manualTargetIndex: Int,
-        harness: Harness
-    ) -> Int {
-        let sourceIndex = harness.pane.tabs.firstIndex { $0.id == tabId }
-        return TabDropDelegate.effectiveLocalDropTargetIndex(
-            staticTargetIndex: staticTargetIndex,
-            manualTargetIndex: manualTargetIndex,
-            sourcePaneMatchesTarget: true,
-            sourceIndex: sourceIndex
-        )
+    ) -> Int? {
+        let sourceIndex = harness.pane.tabs.firstIndex { $0.id == tabId }!
+        return TabDropDelegate.samePaneDropTarget(sourceIndex: sourceIndex, targetIndex: targetIndex)
     }
 }
 
