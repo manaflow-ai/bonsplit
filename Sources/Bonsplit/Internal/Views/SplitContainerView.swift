@@ -4,17 +4,31 @@ import AppKit
 private var splitContainerProgrammaticSyncDepth = 0
 
 enum SplitDividerMouseState {
+    private static let maximumFallbackEventAge: TimeInterval = 0.1
+
+    static func matchesWindow(eventWindow: NSWindow?, splitWindow: NSWindow?) -> Bool {
+        guard let eventWindow, let splitWindow else { return false }
+        return eventWindow === splitWindow
+    }
+
+    static func isRecent(eventTimestamp: TimeInterval?, now: TimeInterval) -> Bool {
+        guard let eventTimestamp else { return false }
+        let age = now - eventTimestamp
+        return age >= 0 && age < maximumFallbackEventAge
+    }
+
     static func isActive(
         pressedMouseButtons: Int,
         eventType: NSEvent.EventType?,
         eventMatchesWindow: Bool,
+        eventIsRecent: Bool,
         sessionIsActive: Bool
     ) -> Bool {
         if pressedMouseButtons & 1 != 0 {
             return true
         }
 
-        guard sessionIsActive, eventMatchesWindow else { return false }
+        guard sessionIsActive, eventMatchesWindow, eventIsRecent else { return false }
         return eventType == .leftMouseDown || eventType == .leftMouseDragged
     }
 }
@@ -1212,10 +1226,19 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         func splitViewWillResizeSubviews(_ notification: Notification) {
             guard let splitView = notification.object as? NSSplitView else { return }
             let currentEvent = NSApp.currentEvent
+            let now = ProcessInfo.processInfo.systemUptime
+            let eventIsRecent = SplitDividerMouseState.isRecent(
+                eventTimestamp: currentEvent?.timestamp,
+                now: now
+            )
             let leftDown = SplitDividerMouseState.isActive(
                 pressedMouseButtons: NSEvent.pressedMouseButtons,
                 eventType: currentEvent?.type,
-                eventMatchesWindow: currentEvent?.window == splitView.window,
+                eventMatchesWindow: SplitDividerMouseState.matchesWindow(
+                    eventWindow: currentEvent?.window,
+                    splitWindow: splitView.window
+                ),
+                eventIsRecent: eventIsRecent,
                 sessionIsActive: isDragging
             )
             // If the left mouse button isn't down, this can't be an interactive divider drag.
@@ -1249,10 +1272,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Only treat this as a divider drag if the pointer is actually on the divider.
             // This delegate callback can also fire during window resizes or structural updates,
             // and persisting divider ratios in those cases can permanently collapse a pane.
-            let now = ProcessInfo.processInfo.systemUptime
             // `NSApp.currentEvent` can be stale when called from async UI work (e.g. socket commands).
             // Only trust very recent events.
-            guard (now - event.timestamp) < 0.1 else {
+            guard eventIsRecent else {
 #if DEBUG
                 debugLogDividerDragSkip("staleCurrentEvent", splitView: splitView, event: event)
 #endif
@@ -1345,10 +1367,18 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
             // Prevent stale drag state from persisting through programmatic/async resizes.
             let currentEvent = NSApp.currentEvent
+            let eventIsRecent = SplitDividerMouseState.isRecent(
+                eventTimestamp: currentEvent?.timestamp,
+                now: ProcessInfo.processInfo.systemUptime
+            )
             let leftDown = SplitDividerMouseState.isActive(
                 pressedMouseButtons: NSEvent.pressedMouseButtons,
                 eventType: currentEvent?.type,
-                eventMatchesWindow: currentEvent?.window == splitView.window,
+                eventMatchesWindow: SplitDividerMouseState.matchesWindow(
+                    eventWindow: currentEvent?.window,
+                    splitWindow: splitView.window
+                ),
+                eventIsRecent: eventIsRecent,
                 sessionIsActive: isDragging
             )
             if !leftDown {
