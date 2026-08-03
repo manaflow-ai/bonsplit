@@ -95,6 +95,29 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    func testRefreshContentUpdatesCachedControllerWithoutRecreation() throws {
+        let controller = BonsplitController(configuration: .init(contentViewLifecycle: .keepAllAlive))
+        let tabID = try XCTUnwrap(controller.createTab(title: "Content"))
+        var created: [TabID: [UpdatingController]] = [:]
+
+        try withRenderer(controller: controller) { tab, _ in
+            let child = UpdatingController()
+            created[tab.id, default: []].append(child)
+            return child
+        } body: { renderer, window in
+            let child = try XCTUnwrap(created[tabID]?.first)
+            let initialUpdateCount = child.updates.count
+
+            renderer.refreshContent()
+            settle(renderer: renderer, window: window)
+
+            XCTAssertEqual(created[tabID]?.count, 1)
+            XCTAssertTrue(created[tabID]?.first === child)
+            XCTAssertGreaterThan(child.updates.count, initialUpdateCount)
+            XCTAssertEqual(child.updates.last?.tab.id, tabID)
+        }
+    }
+
     func testReloadAndProviderReplacementInvalidateContentAndEmptyControllerCaches() throws {
         let controller = BonsplitController()
         let welcome = try XCTUnwrap(controller.allTabIds.first)
