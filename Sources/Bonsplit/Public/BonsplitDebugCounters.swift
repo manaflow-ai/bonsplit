@@ -5,6 +5,7 @@ import Foundation
 ///
 /// These are intended for automated tests (via cmuxterm's debug socket) to
 /// detect transient structural updates that can cause visible flashes.
+@MainActor
 public enum BonsplitDebugCounters {
     public private(set) static var arrangedSubviewUnderflowCount: Int = 0
 

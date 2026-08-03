@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 /// Main controller for the split tab bar system
 @MainActor
@@ -865,7 +865,7 @@ public final class BonsplitController {
 
     /// Keyboard shortcuts to display in tab context menus, keyed by context action.
     /// Set by the host app to sync with its customizable keyboard shortcut settings.
-    public var contextMenuShortcuts: [TabContextAction: KeyboardShortcut] = [:]
+    public var contextMenuShortcuts: [TabContextAction: BonsplitKeyboardShortcut] = [:]
 
     // MARK: - Query Methods
 
@@ -1021,10 +1021,6 @@ public final class BonsplitController {
     public func setDividerPosition(_ position: CGFloat, forSplit splitId: UUID, fromExternal: Bool = false) -> Bool {
         guard let split = internalController.findSplit(splitId) else { return false }
 
-        if fromExternal {
-            internalController.isExternalUpdateInProgress = true
-        }
-
         let range = configuration.dividerPositionRange
         let clampedPosition = min(max(position, range.lowerBound), range.upperBound)
         let clearedImposition = split.imposedFirstExtent != nil
@@ -1037,11 +1033,8 @@ public final class BonsplitController {
             split.syncDividerNow?()
         }
 
-        if fromExternal {
-            // Use a slight delay to allow the UI to update before re-enabling notifications
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.internalController.isExternalUpdateInProgress = false
-            }
+        if !fromExternal {
+            notifyGeometryChange()
         }
 
         return true
@@ -1077,9 +1070,6 @@ public final class BonsplitController {
         _ extent: CGFloat?, forSplit splitId: UUID, fromExternal: Bool = false
     ) -> Bool {
         guard let split = internalController.findSplit(splitId) else { return false }
-        if fromExternal {
-            internalController.isExternalUpdateInProgress = true
-        }
         let normalizedExtent = extent.map { max(0, $0) }
         if split.imposedFirstExtent != normalizedExtent {
             split.imposedFirstExtent = normalizedExtent
@@ -1095,10 +1085,8 @@ public final class BonsplitController {
             split.imposedEpoch &+= 1
         }
         split.syncDividerNow?()
-        if fromExternal {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
-                self?.internalController.isExternalUpdateInProgress = false
-            }
+        if !fromExternal {
+            notifyGeometryChange()
         }
         return true
     }
@@ -1131,12 +1119,9 @@ public final class BonsplitController {
     /// Notify geometry change to delegate (internal use)
     /// - Parameters:
     ///   - isDragging: Whether the change is due to active divider dragging
-    ///   - force: Deliver even inside the external-update suppression window.
-    ///     Only the drag-end path passes true: its notification is the one
-    ///     the delegate contract guarantees, so the anti-echo gate must not
-    ///     swallow it.
+    ///   - force: Reserved for call sites that guarantee a geometry event.
     internal func notifyGeometryChange(isDragging: Bool = false, force: Bool = false) {
-        guard force || !internalController.isExternalUpdateInProgress else { return }
+        _ = force
 
         // If dragging, check if delegate wants notifications during drag
         if isDragging {

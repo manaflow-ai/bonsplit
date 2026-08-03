@@ -1,6 +1,4 @@
-import AppKit
 import Foundation
-import UniformTypeIdentifiers
 
 extension SplitViewController {
     @discardableResult
@@ -33,52 +31,4 @@ extension SplitViewController {
         }
     }
 
-    func makeTabDragItemProvider(
-        for tab: TabItem,
-        from paneId: PaneID,
-        clearDropState: () -> Void
-    ) -> NSItemProvider {
-#if DEBUG
-        NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
-#endif
-        clearDropState()
-        let dragGeneration = beginTabDrag(tab, from: paneId)
-        installCancelledTabDragCleanup(forGeneration: dragGeneration)
-
-        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
-        if let data = try? JSONEncoder().encode(transfer) {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: UTType.tabTransfer.identifier,
-                visibility: .ownProcess
-            ) { completion in
-                completion(data, nil)
-                return nil
-            }
-#if DEBUG
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                let types = NSPasteboard(name: .drag).types?.map(\.rawValue).joined(separator: ",") ?? "-"
-                dlog("tab.dragPasteboard types=\(types)")
-            }
-#endif
-            return provider
-        }
-        return NSItemProvider()
-    }
-
-    private func installCancelledTabDragCleanup(forGeneration generation: Int) {
-        var monitorRef: Any?
-        monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            // One-shot: remove ourselves AND nil the capture box, or the cycle
-            // monitor -> closure -> box -> monitor leaks one monitor per drag.
-            if let m = monitorRef {
-                NSEvent.removeMonitor(m)
-                monitorRef = nil
-            }
-            DispatchQueue.main.async {
-                self?.cancelTabDragIfGenerationMatches(generation)
-            }
-            return event
-        }
-    }
 }

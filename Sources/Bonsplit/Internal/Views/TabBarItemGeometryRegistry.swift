@@ -1,5 +1,4 @@
 import AppKit
-import SwiftUI
 
 @MainActor
 protocol TabBarItemGeometryObserving: AnyObject {
@@ -9,7 +8,7 @@ protocol TabBarItemGeometryObserving: AnyObject {
 /// AppKit-owned geometry for the tab strip.
 ///
 /// Tab frames stay in the platform view hierarchy and are queried only by
-/// platform consumers. They never become SwiftUI state, so measuring or
+/// platform consumers. They never become declarative UI state, so measuring or
 /// scrolling the strip cannot invalidate the graph that produced the frames.
 @MainActor
 final class TabBarItemGeometryRegistry {
@@ -38,7 +37,7 @@ final class TabBarItemGeometryRegistry {
     private var expectedProgrammaticOffset: CGFloat?
     private var trailingObscuredWidth: CGFloat = 0
 
-    deinit {
+    isolated deinit {
         if let scrollBoundsObserver {
             NotificationCenter.default.removeObserver(scrollBoundsObserver)
         }
@@ -103,7 +102,7 @@ final class TabBarItemGeometryRegistry {
             return
         }
 
-        // Keep the documented AppKit scroll signal outside SwiftUI so chrome
+        // Keep the documented AppKit scroll signal outside declarative UI so chrome
         // redraws do not publish geometry into the view graph.
         clipView.postsBoundsChangedNotifications = true
         scrollBoundsObserver = NotificationCenter.default.addObserver(
@@ -273,8 +272,11 @@ final class TabBarItemGeometryRegistry {
     }
 
     private func documentGeometryDidChange() {
-        pendingScrollIntent = selectedTabId.map(ScrollIntent.revealSelectedTab) ?? .leading
+        // A document resize can be caused by the viewport itself. Preserve the
+        // current scroll anchor in that case. Selection changes and selected-tab
+        // frame changes install their own explicit reveal intent.
         viewportLayoutDidChange()
+        reconcilePendingScrollIntent()
         invalidateObservers()
     }
 
@@ -395,164 +397,5 @@ final class TabBarItemGeometryRegistry {
             current = candidate.superview
         }
         return true
-    }
-}
-
-struct TabItemHitRegionView: NSViewRepresentable {
-    let tabId: UUID
-    let geometryRegistry: TabBarItemGeometryRegistry
-
-    func makeNSView(context: Context) -> RegionNSView {
-        let view = RegionNSView()
-        view.configure(tabId: tabId, geometryRegistry: geometryRegistry)
-        return view
-    }
-
-    func updateNSView(_ nsView: RegionNSView, context: Context) {
-        nsView.configure(tabId: tabId, geometryRegistry: geometryRegistry)
-    }
-
-    final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
-        nonisolated(unsafe) private var hitBounds: NSRect = .zero
-        private var tabId: UUID?
-        private weak var geometryRegistry: TabBarItemGeometryRegistry?
-        private var containerFrameObserver: NSObjectProtocol?
-        private var containerBoundsObserver: NSObjectProtocol?
-
-        override var mouseDownCanMoveWindow: Bool { false }
-
-        deinit {
-            invalidateContainerGeometryObservers()
-            unregisterGeometry()
-            BonsplitTabItemHitRegionRegistry.unregister(self)
-        }
-
-        func configure(tabId: UUID, geometryRegistry: TabBarItemGeometryRegistry) {
-            if self.tabId != tabId || self.geometryRegistry !== geometryRegistry {
-                unregisterGeometry()
-                self.tabId = tabId
-                self.geometryRegistry = geometryRegistry
-            }
-            registerGeometryIfVisible()
-        }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            syncHitBounds()
-            BonsplitTabItemHitRegionRegistry.unregister(self)
-            if window != nil {
-                BonsplitTabItemHitRegionRegistry.register(self)
-            }
-            registerGeometryIfVisible()
-        }
-
-        override func viewDidMoveToSuperview() {
-            super.viewDidMoveToSuperview()
-            observeContainerGeometry()
-            if superview == nil {
-                unregisterGeometry()
-                BonsplitTabItemHitRegionRegistry.unregister(self)
-            } else {
-                registerGeometryIfVisible()
-            }
-        }
-
-        override func layout() {
-            super.layout()
-            syncHitBounds()
-            notifyGeometryDidChange()
-        }
-
-        override func setFrameSize(_ newSize: NSSize) {
-            super.setFrameSize(newSize)
-            syncHitBounds()
-            notifyGeometryDidChange()
-        }
-
-        override func setBoundsSize(_ newSize: NSSize) {
-            super.setBoundsSize(newSize)
-            syncHitBounds()
-            notifyGeometryDidChange()
-        }
-
-        override func setBoundsOrigin(_ newOrigin: NSPoint) {
-            super.setBoundsOrigin(newOrigin)
-            syncHitBounds()
-            notifyGeometryDidChange()
-        }
-
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            hitBounds
-                .insetBy(
-                    dx: -BonsplitTabItemHitTesting.horizontalSlop,
-                    dy: -BonsplitTabItemHitTesting.verticalSlop
-                )
-                .contains(localPoint)
-        }
-
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            nil
-        }
-
-        private func registerGeometryIfVisible() {
-            guard window != nil, superview != nil, let tabId else { return }
-            geometryRegistry?.attachScrollView(enclosingScrollView)
-            geometryRegistry?.register(self, for: tabId)
-        }
-
-        private func unregisterGeometry() {
-            guard let tabId else { return }
-            geometryRegistry?.unregister(self, for: tabId)
-        }
-
-        private func observeContainerGeometry() {
-            invalidateContainerGeometryObservers()
-            guard let containerView = superview else { return }
-            containerView.postsFrameChangedNotifications = true
-            containerView.postsBoundsChangedNotifications = true
-            containerFrameObserver = makeContainerGeometryObserver(
-                name: NSView.frameDidChangeNotification,
-                containerView: containerView
-            )
-            containerBoundsObserver = makeContainerGeometryObserver(
-                name: NSView.boundsDidChangeNotification,
-                containerView: containerView
-            )
-        }
-
-        private func makeContainerGeometryObserver(
-            name: Notification.Name,
-            containerView: NSView
-        ) -> NSObjectProtocol {
-            NotificationCenter.default.addObserver(
-                forName: name,
-                object: containerView,
-                queue: .main
-            ) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self?.notifyGeometryDidChange()
-                }
-            }
-        }
-
-        private func invalidateContainerGeometryObservers() {
-            if let containerFrameObserver {
-                NotificationCenter.default.removeObserver(containerFrameObserver)
-                self.containerFrameObserver = nil
-            }
-            if let containerBoundsObserver {
-                NotificationCenter.default.removeObserver(containerBoundsObserver)
-                self.containerBoundsObserver = nil
-            }
-        }
-
-        private func notifyGeometryDidChange() {
-            guard let tabId else { return }
-            geometryRegistry?.geometryDidChange(for: tabId)
-        }
-
-        private func syncHitBounds() {
-            hitBounds = bounds
-        }
     }
 }

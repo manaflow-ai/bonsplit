@@ -1,12 +1,12 @@
 import CoreGraphics
 import Foundation
+import os
 
 #if DEBUG
 enum TabGeometryDebugLog {
     static let isEnabled = ProcessInfo.processInfo.environment["CMUX_TAB_GEOMETRY_LOG"] != nil
 
-    private static let queue = DispatchQueue(label: "com.bonsplit.tab-geometry-debug-log")
-    private static let sink = TabGeometryDebugLogSink()
+    private static let sink = OSAllocatedUnfairLock(initialState: TabGeometryDebugLogSink())
 
     static func geometry(
         tabId: UUID,
@@ -18,7 +18,7 @@ enum TabGeometryDebugLog {
         showsShortcutHint: Bool
     ) {
         guard isEnabled else { return }
-        queue.async {
+        sink.withLock { sink in
             sink.write(
                 tabId: tabId,
                 event: "geom",
@@ -50,7 +50,7 @@ enum TabGeometryDebugLog {
         showsShortcutHint: Bool
     ) {
         guard isEnabled else { return }
-        queue.async {
+        sink.withLock { sink in
             sink.write(
                 tabId: tabId,
                 event: "state",
@@ -100,7 +100,7 @@ enum TabGeometryDebugLog {
     }
 }
 
-private final class TabGeometryDebugLogSink {
+private struct TabGeometryDebugLogSink: Sendable {
     private let path = "/tmp/cmux-tab-geometry.log"
     private var handle: FileHandle?
     private var wroteHeader = false
@@ -111,7 +111,7 @@ private final class TabGeometryDebugLogSink {
         return formatter
     }()
 
-    func write(tabId: UUID, event: String, fields: [String]) {
+    mutating func write(tabId: UUID, event: String, fields: [String]) {
         writeHeaderIfNeeded()
         let lineFields = [
             "ts=\(timestampFormatter.string(from: Date()))",
@@ -121,7 +121,7 @@ private final class TabGeometryDebugLogSink {
         append(lineFields.joined(separator: "\t"))
     }
 
-    private func writeHeaderIfNeeded() {
+    private mutating func writeHeaderIfNeeded() {
         guard !wroteHeader else { return }
         wroteHeader = true
         append([
@@ -133,7 +133,7 @@ private final class TabGeometryDebugLogSink {
         ].joined(separator: "\t"))
     }
 
-    private func append(_ line: String) {
+    private mutating func append(_ line: String) {
         guard let data = (line + "\n").data(using: .utf8),
               let handle = fileHandle() else {
             return
@@ -141,7 +141,7 @@ private final class TabGeometryDebugLogSink {
         try? handle.write(contentsOf: data)
     }
 
-    private func fileHandle() -> FileHandle? {
+    private mutating func fileHandle() -> FileHandle? {
         if let handle { return handle }
         if !FileManager.default.fileExists(atPath: path) {
             _ = FileManager.default.createFile(atPath: path, contents: nil)

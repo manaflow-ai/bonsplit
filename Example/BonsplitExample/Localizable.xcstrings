@@ -1,0 +1,300 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "example.alert.cancel" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cancel" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "キャンセル" } }
+      }
+    },
+    "example.alert.dontSave" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Don't Save" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存しない" } }
+      }
+    },
+    "example.alert.save" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Save" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存" } }
+      }
+    },
+    "example.alert.saveQuestionFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Do you want to save changes to \"%@\"?" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "\"%@\"への変更を保存しますか？" } }
+      }
+    },
+    "example.alert.unsavedWarning" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Your changes will be lost if you don't save them." } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "保存しない場合、変更内容は失われます。" } }
+      }
+    },
+    "example.content.noContent" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No content" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "内容がありません" } }
+      }
+    },
+    "example.debug.clear" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "消去" } }
+      }
+    },
+    "example.debug.containerFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Container: %d x %d at (%d, %d)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "コンテナ: %d x %d、位置 (%d, %d)" } }
+      }
+    },
+    "example.debug.eventLog" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Event Log" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "イベントログ" } }
+      }
+    },
+    "example.debug.layoutSnapshot" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Layout Snapshot" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "レイアウトのスナップショット" } }
+      }
+    },
+    "example.debug.noSnapshot" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No snapshot, waiting for layout" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "スナップショットがありません。レイアウトを待機中です" } }
+      }
+    },
+    "example.debug.paneFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@…%@\n  pos: (%d, %d)\n  size: %d x %d\n  tabs: %d" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@…%@\n  位置: (%d, %d)\n  サイズ: %d x %d\n  タブ: %d" } }
+      }
+    },
+    "example.debug.panesFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Panes (%d)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ペイン (%d)" } }
+      }
+    },
+    "example.debug.refreshedFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refreshed: %d panes" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "更新: %dペイン" } }
+      }
+    },
+    "example.debug.splitFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@… (%@)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "%@… (%@)" } }
+      }
+    },
+    "example.debug.splits" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Splits" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "分割" } }
+      }
+    },
+    "example.debug.windowTitle" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Geometry Debug" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ジオメトリデバッグ" } }
+      }
+    },
+    "example.empty.closePane" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close Pane" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ペインを閉じる" } }
+      }
+    },
+    "example.empty.newFile" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New File" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新規ファイル" } }
+      }
+    },
+    "example.empty.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No Open Files" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "開いているファイルはありません" } }
+      }
+    },
+    "example.log.allowed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "   → allowed" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "   → 許可" } }
+      }
+    },
+    "example.log.allowedDiscarded" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "   → allowed (discarded)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "   → 許可（破棄）" } }
+      }
+    },
+    "example.log.allowedSaved" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "   → allowed (saved)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "   → 許可（保存済み）" } }
+      }
+    },
+    "example.log.deniedCancelled" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "   → denied (cancelled)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "   → 拒否（キャンセル）" } }
+      }
+    },
+    "example.log.didCloseFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "✅ didCloseTab: tab %d from pane %d" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "✅ didCloseTab: タブ %d、ペイン %d" } }
+      }
+    },
+    "example.log.geometryChangedFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Geometry changed: %d panes" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ジオメトリ変更: %dペイン" } }
+      }
+    },
+    "example.log.shouldCloseFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "🔔 shouldCloseTab: \"%@\" in pane %d" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "🔔 shouldCloseTab: \"%@\"、ペイン %d" } }
+      }
+    },
+    "example.menu.closeTab" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Close Tab" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "タブを閉じる" } }
+      }
+    },
+    "example.menu.debug" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Debug" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "デバッグ" } }
+      }
+    },
+    "example.menu.file" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "File" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ファイル" } }
+      }
+    },
+    "example.menu.navigateDown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigate Down" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "下へ移動" } }
+      }
+    },
+    "example.menu.navigateLeft" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigate Left" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "左へ移動" } }
+      }
+    },
+    "example.menu.navigateRight" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigate Right" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "右へ移動" } }
+      }
+    },
+    "example.menu.navigateUp" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Navigate Up" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "上へ移動" } }
+      }
+    },
+    "example.menu.newTab" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "New Tab" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "新規タブ" } }
+      }
+    },
+    "example.menu.nextTab" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show Next Tab" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "次のタブを表示" } }
+      }
+    },
+    "example.menu.previousTab" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show Previous Tab" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "前のタブを表示" } }
+      }
+    },
+    "example.menu.quit" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit Bonsplit Example" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Bonsplit Exampleを終了" } }
+      }
+    },
+    "example.menu.showGeometryDebug" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show Geometry Debug" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "ジオメトリデバッグを表示" } }
+      }
+    },
+    "example.menu.split" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Split" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "分割" } }
+      }
+    },
+    "example.menu.splitDown" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Split Down" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "下に分割" } }
+      }
+    },
+    "example.menu.splitRight" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Split Right" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "右に分割" } }
+      }
+    },
+    "example.sample.appKit" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "import AppKit\n\nfinal class MyViewController: NSViewController {\n    override func loadView() {\n        view = NSTextField(labelWithString: \"Hello from tab %d\")\n    }\n}" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "import AppKit\n\nfinal class MyViewController: NSViewController {\n    override func loadView() {\n        view = NSTextField(labelWithString: \"タブ%dからこんにちは\")\n    }\n}" } }
+      }
+    },
+    "example.sample.document" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "struct Document: Identifiable {\n    let id = UUID()\n    var title: String\n    var content: String\n    var isDirty: Bool = false\n}\n\nclass DocumentManager {\n    var documents: [Document] = []\n\n    func save(_ document: Document) {\n        // Save implementation\n    }\n}" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "struct Document: Identifiable {\n    let id = UUID()\n    var title: String\n    var content: String\n    var isDirty: Bool = false\n}\n\nclass DocumentManager {\n    var documents: [Document] = []\n\n    func save(_ document: Document) {\n        // 保存処理\n    }\n}" } }
+      }
+    },
+    "example.sample.fibonacci" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "func fibonacci(_ n: Int) -> Int {\n    guard n > 1 else { return n }\n    return fibonacci(n - 1) + fibonacci(n - 2)\n}\n\nlet result = fibonacci(10)\nprint(\"Fibonacci(10) = \\(result)\")" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "func fibonacci(_ n: Int) -> Int {\n    guard n > 1 else { return n }\n    return fibonacci(n - 1) + fibonacci(n - 2)\n}\n\nlet result = fibonacci(10)\nprint(\"フィボナッチ(10) = \\(result)\")" } }
+      }
+    },
+    "example.sample.notes" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "# Notes\n\nThis is a sample document.\n\n## Features\n\n- Drag and drop tabs\n- Split panes\n- Keyboard navigation\n\n## Tips\n\nTry dragging a tab to the edge of a pane to create a split!" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "# メモ\n\nこれはサンプル文書です。\n\n## 機能\n\n- タブのドラッグ＆ドロップ\n- ペイン分割\n- キーボードナビゲーション\n\n## ヒント\n\nタブをペインの端へドラッグして分割してみてください。" } }
+      }
+    },
+    "example.sample.welcome" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "// Welcome to Bonsplit Example!\n\n// Try these actions:\n// - ⌘T to create a new tab\n// - ⌘W to close the current tab\n// - ⌘⇧D to split right\n// - ⌘⌥D to split down\n// - Drag tabs to reorder or move between panes\n// - ⌘⌥←→↑↓ to navigate between panes\n\nlet greeting = \"Hello, World!\"\nprint(greeting)" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "// Bonsplit Exampleへようこそ！\n\n// 操作を試してください:\n// - ⌘T: 新しいタブ\n// - ⌘W: 現在のタブを閉じる\n// - ⌘⇧D: 右に分割\n// - ⌘⌥D: 下に分割\n// - タブをドラッグして並べ替えまたはペイン間を移動\n// - ⌘⌥←→↑↓: ペイン間を移動\n\nlet greeting = \"こんにちは、世界！\"\nprint(greeting)" } }
+      }
+    },
+    "example.tab.untitledFormat" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Untitled %d" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "名称未設定 %d" } }
+      }
+    },
+    "example.window.title" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Bonsplit Example" } },
+        "ja" : { "stringUnit" : { "state" : "translated", "value" : "Bonsplit Example" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

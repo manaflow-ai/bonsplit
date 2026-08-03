@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 /// State for a single pane (leaf node in the split tree)
 @Observable

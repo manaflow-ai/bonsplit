@@ -41,3 +41,14 @@
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
 "tabContext.disconnectRemote" = "Disconnect SSH";
 "tabContext.remoteConnectedAccessibility" = "Connected over SSH";
+"tab.close" = "Close Tab";
+"tab.accessibility.loading" = "Loading";
+"tab.accessibility.pinned" = "Pinned";
+"tab.accessibility.unread" = "Unread";
+"tab.accessibility.modified" = "Modified";
+"tab.accessibility.zoomed" = "Zoomed";
+"emptyPane.noOpenTabs" = "No Open Tabs";
+"splitButton.newTerminal" = "New Terminal";
+"splitButton.newBrowser" = "New Browser";
+"splitButton.splitRight" = "Split Right";
+"splitButton.splitDown" = "Split Down";

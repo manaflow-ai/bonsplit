@@ -1,5 +1,5 @@
 import Foundation
-import SwiftUI
+import Observation
 
 /// Central controller managing the entire split view state (internal implementation)
 @Observable
@@ -23,7 +23,7 @@ final class SplitViewController {
     var focusedPaneId: PaneID?
 
     /// Tab currently being dragged (for visual feedback and hit-testing).
-    /// This is @Observable so SwiftUI views react (e.g. allowsHitTesting).
+    /// This is @Observable so native renderers react (e.g. allowsHitTesting).
     var draggingTab: TabItem?
 
     /// Monotonic counter incremented on each drag start. Used to invalidate stale
@@ -34,7 +34,7 @@ final class SplitViewController {
     var dragSourcePaneId: PaneID?
 
     /// Non-observable drag session state. Drop delegates read these instead of the
-    /// @Observable properties above, because SwiftUI batches observable updates and
+    /// @Observable properties above, because observation batches observable updates and
     /// createItemProvider's writes may not be visible to validateDrop/performDrop yet.
     @ObservationIgnored var activeDragTab: TabItem?
     @ObservationIgnored var activeDragSourcePaneId: PaneID?
@@ -53,16 +53,13 @@ final class SplitViewController {
     /// Receives the dropped URLs and the pane ID where the drop occurred.
     @ObservationIgnored var onFileDrop: ((_ urls: [URL], _ paneId: PaneID) -> Bool)?
 
-    /// During drop, SwiftUI may keep the source tab view alive briefly (default removal animation)
+    /// During drop, the source tab view may remain alive briefly while native layout settles
     /// even after we've updated the model. Hide it explicitly so it disappears immediately.
     var dragHiddenSourceTabId: UUID?
     var dragHiddenSourcePaneId: PaneID?
 
     /// Current frame of the entire split view container
     var containerFrame: CGRect = .zero
-
-    /// Flag to prevent notification loops during external updates
-    var isExternalUpdateInProgress: Bool = false
 
     /// Timestamp of last geometry notification for debouncing
     var lastGeometryNotificationTime: TimeInterval = 0
