@@ -4,19 +4,19 @@ import UniformTypeIdentifiers
 
 /// Custom UTTypes for tab drag and drop
 extension UTType {
-    static var tabItem: UTType {
+    static let tabItem: UTType = {
 #if DEBUG
         BonsplitDebugCounters.recordTabItemTypeConstruction()
 #endif
         return UTType(exportedAs: "com.splittabbar.tabitem")
-    }
+    }()
 
-    static var tabTransfer: UTType {
+    static let tabTransfer: UTType = {
 #if DEBUG
         BonsplitDebugCounters.recordTabTransferTypeConstruction()
 #endif
         return UTType(exportedAs: "com.splittabbar.tabtransfer", conformingTo: .data)
-    }
+    }()
 }
 
 /// Represents a single tab in a pane's tab bar (internal representation)

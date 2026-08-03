@@ -699,12 +699,7 @@ struct TabItemView: View {
             ? TabBarColors.nsColorActiveText(for: appearance)
             : TabBarColors.nsColorInactiveText(for: appearance)
         let iconTint = Color(nsColor: iconTintColor)
-        let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { data in
-#if DEBUG
-            BonsplitDebugCounters.recordFaviconImageDecode()
-#endif
-            return NSImage(data: data)
-        }
+        let faviconImage = renderedFaviconImage
 
         Group {
             if tab.isLoading {
