@@ -3,6 +3,40 @@ import XCTest
 
 @MainActor
 final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
+    func testEarlierTabLocalDropUsesManualMiddleIndexInsteadOfStaticEndTarget() throws {
+        let harness = try makeHarness()
+        let initialIds = harness.pane.tabs.map(\.id)
+        let movedTabId = initialIds[0]
+
+        let targetIndex = effectiveSamePaneLocalDropTarget(
+            tabId: movedTabId,
+            staticTargetIndex: harness.pane.tabs.count,
+            manualTargetIndex: 3,
+            harness: harness
+        )
+
+        XCTAssertEqual(targetIndex, 3)
+        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
+        XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[1], initialIds[2], movedTabId, initialIds[3]])
+    }
+
+    func testLaterActiveTabLocalDropUsesManualMiddleIndexInsteadOfStaticEndNoop() throws {
+        let harness = try makeHarness()
+        let initialIds = harness.pane.tabs.map(\.id)
+        let movedTabId = initialIds[3]
+
+        let targetIndex = effectiveSamePaneLocalDropTarget(
+            tabId: movedTabId,
+            staticTargetIndex: harness.pane.tabs.count,
+            manualTargetIndex: 1,
+            harness: harness
+        )
+
+        XCTAssertEqual(targetIndex, 1)
+        XCTAssertTrue(harness.controller.reorderTab(TabID(uuid: movedTabId), toIndex: targetIndex))
+        XCTAssertEqual(harness.pane.tabs.map(\.id), [initialIds[0], movedTabId, initialIds[1], initialIds[2]])
+    }
+
     func testEarlierTabManualMiddleReorderIgnoresStaleSamePaneEndFallback() throws {
         let harness = try makeHarness()
         let initialIds = harness.pane.tabs.map(\.id)
@@ -80,6 +114,21 @@ final class TabDropDelegateSamePaneFallbackTests: XCTestCase {
             return false
         }
         return harness.controller.onExternalTabDrop?(request) ?? false
+    }
+
+    private func effectiveSamePaneLocalDropTarget(
+        tabId: UUID,
+        staticTargetIndex: Int,
+        manualTargetIndex: Int,
+        harness: Harness
+    ) -> Int {
+        let sourceIndex = harness.pane.tabs.firstIndex { $0.id == tabId }
+        return TabDropDelegate.effectiveLocalDropTargetIndex(
+            staticTargetIndex: staticTargetIndex,
+            manualTargetIndex: manualTargetIndex,
+            sourcePaneMatchesTarget: true,
+            sourceIndex: sourceIndex
+        )
     }
 }
 

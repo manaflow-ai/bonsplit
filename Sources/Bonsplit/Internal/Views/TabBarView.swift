@@ -3385,6 +3385,15 @@ struct TabDropDelegate: DropDelegate {
         dropTargetIndex = nil
     }
 
+    static func effectiveLocalDropTargetIndex(
+        staticTargetIndex: Int,
+        manualTargetIndex: Int?,
+        sourcePaneMatchesTarget: Bool,
+        sourceIndex: Int?
+    ) -> Int {
+        staticTargetIndex
+    }
+
     static func sameProcessFallbackRequest(
         transfer: TabTransferData,
         targetPane: PaneID,
