@@ -3826,6 +3826,39 @@ final class BonsplitTests: XCTestCase {
     /// imposed extent arriving mid-session must not move it. The imposition
     /// stays armed instead, and the session's end applies it with no fresh
     /// impose call from the host.
+    func testActiveDividerSessionAcceptsSyntheticDragWithoutGlobalButtonState() {
+        XCTAssertTrue(SplitDividerMouseState.isActive(
+            pressedMouseButtons: 0,
+            eventType: .leftMouseDragged,
+            eventMatchesWindow: true,
+            sessionIsActive: true
+        ))
+        XCTAssertTrue(SplitDividerMouseState.isActive(
+            pressedMouseButtons: 1,
+            eventType: nil,
+            eventMatchesWindow: false,
+            sessionIsActive: false
+        ))
+        XCTAssertFalse(SplitDividerMouseState.isActive(
+            pressedMouseButtons: 0,
+            eventType: .leftMouseDragged,
+            eventMatchesWindow: true,
+            sessionIsActive: false
+        ))
+        XCTAssertFalse(SplitDividerMouseState.isActive(
+            pressedMouseButtons: 0,
+            eventType: .leftMouseDragged,
+            eventMatchesWindow: false,
+            sessionIsActive: true
+        ))
+        XCTAssertFalse(SplitDividerMouseState.isActive(
+            pressedMouseButtons: 0,
+            eventType: .leftMouseUp,
+            eventMatchesWindow: true,
+            sessionIsActive: true
+        ))
+    }
+
     @MainActor
     func testImposeDuringDragSessionDefersUntilSessionEnds() throws {
         var configuration = BonsplitConfiguration()
