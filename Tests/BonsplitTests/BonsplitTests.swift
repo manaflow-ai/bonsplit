@@ -3887,6 +3887,26 @@ final class BonsplitTests: XCTestCase {
         ))
     }
 
+    func testRejectedSyntheticResizeCanRecoverWithinSameDividerSession() {
+        var state = SplitDividerDragState()
+
+        state.sessionChanged(true)
+        XCTAssertTrue(state.sessionIsActive)
+        XCTAssertTrue(state.resizeIsActive)
+
+        state.rejectCurrentResize()
+        XCTAssertTrue(state.sessionIsActive)
+        XCTAssertFalse(state.resizeIsActive)
+
+        state.acceptCurrentResize()
+        XCTAssertTrue(state.sessionIsActive)
+        XCTAssertTrue(state.resizeIsActive)
+
+        state.sessionChanged(false)
+        XCTAssertFalse(state.sessionIsActive)
+        XCTAssertFalse(state.resizeIsActive)
+    }
+
     @MainActor
     func testImposeDuringDragSessionDefersUntilSessionEnds() throws {
         var configuration = BonsplitConfiguration()
