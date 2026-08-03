@@ -37,7 +37,7 @@ final class BonsplitTests: XCTestCase {
 
     @MainActor
     private final class FakeTabItemHitRegionView: NSView, BonsplitTabItemHitRegionProviding {
-        nonisolated(unsafe) var tabFrames: [CGRect] = []
+        var tabFrames: [CGRect] = []
 
         deinit {
             BonsplitTabItemHitRegionRegistry.unregister(self)
@@ -58,7 +58,7 @@ final class BonsplitTests: XCTestCase {
             }
         }
 
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+        func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             tabFrames.contains { $0.contains(localPoint) }
         }
     }
