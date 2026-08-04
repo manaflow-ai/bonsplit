@@ -1293,6 +1293,104 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(Int(round(alpha * 255)), 255)
     }
 
+    func testTabStyleOverridesResolveEverySelectionColor() {
+        let appearance = BonsplitConfiguration.Appearance(
+            tabStyle: .init(
+                activeBackgroundHex: "#11223344",
+                activeForegroundHex: "#55667788",
+                inactiveBackgroundHex: "#99AABBCC",
+                inactiveForegroundHex: "#DDEEFF",
+                dividerHex: "#10203040",
+                activeIndicatorHex: "#50607080"
+            )
+        )
+
+        let resolved: [(NSColor, [Int])] = [
+            (
+                NSColor(TabBarColors.activeTabBackground(for: appearance)),
+                [0x11, 0x22, 0x33, 0x44]
+            ),
+            (
+                TabBarColors.nsColorActiveText(for: appearance),
+                [0x55, 0x66, 0x77, 0x88]
+            ),
+            (
+                NSColor(TabBarColors.inactiveTabBackground(for: appearance)),
+                [0x99, 0xAA, 0xBB, 0xCC]
+            ),
+            (
+                TabBarColors.nsColorInactiveText(for: appearance),
+                [0xDD, 0xEE, 0xFF, 0xFF]
+            ),
+            (
+                TabBarColors.nsColorSeparator(for: appearance),
+                [0x10, 0x20, 0x30, 0x40]
+            ),
+            (
+                TabBarColors.nsColorActiveIndicator(for: appearance, saturation: 1),
+                [0x50, 0x60, 0x70, 0x80]
+            ),
+        ]
+
+        for (color, expected) in resolved {
+            let rgb = color.usingColorSpace(.sRGB)!
+            var red: CGFloat = 0
+            var green: CGFloat = 0
+            var blue: CGFloat = 0
+            var alpha: CGFloat = 0
+            rgb.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+            XCTAssertEqual(Int(round(red * 255)), expected[0])
+            XCTAssertEqual(Int(round(green * 255)), expected[1])
+            XCTAssertEqual(Int(round(blue * 255)), expected[2])
+            XCTAssertEqual(Int(round(alpha * 255)), expected[3])
+        }
+    }
+
+    @MainActor
+    func testActiveTabIndicatorCanRenderAlongBottomEdge() {
+        let size = NSSize(width: 160, height: TabBarMetrics.barHeight)
+        let appearance = BonsplitConfiguration.Appearance(
+            tabBarHeight: size.height,
+            chromeColors: .init(
+                backgroundHex: "#000000",
+                tabBarBackgroundHex: "#000000",
+                borderHex: "#00000000"
+            ),
+            tabStyle: .init(
+                activeBackgroundHex: "#000000",
+                activeIndicatorHex: "#FF0000",
+                activeIndicatorEdge: .bottom
+            )
+        )
+
+        let samples = renderedTabBarValue(
+            isFocused: true,
+            appearance: appearance,
+            size: size
+        ) { hostingView -> (top: NSColor, bottom: NSColor)? in
+            guard let top = renderedColorInViewCoordinates(
+                in: hostingView,
+                at: NSPoint(x: 20, y: 0.5)
+            )?.usingColorSpace(.sRGB),
+                  let bottom = renderedColorInViewCoordinates(
+                    in: hostingView,
+                    at: NSPoint(x: 20, y: size.height - 0.5)
+                  )?.usingColorSpace(.sRGB) else {
+                return nil
+            }
+            return (top, bottom)
+        }
+
+        guard let samples else {
+            XCTFail("Expected rendered tab bar edge samples")
+            return
+        }
+        XCTAssertLessThan(samples.top.redComponent, 0.1)
+        XCTAssertGreaterThan(samples.bottom.redComponent, 0.8)
+        XCTAssertLessThan(samples.bottom.greenComponent, 0.1)
+        XCTAssertLessThan(samples.bottom.blueComponent, 0.1)
+    }
+
     func testInvalidChromeBackgroundHexFallsBackToPaneDefaultColor() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(backgroundHex: "#ZZZZZZ")
