@@ -13,6 +13,10 @@ private final class DropZoneModel {
 }
 
 final class BonsplitTests: XCTestCase {
+    private struct CallbackSendableBox<Value>: @unchecked Sendable {
+        let value: Value
+    }
+
     @MainActor
     private final class FakeTabBarHitRegionView: NSView {
         deinit {
@@ -37,7 +41,7 @@ final class BonsplitTests: XCTestCase {
 
     @MainActor
     private final class FakeTabItemHitRegionView: NSView, BonsplitTabItemHitRegionProviding {
-        nonisolated(unsafe) var tabFrames: [CGRect] = []
+        var tabFrames: [CGRect] = []
 
         deinit {
             BonsplitTabItemHitRegionRegistry.unregister(self)
@@ -58,8 +62,15 @@ final class BonsplitTests: XCTestCase {
             }
         }
 
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+        func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             tabFrames.contains { $0.contains(localPoint) }
+        }
+    }
+
+    @MainActor
+    private final class MainActorHitRegionProbe: NSObject, BonsplitTabItemHitRegionProviding {
+        func containsBonsplitTabItemHit(localPoint _: NSPoint) -> Bool {
+            Thread.isMainThread
         }
     }
 
@@ -997,6 +1008,22 @@ final class BonsplitTests: XCTestCase {
         XCTAssertFalse(
             BonsplitTabItemHitRegionRegistry.containsWindowPoint(emptyChromePoint, in: window),
             "Empty tab-bar chrome should stay available for explicit app-window dragging"
+        )
+    }
+
+    func testTabItemHitProviderHopsToMainActor() async {
+        let callbackBox = await MainActor.run {
+            let provider: any BonsplitTabItemHitRegionProviding = MainActorHitRegionProbe()
+            return CallbackSendableBox(value: provider.containsBonsplitTabItemHit)
+        }
+
+        let ranOnMainThread = await Task.detached {
+            await callbackBox.value(.zero)
+        }.value
+
+        XCTAssertTrue(
+            ranOnMainThread,
+            "The protocol callback must preserve main-actor isolation when it escapes"
         )
     }
 
