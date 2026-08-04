@@ -13,6 +13,10 @@ private final class DropZoneModel {
 }
 
 final class BonsplitTests: XCTestCase {
+    private struct CallbackSendableBox<Value>: @unchecked Sendable {
+        let value: Value
+    }
+
     @MainActor
     private final class FakeTabBarHitRegionView: NSView {
         deinit {
@@ -60,6 +64,13 @@ final class BonsplitTests: XCTestCase {
 
         func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             tabFrames.contains { $0.contains(localPoint) }
+        }
+    }
+
+    @MainActor
+    private final class MainActorHitRegionProbe: NSObject, BonsplitTabItemHitRegionProviding {
+        func containsBonsplitTabItemHit(localPoint _: NSPoint) -> Bool {
+            Thread.isMainThread
         }
     }
 
@@ -1000,26 +1011,19 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
-    func testTabItemHitProviderUsesStaticMainActorIsolation() throws {
-        let repositoryRoot = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-        let sourceURL = repositoryRoot
-            .appendingPathComponent("Sources/Bonsplit/Internal/Views/TabBarView.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+    func testTabItemHitProviderHopsToMainActor() async {
+        let callbackBox = await MainActor.run {
+            let provider: any BonsplitTabItemHitRegionProviding = MainActorHitRegionProbe()
+            return CallbackSendableBox(value: provider.containsBonsplitTabItemHit)
+        }
+
+        let ranOnMainThread = await Task.detached {
+            await callbackBox.value(.zero)
+        }.value
 
         XCTAssertTrue(
-            source.contains("@MainActor\npublic protocol BonsplitTabItemHitRegionProviding"),
-            "AppKit hit providers must use static UI isolation instead of a runtime executor assumption"
-        )
-        XCTAssertFalse(
-            source.contains("nonisolated func containsBonsplitTabItemHit"),
-            "Hit testing must not cross out of the main actor"
-        )
-        XCTAssertFalse(
-            source.contains("MainActor.assumeIsolated"),
-            "AppKit hit testing must not enter Swift's dynamic main-executor check"
+            ranOnMainThread,
+            "The protocol callback must preserve main-actor isolation when it escapes"
         )
     }
 
