@@ -164,6 +164,10 @@ enum TabBarColors {
     }
 
     static func activeTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        if let value = appearance.tabStyle.activeBackgroundHex,
+           let override = NSColor(bonsplitHex: value) {
+            return Color(nsColor: override)
+        }
         guard let custom = tabBarBackgroundColor(for: appearance) else {
             return activeTabBackground
         }
@@ -201,6 +205,14 @@ enum TabBarColors {
         .clear
     }
 
+    static func inactiveTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        guard let value = appearance.tabStyle.inactiveBackgroundHex,
+              let override = NSColor(bonsplitHex: value) else {
+            return inactiveTabBackground
+        }
+        return Color(nsColor: override)
+    }
+
     // MARK: - Text Colors
 
     static var activeText: Color {
@@ -208,11 +220,15 @@ enum TabBarColors {
     }
 
     static func activeText(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveTextColor(for: appearance, secondary: false))
+        Color(nsColor: nsColorActiveText(for: appearance))
     }
 
     static func nsColorActiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveTextColor(for: appearance, secondary: false)
+        if let value = appearance.tabStyle.activeForegroundHex,
+           let override = NSColor(bonsplitHex: value) {
+            return override
+        }
+        return effectiveTextColor(for: appearance, secondary: false)
     }
 
     static var inactiveText: Color {
@@ -220,11 +236,15 @@ enum TabBarColors {
     }
 
     static func inactiveText(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        Color(nsColor: effectiveTextColor(for: appearance, secondary: true))
+        Color(nsColor: nsColorInactiveText(for: appearance))
     }
 
     static func nsColorInactiveText(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
-        effectiveTextColor(for: appearance, secondary: true)
+        if let value = appearance.tabStyle.inactiveForegroundHex,
+           let override = NSColor(bonsplitHex: value) {
+            return override
+        }
+        return effectiveTextColor(for: appearance, secondary: true)
     }
 
     static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
@@ -249,6 +269,13 @@ enum TabBarColors {
     }
 
     static func nsColorSeparator(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        if appearance.tabStyle.dividerHex?.caseInsensitiveCompare("none") == .orderedSame {
+            return .clear
+        }
+        if let value = appearance.tabStyle.dividerHex,
+           let override = NSColor(bonsplitHex: value) {
+            return override
+        }
         if let explicit = chromeBorderColor(for: appearance) {
             return explicit
         }
@@ -278,6 +305,17 @@ enum TabBarColors {
 
     static func nsColorActiveIndicator(saturation: Double) -> NSColor {
         NSColor.controlAccentColor.bonsplitSaturating(by: saturation)
+    }
+
+    static func nsColorActiveIndicator(
+        for appearance: BonsplitConfiguration.Appearance,
+        saturation: Double
+    ) -> NSColor {
+        if let value = appearance.tabStyle.activeIndicatorHex,
+           let override = NSColor(bonsplitHex: value) {
+            return override
+        }
+        return nsColorActiveIndicator(saturation: saturation)
     }
 
     static var focusRing: Color {

@@ -1005,7 +1005,7 @@ struct TabItemView: View {
                 Rectangle()
                     .fill(TabBarColors.hoveredTabBackground(for: appearance))
             } else {
-                Color.clear
+                TabBarColors.inactiveTabBackground(for: appearance)
             }
 
             // Right border separator

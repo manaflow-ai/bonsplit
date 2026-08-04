@@ -504,6 +504,43 @@ extension BonsplitConfiguration {
             }
         }
 
+        /// Selection-dependent styling for surface tabs.
+        ///
+        /// Every value is optional so hosts can override only the parts they
+        /// need while preserving Bonsplit's native appearance for the rest.
+        public struct TabStyle: Sendable, Equatable {
+            public enum ActiveIndicatorEdge: String, Sendable, Codable, CaseIterable {
+                case top
+                case bottom
+            }
+
+            public var activeBackgroundHex: String?
+            public var activeForegroundHex: String?
+            public var inactiveBackgroundHex: String?
+            public var inactiveForegroundHex: String?
+            public var dividerHex: String?
+            public var activeIndicatorHex: String?
+            public var activeIndicatorEdge: ActiveIndicatorEdge
+
+            public init(
+                activeBackgroundHex: String? = nil,
+                activeForegroundHex: String? = nil,
+                inactiveBackgroundHex: String? = nil,
+                inactiveForegroundHex: String? = nil,
+                dividerHex: String? = nil,
+                activeIndicatorHex: String? = nil,
+                activeIndicatorEdge: ActiveIndicatorEdge = .top
+            ) {
+                self.activeBackgroundHex = activeBackgroundHex
+                self.activeForegroundHex = activeForegroundHex
+                self.inactiveBackgroundHex = inactiveBackgroundHex
+                self.inactiveForegroundHex = inactiveForegroundHex
+                self.dividerHex = dividerHex
+                self.activeIndicatorHex = activeIndicatorHex
+                self.activeIndicatorEdge = activeIndicatorEdge
+            }
+        }
+
         /// Controls how surface tabs are sized within a pane's tab bar.
         public enum TabWidthMode: Sendable, Equatable, Codable {
             /// Tabs use a fixed width clamped to `tabMinWidth...tabMaxWidth` and the
@@ -609,6 +646,9 @@ extension BonsplitConfiguration {
         /// Optional color overrides for tab/pane chrome.
         public var chromeColors: ChromeColors
 
+        /// Optional selection-dependent surface-tab styling.
+        public var tabStyle: TabStyle
+
         /// When true, the host app is trying to make all surfaces share the
         /// same backdrop. Bonsplit should avoid local chrome color adjustments
         /// that would create visibly different translucent layers.
@@ -656,6 +696,7 @@ extension BonsplitConfiguration {
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
             chromeColors: ChromeColors = .init(),
+            tabStyle: TabStyle = .init(),
             usesSharedBackdrop: Bool = false
         ) {
             self.tabBarHeight = tabBarHeight
@@ -678,6 +719,7 @@ extension BonsplitConfiguration {
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
             self.chromeColors = chromeColors
+            self.tabStyle = tabStyle
             self.usesSharedBackdrop = usesSharedBackdrop
         }
 
