@@ -21,12 +21,23 @@ let package = Package(
             path: "Sources/Bonsplit",
             resources: [
                 .process("Resources")
+            ],
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .defaultIsolation(MainActor.self),
+                .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
             ]
         ),
         .testTarget(
             name: "BonsplitTests",
             dependencies: ["Bonsplit"],
-            path: "Tests/BonsplitTests"
+            path: "Tests/BonsplitTests",
+            swiftSettings: [
+                .swiftLanguageMode(.v6),
+                .enableUpcomingFeature("InferIsolatedConformances"),
+                .enableUpcomingFeature("NonisolatedNonsendingByDefault"),
+            ]
         ),
     ],
     swiftLanguageModes: [.v6]

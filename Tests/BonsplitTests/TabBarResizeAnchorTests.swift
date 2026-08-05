@@ -2,8 +2,8 @@ import AppKit
 @testable import Bonsplit
 import XCTest
 
-@MainActor
 final class TabBarResizeAnchorTests: XCTestCase {
+    @MainActor
     func testPendingSelectionReconcilesWhenScrollViewAttaches() throws {
         let harness = try makeGeometryRegistryHarness()
         defer { harness.window.orderOut(nil) }
@@ -16,6 +16,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertGreaterThan(harness.scrollView.contentView.bounds.origin.x, 0)
     }
 
+    @MainActor
     func testProgrammaticRevealSurvivesLaterBoundsOriginRestoration() throws {
         let harness = try makeGeometryRegistryHarness()
         defer { harness.window.orderOut(nil) }
@@ -31,6 +32,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, revealedOffset, accuracy: 0.5)
     }
 
+    @MainActor
     func testLiveUserScrollRelinquishesProgrammaticOffsetOwnership() throws {
         let harness = try makeGeometryRegistryHarness()
         defer { harness.window.orderOut(nil) }
@@ -48,6 +50,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 120, accuracy: 0.5)
     }
 
+    @MainActor
     func testNativeTabBarRevealsNewlySelectedOverflowTab() throws {
         let harness = try makeNativeHarness(width: 320, tabCount: 8, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
@@ -64,6 +67,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertLessThanOrEqual(tabView.frame.maxX, visible.maxX + 0.5)
     }
 
+    @MainActor
     func testNativeTabBarReturnsToLeadingEdgeWhenContentShrinks() throws {
         let harness = try makeNativeHarness(width: 320, tabCount: 8, selectedIndex: 7)
         defer { harness.window.orderOut(nil) }
@@ -77,6 +81,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(tabBar.scrollViewForTesting.contentView.bounds.origin.x, 0, accuracy: 0.5)
     }
 
+    @MainActor
     func testNativeTabBarPreservesValidUserOffsetAcrossResize() throws {
         let harness = try makeNativeHarness(width: 260, tabCount: 10, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
@@ -95,6 +100,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, min(userOffset, resizedMaximum), accuracy: 1)
     }
 
+    @MainActor
     func testSelectedOverflowTabTracksLiveGeometryAndFullyRevealsChrome() throws {
         let harness = try makeNativeHarness(width: 420, tabCount: 3, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
@@ -118,6 +124,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertLessThanOrEqual(selectedFrame.maxX, tabBar.bounds.maxX + 0.5)
     }
 
+    @MainActor
     func testSelectedTabStaysRevealedWhenEarlierTabGrowthMovesItsLiveFrame() throws {
         let harness = try makeNativeHarness(width: 420, tabCount: 4, selectedIndex: 3)
         defer { harness.window.orderOut(nil) }
@@ -134,6 +141,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertLessThanOrEqual(selectedFrame.maxX, tabBar.bounds.maxX + 0.5)
     }
 
+    @MainActor
     func testSelectingTabBehindActionLaneRevealsItsCloseAffordance() throws {
         let harness = try makeNativeHarness(
             width: 520,
@@ -167,6 +175,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertLessThanOrEqual(selectedFrame.maxX, unobscuredMaxX + 0.5)
     }
 
+    @MainActor
     func testViewportResizeKeepsLeadingAnchoredWhenTabStripWasLeadingAligned() throws {
         let harness = try makeNativeHarness(width: 900, tabCount: 8, selectedIndex: 2)
         defer { harness.window.orderOut(nil) }
@@ -178,6 +187,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
     }
 
+    @MainActor
     func testViewportResizeClampsExistingOverflowOffsetToNewRange() throws {
         let harness = try makeNativeHarness(width: 240, tabCount: 8, selectedIndex: 7)
         defer { harness.window.orderOut(nil) }
@@ -196,6 +206,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, resizedMaximum, accuracy: 0.5)
     }
 
+    @MainActor
     func testContentShrinkReturnsFittingStripToLeadingEdge() throws {
         let harness = try makeNativeHarness(width: 360, tabCount: 8, selectedIndex: 0)
         defer { harness.window.orderOut(nil) }
@@ -213,6 +224,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         XCTAssertEqual(scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
     }
 
+    @MainActor
     func testViewportResizeDoesNotUndoLaterValidOffset() async throws {
         let harness = try makeNativeHarness(width: 240, tabCount: 8, selectedIndex: 7)
         defer { harness.window.orderOut(nil) }
@@ -243,6 +255,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         let pane: PaneState
     }
 
+    @MainActor
     private func makeGeometryRegistryHarness() throws -> GeometryRegistryHarness {
         let viewportSize = NSSize(width: 200, height: TabBarMetrics.barHeight)
         let window = NSWindow(
@@ -272,6 +285,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func makeNativeHarness(
         width: CGFloat,
         tabCount: Int,
@@ -312,15 +326,18 @@ final class TabBarResizeAnchorTests: XCTestCase {
         return .init(window: window, viewController: renderer, pane: pane)
     }
 
+    @MainActor
     private func nativeTabBar(in root: NSView) throws -> BonsplitNativeTabBarView {
         try XCTUnwrap(descendants(ofType: BonsplitNativeTabBarView.self, in: root).first)
     }
 
+    @MainActor
     private func visibleFrame(for tabID: UUID, in tabBar: BonsplitNativeTabBarView) throws -> NSRect {
         let tabView = try XCTUnwrap(tabBar.tabViewsForTesting[tabID])
         return tabBar.convert(tabView.bounds, from: tabView)
     }
 
+    @MainActor
     private func maxHorizontalOffset(in scrollView: NSScrollView) -> CGFloat {
         let documentWidth = max(
             scrollView.documentView?.frame.width ?? 0,
@@ -329,6 +346,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         return max(0, documentWidth - scrollView.contentView.bounds.width)
     }
 
+    @MainActor
     private func settleLayout(in window: NSWindow, root: NSView, passes: Int = 12) {
         for _ in 0..<passes {
             window.contentView?.layoutSubtreeIfNeeded()
@@ -337,6 +355,7 @@ final class TabBarResizeAnchorTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
         var matches = (root as? T).map { [$0] } ?? []
         for subview in root.subviews {

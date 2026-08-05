@@ -3,7 +3,7 @@ import Foundation
 import os
 
 #if DEBUG
-enum TabGeometryDebugLog {
+nonisolated enum TabGeometryDebugLog {
     static let isEnabled = ProcessInfo.processInfo.environment["CMUX_TAB_GEOMETRY_LOG"] != nil
 
     private static let sink = OSAllocatedUnfairLock(initialState: TabGeometryDebugLogSink())
@@ -100,7 +100,7 @@ enum TabGeometryDebugLog {
     }
 }
 
-private struct TabGeometryDebugLogSink: Sendable {
+nonisolated private struct TabGeometryDebugLogSink: Sendable {
     private let path = "/tmp/cmux-tab-geometry.log"
     private var handle: FileHandle?
     private var wroteHeader = false
@@ -155,7 +155,7 @@ private struct TabGeometryDebugLogSink: Sendable {
     }
 }
 #else
-enum TabGeometryDebugLog {
+nonisolated enum TabGeometryDebugLog {
     static let isEnabled = false
 
     static func geometry(

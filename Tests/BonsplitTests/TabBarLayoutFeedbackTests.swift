@@ -3,8 +3,8 @@ import AppKit
 import XCTest
 
 #if DEBUG
-@MainActor
 final class TabBarLayoutFeedbackTests: XCTestCase {
+    @MainActor
     func testScrollingManyTabsKeepsPlatformGeometryLive() throws {
         let size = NSSize(width: 420, height: 180)
         let controller = BonsplitController(configuration: .init(appearance: .default))
@@ -59,6 +59,7 @@ final class TabBarLayoutFeedbackTests: XCTestCase {
         XCTAssertEqual(scrolledFrame.minX, initialFrame.minX - maximumOffset, accuracy: 1)
     }
 
+    @MainActor
     private func settleLayout(in window: NSWindow, root: NSView, passes: Int = 8) {
         for _ in 0..<passes {
             window.contentView?.layoutSubtreeIfNeeded()
@@ -67,6 +68,7 @@ final class TabBarLayoutFeedbackTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
         var matches = (root as? T).map { [$0] } ?? []
         for subview in root.subviews {

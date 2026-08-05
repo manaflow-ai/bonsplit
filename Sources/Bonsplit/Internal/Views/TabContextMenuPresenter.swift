@@ -61,7 +61,12 @@ final class TabContextMenu: NSMenu, NSMenuDelegate {
     }
 
     @available(*, unavailable)
-    required init(coder: NSCoder) {
+    nonisolated override init(title: String) {
+        fatalError("Use init(snapshot:forkConversationAvailability:actionTarget:)")
+    }
+
+    @available(*, unavailable)
+    nonisolated required init(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 

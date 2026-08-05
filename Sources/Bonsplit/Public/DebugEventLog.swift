@@ -4,7 +4,7 @@ import os
 
 /// Unified ring-buffer event log for key, mouse, focus, and split events.
 /// Writes every entry to a debug log path so `tail -f` works in real time.
-public final class DebugEventLog: Sendable {
+nonisolated public final class DebugEventLog: Sendable {
     public static let shared = DebugEventLog()
 
     private struct State {
@@ -117,7 +117,7 @@ public final class DebugEventLog: Sendable {
 }
 
 /// Convenience free function. Logs the message and appends to the configured debug log path.
-public func dlog(_ msg: String) {
+nonisolated public func dlog(_ msg: String) {
     DebugEventLog.shared.log(msg)
 }
 #endif

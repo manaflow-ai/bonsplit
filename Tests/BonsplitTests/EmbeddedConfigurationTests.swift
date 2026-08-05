@@ -1,8 +1,8 @@
 import XCTest
 @testable import Bonsplit
 
-@MainActor
 final class EmbeddedConfigurationTests: XCTestCase {
+    @MainActor
     func testEmbeddedBehaviorControlsAreOptIn() {
         let configuration = BonsplitConfiguration()
 
@@ -10,6 +10,7 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(configuration.dividerPositionRange, 0.1...0.9)
     }
 
+    @MainActor
     func testConfiguredDividerRangeAllowsNarrowProgrammaticLayouts() throws {
         let configuration = BonsplitConfiguration(
             allowsTabContextMenu: false,
@@ -37,6 +38,7 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(updated.dividerPosition, 0.98, accuracy: 0.0001)
     }
 
+    @MainActor
     func testDefaultSplitPositionRespectsConfiguredDividerRange() throws {
         let controller = BonsplitController(configuration: BonsplitConfiguration(
             dividerPositionRange: 0.6...0.9
@@ -52,6 +54,7 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(split.dividerPosition, 0.6, accuracy: 0.0001)
     }
 
+    @MainActor
     func testMovingTabSplitRespectsConfiguredDividerRange() throws {
         let controller = BonsplitController(configuration: BonsplitConfiguration(
             dividerPositionRange: 0.6...0.9
@@ -74,6 +77,7 @@ final class EmbeddedConfigurationTests: XCTestCase {
         XCTAssertEqual(split.dividerPosition, 0.6, accuracy: 0.0001)
     }
 
+    @MainActor
     func testDisabledTabMovesRejectBothReorderAndCrossPaneMutation() throws {
         let controller = BonsplitController(configuration: BonsplitConfiguration(
             allowTabReordering: false,

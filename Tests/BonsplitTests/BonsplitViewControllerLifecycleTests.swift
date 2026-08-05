@@ -2,7 +2,6 @@ import AppKit
 @testable import Bonsplit
 import XCTest
 
-@MainActor
 final class BonsplitViewControllerLifecycleTests: XCTestCase {
     private final class UpdatingController: NSViewController, BonsplitContentUpdating {
         private(set) var updates: [(tab: Tab, pane: PaneID)] = []
@@ -16,6 +15,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testKeepAllAliveCreatesEveryTabOnceAndPreservesControllersAcrossSelection() throws {
         let controller = BonsplitController(configuration: .init(contentViewLifecycle: .keepAllAlive))
         let first = try XCTUnwrap(controller.createTab(title: "First"))
@@ -46,6 +46,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testRecreateOnSwitchOnlyCreatesSelectedContentAndRecreatesItOnReturn() throws {
         let controller = BonsplitController(configuration: .init(contentViewLifecycle: .recreateOnSwitch))
         let first = try XCTUnwrap(controller.createTab(title: "First"))
@@ -73,6 +74,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testCachedControllerReceivesMetadataAndPaneUpdates() throws {
         let controller = BonsplitController(configuration: .init(contentViewLifecycle: .keepAllAlive))
         let tabID = try XCTUnwrap(controller.createTab(title: "Original"))
@@ -95,6 +97,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testRefreshContentUpdatesCachedControllerWithoutRecreation() throws {
         let controller = BonsplitController(configuration: .init(contentViewLifecycle: .keepAllAlive))
         let tabID = try XCTUnwrap(controller.createTab(title: "Content"))
@@ -118,6 +121,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     func testReloadAndProviderReplacementInvalidateContentAndEmptyControllerCaches() throws {
         let controller = BonsplitController()
         let welcome = try XCTUnwrap(controller.allTabIds.first)
@@ -171,6 +175,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func withRenderer(
         controller: BonsplitController,
         content: @escaping BonsplitViewController.ContentProvider,
@@ -182,6 +187,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         }
     }
 
+    @MainActor
     private func withMountedRenderer(
         _ renderer: BonsplitViewController,
         body: (NSWindow) throws -> Void
@@ -201,6 +207,7 @@ final class BonsplitViewControllerLifecycleTests: XCTestCase {
         try body(window)
     }
 
+    @MainActor
     private func settle(renderer: BonsplitViewController, window: NSWindow, passes: Int = 8) {
         for _ in 0..<passes {
             window.contentView?.layoutSubtreeIfNeeded()

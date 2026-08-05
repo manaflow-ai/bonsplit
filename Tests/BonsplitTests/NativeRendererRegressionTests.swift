@@ -6,7 +6,6 @@ import os
 
 @testable import Bonsplit
 
-@MainActor
 final class NativeRendererRegressionTests: XCTestCase {
   private final class NewTabRequestSpy: BonsplitDelegate {
     var requestedKind: String?
@@ -60,6 +59,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testNoopTabUpdateDoesNotInvalidateObservedTabMetadata() {
     let controller = BonsplitController()
     let tabID = controller.createTab(
@@ -100,6 +100,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     XCTAssertFalse(invalidated.value)
   }
 
+  @MainActor
   func testDoubleClickingEmptyTrailingTabBarSpaceRequestsNewTerminalTab() throws {
     let controller = BonsplitController()
     let spy = NewTabRequestSpy()
@@ -121,6 +122,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     XCTAssertEqual(spy.requestedPane, pane.id)
   }
 
+  @MainActor
   func testEmptyTrailingTabBarSpaceDoesNotRequestNewTerminalWhenButtonHidden() throws {
     let controller = BonsplitController(
       configuration: .init(
@@ -144,6 +146,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     XCTAssertNil(spy.requestedPane)
   }
 
+  @MainActor
   func testTrailingTabBarChromeRoutesTabDropsAcrossFullWidth() throws {
     let controller = BonsplitController(
       configuration: .init(
@@ -168,6 +171,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testShortConfiguredTabKeepsCompactChromeWithExpandedHitSlop() throws {
     let appearance = BonsplitConfiguration.Appearance(
       tabMinWidth: 140,
@@ -195,6 +199,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testPaneDropOverlayDoesNotResizeHostedContentDuringHover() throws {
     let controller = BonsplitController()
     let probe = LayoutProbeView()
@@ -225,6 +230,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testSyncRestoresDividerThatDriftedOutsideConfiguredRange() throws {
     let controller = BonsplitController(
       configuration: .init(
@@ -258,6 +264,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testReimposingSameExtentAfterContainerResizeRetargetsExactly() throws {
     let (controller, splitID) = try makeImposedSplitController()
     try withRenderer(controller: controller, size: NSSize(width: 400, height: 300)) {
@@ -288,6 +295,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testImposeDuringDragSessionDefersUntilSessionEnds() throws {
     let (controller, splitID) = try makeImposedSplitController()
     try withRenderer(controller: controller, size: NSSize(width: 400, height: 300)) {
@@ -308,6 +316,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testImposedExtentReappliesAfterContainerResizeWithoutFreshImposition() throws {
     let (controller, splitID) = try makeImposedSplitController()
     try withRenderer(controller: controller, size: NSSize(width: 400, height: 300)) {
@@ -328,6 +337,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testTranslucentSplitWrappersStayClear() throws {
     let controller = BonsplitController(
       configuration: .init(
@@ -352,6 +362,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testNativeTabChromePreservesStatusControlsAndLocalizedAccessibility() throws {
     let controller = BonsplitController(
       configuration: .init(
@@ -395,6 +406,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testNativeShortcutHintUsesConfiguredModifierWithoutChangingTabWidth() throws {
     let defaults = UserDefaults.standard
     let key = TabControlShortcutHintDebugSettings.alwaysShowKey
@@ -424,6 +436,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testSplitButtonsHonorHoverPolicyAndMouseDownActivation() throws {
     let action = BonsplitConfiguration.SplitActionButton(
       id: "instant",
@@ -470,6 +483,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testAdjacentTerminalDropTreatsSharedEdgeAsMoveAndOuterEdgeAsSplit() throws {
     let controller = BonsplitController()
     let sourcePane = try XCTUnwrap(controller.focusedPaneId)
@@ -495,6 +509,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   func testNativeSplitConsumesEntryAnimationAndSettlesAtConfiguredRatio() throws {
     var configuration = BonsplitConfiguration()
     configuration.appearance.minimumPaneWidth = 1
@@ -524,6 +539,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   private func makeImposedSplitController() throws -> (BonsplitController, UUID) {
     var configuration = BonsplitConfiguration()
     configuration.appearance.minimumPaneWidth = 1
@@ -547,6 +563,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     return (controller, splitID)
   }
 
+  @MainActor
   private func withRenderer<T>(
     controller: BonsplitController,
     size: NSSize,
@@ -574,6 +591,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     return try body(renderer.view, window, renderer)
   }
 
+  @MainActor
   private func settle(window: NSWindow, root: NSView, passes: Int = 6) {
     for _ in 0..<passes {
       window.contentView?.layoutSubtreeIfNeeded()
@@ -582,6 +600,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     }
   }
 
+  @MainActor
   private func firstDescendant<T: NSView>(ofType type: T.Type, in root: NSView) -> T? {
     if let match = root as? T { return match }
     for child in root.subviews {
@@ -590,6 +609,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     return nil
   }
 
+  @MainActor
   private func descendants<T: NSView>(ofType type: T.Type, in root: NSView) -> [T] {
     var matches: [T] = []
     if let match = root as? T { matches.append(match) }
@@ -599,6 +619,7 @@ final class NativeRendererRegressionTests: XCTestCase {
     return matches
   }
 
+  @MainActor
   private func makeMouseEvent(
     type: NSEvent.EventType,
     in view: NSView,
