@@ -1008,18 +1008,13 @@ struct TabBarView: View {
             geometryRegistry: tabItemGeometryRegistry,
             tabIds: tabIds,
             onBeginTabDrag: { tabId, sourceView, event, draggingFrame, dragImage in
-                guard let tab = pane.tabs.first(where: { $0.id == tabId }),
-                      let pasteboardItem = splitViewController.makeTabDragPasteboardItem(
-                          for: tab,
-                          from: pane.id
-                      ) else {
+                guard let tab = pane.tabs.first(where: { $0.id == tabId }) else {
                     return false
                 }
                 dropTargetIndex = nil
                 return splitViewController.beginNativeTabDrag(
                     tab,
                     from: pane.id,
-                    pasteboardItem: pasteboardItem,
                     sourceView: sourceView,
                     event: event,
                     draggingFrame: draggingFrame,

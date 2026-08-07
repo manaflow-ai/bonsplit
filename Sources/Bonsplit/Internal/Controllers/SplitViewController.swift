@@ -33,6 +33,9 @@ final class SplitViewController {
     /// Native sources stay alive independently of SwiftUI tab/view teardown.
     @ObservationIgnored var nativeTabDragSources: [Int: TabDragSessionSource] = [:]
 
+    /// Process-local capability store shared by tab-drag sources and destinations.
+    @ObservationIgnored let tabDragTransferRegistry: TabDragTransferRegistry
+
     /// When false, drop delegates reject all drags and NSViews are hidden.
     /// Mirrors BonsplitController.isInteractive. Must be observable so
     /// updateNSView is called to toggle isHidden on the AppKit containers.
@@ -95,7 +98,15 @@ final class SplitViewController {
         }
     }
 
-    init(rootNode: SplitNode? = nil) {
+    convenience init(rootNode: SplitNode? = nil) {
+        self.init(
+            rootNode: rootNode,
+            tabDragTransferRegistry: .process
+        )
+    }
+
+    init(rootNode: SplitNode? = nil, tabDragTransferRegistry: TabDragTransferRegistry) {
+        self.tabDragTransferRegistry = tabDragTransferRegistry
         let resolvedRoot: SplitNode
         let initialFocusedPaneId: PaneID?
         if let rootNode {
