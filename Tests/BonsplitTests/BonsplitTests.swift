@@ -1736,7 +1736,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testAppResignClearsTabDragLifecycle() async {
+    func testAppResignClearsTabDragLifecycleSynchronously() {
         let controller = SplitViewController()
         let pane = controller.focusedPane!
         let tab = pane.selectedTab!
@@ -1752,7 +1752,6 @@ final class BonsplitTests: XCTestCase {
             name: NSApplication.didResignActiveNotification,
             object: nil
         )
-        await Task.yield()
 
         XCTAssertNil(
             controller.tabDragSession,
