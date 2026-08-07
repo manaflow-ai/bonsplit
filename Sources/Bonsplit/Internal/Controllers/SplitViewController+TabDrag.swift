@@ -1,6 +1,5 @@
 import AppKit
 import Foundation
-import UniformTypeIdentifiers
 
 extension SplitViewController {
     @discardableResult
@@ -31,7 +30,6 @@ extension SplitViewController {
     func beginNativeTabDrag(
         _ tab: TabItem,
         from paneId: PaneID,
-        pasteboardItem: NSPasteboardItem,
         sourceView: NSView,
         event: NSEvent,
         draggingFrame: NSRect,
@@ -40,11 +38,20 @@ extension SplitViewController {
 #if DEBUG
         NSLog("[Bonsplit Drag] begin native session for tab: \(tab.title)")
 #endif
+        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
+        guard let registration = tabDragTransferRegistry.register(transfer) else {
+            return false
+        }
         let generation = beginTabDrag(tab, from: paneId)
-        let source = TabDragSessionSource(generation: generation, controller: self)
+        let source = TabDragSessionSource(
+            generation: generation,
+            transferToken: registration.token,
+            transferRegistry: tabDragTransferRegistry,
+            controller: self
+        )
         nativeTabDragSources[generation] = source
 
-        let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
+        let draggingItem = NSDraggingItem(pasteboardWriter: registration.pasteboardItem)
         draggingItem.setDraggingFrame(draggingFrame, contents: dragImage)
         sourceView.beginDraggingSession(
             with: [draggingItem],
@@ -52,14 +59,6 @@ extension SplitViewController {
             source: source
         )
         return true
-    }
-
-    func makeTabDragPasteboardItem(for tab: TabItem, from paneId: PaneID) -> NSPasteboardItem? {
-        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
-        guard let data = try? JSONEncoder().encode(transfer) else { return nil }
-        let item = NSPasteboardItem()
-        item.setData(data, forType: NSPasteboard.PasteboardType(UTType.tabTransfer.identifier))
-        return item
     }
 
     func nativeTabDragSessionDidEnd(generation: Int) {

@@ -477,8 +477,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         }
 
         if info.hasItemsConforming(to: [.tabTransfer]) {
-            guard let transfer = decodeTransfer(from: info),
-                  transfer.isFromCurrentProcess,
+            guard let transfer = resolveTransfer(),
                   let destination = destination(for: zone) else {
                 return false
             }
@@ -589,9 +588,8 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             // Local tab drags use in-memory state and are always same-process.
             return true
         } else if hasTabTransfer {
-            // External drags (another Bonsplit controller) must include a payload from this process.
-            guard let transfer = decodeTransfer(from: info),
-                  transfer.isFromCurrentProcess else {
+            // External drags must present a capability owned by a live source in this process.
+            guard resolveTransfer() != nil else {
                 return false
             }
         }
@@ -743,24 +741,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         !fileURLs(from: pasteboard).isEmpty
     }
 
-    private func decodeTransfer(from string: String) -> TabTransferData? {
-        guard let data = string.data(using: .utf8),
-              let transfer = try? JSONDecoder().decode(TabTransferData.self, from: data) else {
-            return nil
-        }
-        return transfer
-    }
-
-    private func decodeTransfer(from info: DropInfo) -> TabTransferData? {
-        let pasteboard = NSPasteboard(name: .drag)
-        let type = NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)
-        if let data = pasteboard.data(forType: type),
-           let transfer = try? JSONDecoder().decode(TabTransferData.self, from: data) {
-            return transfer
-        }
-        if let raw = pasteboard.string(forType: type) {
-            return decodeTransfer(from: raw)
-        }
-        return nil
+    private func resolveTransfer() -> TabTransferData? {
+        controller.tabDragTransferRegistry.resolve(from: NSPasteboard(name: .drag))
     }
 }

@@ -119,6 +119,21 @@ public final class BonsplitController {
     public init(configuration: BonsplitConfiguration = .default) {
         self.configuration = configuration
         self.internalController = SplitViewController()
+        configureInternalController()
+    }
+
+    init(
+        configuration: BonsplitConfiguration = .default,
+        tabDragTransferRegistry: TabDragTransferRegistry
+    ) {
+        self.configuration = configuration
+        self.internalController = SplitViewController(
+            tabDragTransferRegistry: tabDragTransferRegistry
+        )
+        configureInternalController()
+    }
+
+    private func configureInternalController() {
         internalController.publicController = self
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }
