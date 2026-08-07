@@ -1759,6 +1759,21 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testNativeTabDragPasteboardDoesNotExposeSerializedTabMetadata() throws {
+        let controller = SplitViewController()
+        let pane = try XCTUnwrap(controller.focusedPane)
+        let tab = try XCTUnwrap(pane.selectedTab)
+        let item = try XCTUnwrap(
+            controller.makeTabDragPasteboardItem(for: tab, from: pane.id)
+        )
+        let data = try XCTUnwrap(
+            item.data(forType: NSPasteboard.PasteboardType(UTType.tabTransfer.identifier))
+        )
+
+        XCTAssertThrowsError(try JSONDecoder().decode(TabTransferData.self, from: data))
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!
