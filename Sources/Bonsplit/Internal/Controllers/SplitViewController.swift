@@ -22,22 +22,16 @@ final class SplitViewController {
     /// Currently focused pane ID
     var focusedPaneId: PaneID?
 
-    /// Tab currently being dragged (for visual feedback and hit-testing).
-    /// This is @Observable so SwiftUI views react (e.g. allowsHitTesting).
-    var draggingTab: TabItem?
+    /// The only tab-drag state. SwiftUI observes this for visual feedback and
+    /// hit-testing while drop delegates read the same value synchronously.
+    var tabDragSession: TabDragSession?
 
-    /// Monotonic counter incremented on each drag start. Used to invalidate stale
-    /// timeout timers that would otherwise cancel a new drag of the same tab.
+    /// Monotonic counter incremented on each drag start. The current value is
+    /// copied into ``tabDragSession`` to invalidate stale lifecycle callbacks.
     var dragGeneration: Int = 0
 
-    /// Source pane of the dragging tab
-    var dragSourcePaneId: PaneID?
-
-    /// Non-observable drag session state. Drop delegates read these instead of the
-    /// @Observable properties above, because SwiftUI batches observable updates and
-    /// createItemProvider's writes may not be visible to validateDrop/performDrop yet.
-    @ObservationIgnored var activeDragTab: TabItem?
-    @ObservationIgnored var activeDragSourcePaneId: PaneID?
+    /// Controller-owned ground-truth cleanup for cancelled drags.
+    @ObservationIgnored var tabDragLifecycleMonitor: TabDragLifecycleMonitor?
 
     /// When false, drop delegates reject all drags and NSViews are hidden.
     /// Mirrors BonsplitController.isInteractive. Must be observable so
