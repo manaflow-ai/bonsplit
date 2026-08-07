@@ -42,7 +42,13 @@ struct TabBarDropHandler {
             guard let transfer = Self.decodeTransfer(from: pasteboard), transfer.isFromCurrentProcess else {
                 return []
             }
-            return permitsTabMove(from: PaneID(id: transfer.sourcePaneId)) ? .move : []
+            let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+            guard sourcePaneId != pane.id,
+                  bonsplitController.configuration.allowCrossPaneTabMove,
+                  bonsplitController.onExternalTabDrop != nil else {
+                return []
+            }
+            return .move
         }
 
         return []

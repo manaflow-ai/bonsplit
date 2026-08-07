@@ -4,6 +4,7 @@ import Testing
 
 @Suite("Horizontal tab strip drop index")
 struct TabDropIndexResolverTests {
+    private let resolver = TabDropIndexResolver()
     private let bounds = CGRect(x: 0, y: 0, width: 360, height: 34)
     private let tabFrames = [
         CGRect(x: 12, y: 0, width: 80, height: 34),
@@ -35,14 +36,14 @@ struct TabDropIndexResolverTests {
         let translatedFrames = tabFrames.map { $0.offsetBy(dx: 500, dy: 120) }
 
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 596, y: 137),
                 in: translatedBounds,
                 tabFrames: translatedFrames
             ) == 1
         )
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 724, y: 137),
                 in: translatedBounds,
                 tabFrames: translatedFrames
@@ -55,7 +56,7 @@ struct TabDropIndexResolverTests {
         #expect(insertionIndex(x: -1) == nil)
         #expect(insertionIndex(x: 361) == nil)
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 96, y: 35),
                 in: bounds,
                 tabFrames: tabFrames
@@ -66,7 +67,7 @@ struct TabDropIndexResolverTests {
     @Test("An empty strip accepts its only insertion slot")
     func emptyStripUsesZeroIndex() {
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 180, y: 17),
                 in: bounds,
                 tabFrames: []
@@ -82,7 +83,7 @@ struct TabDropIndexResolverTests {
         ]
 
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 120, y: bounds.midY),
                 in: bounds,
                 indexedTabFrames: indexedFrames,
@@ -90,7 +91,7 @@ struct TabDropIndexResolverTests {
             ) == 1
         )
         #expect(
-            TabDropIndexResolver.insertionIndex(
+            resolver.insertionIndex(
                 at: CGPoint(x: 280, y: bounds.midY),
                 in: bounds,
                 indexedTabFrames: indexedFrames,
@@ -99,8 +100,25 @@ struct TabDropIndexResolverTests {
         )
     }
 
+    @Test("Registered frames must stay in model and visual order")
+    func rejectsUnorderedIndexedFrames() {
+        let unorderedFrames = [
+            TabDropIndexResolver.IndexedFrame(index: 1, frame: tabFrames[1]),
+            TabDropIndexResolver.IndexedFrame(index: 0, frame: tabFrames[0]),
+        ]
+
+        #expect(
+            resolver.insertionIndex(
+                at: CGPoint(x: 120, y: bounds.midY),
+                in: bounds,
+                indexedTabFrames: unorderedFrames,
+                tabCount: tabFrames.count
+            ) == nil
+        )
+    }
+
     private func insertionIndex(x: CGFloat) -> Int? {
-        TabDropIndexResolver.insertionIndex(
+        resolver.insertionIndex(
             at: CGPoint(x: x, y: bounds.midY),
             in: bounds,
             tabFrames: tabFrames

@@ -128,6 +128,31 @@ final class TabBarDropHandlerTests: XCTestCase {
         XCTAssertEqual(makeHandler(harness).operation(for: emptyPasteboard), [])
     }
 
+    func testPasteboardOnlySamePaneTransferIsRejected() throws {
+        let harness = try makeHarness()
+        let pasteboard = try makePasteboard(for: harness.pane.tabs[1], in: harness)
+        let handler = makeHandler(harness)
+
+        XCTAssertEqual(handler.operation(for: pasteboard), [])
+        XCTAssertFalse(handler.performDrop(from: pasteboard, at: 3))
+    }
+
+    func testPasteboardOnlyCrossPaneTransferRequiresExternalHandler() throws {
+        let harness = try makeHarness()
+        let sourcePane = harness.pane
+        let targetPaneId = try XCTUnwrap(
+            harness.controller.splitPane(sourcePane.id, orientation: .vertical)
+        )
+        let targetPane = try XCTUnwrap(
+            harness.controller.internalController.paneState(for: targetPaneId)
+        )
+        let pasteboard = try makePasteboard(for: sourcePane.tabs[1], sourcePane: sourcePane)
+        let handler = makeHandler(controller: harness.controller, pane: targetPane)
+
+        XCTAssertEqual(handler.operation(for: pasteboard), [])
+        XCTAssertFalse(handler.performDrop(from: pasteboard, at: 0))
+    }
+
     func testDestinationCapturesOnlyCompatibleDragEvents() {
         XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
             eventType: .leftMouseDragged,

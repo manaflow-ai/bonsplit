@@ -9,9 +9,11 @@ final class TabBarDropDestinationNSView: NSView {
     weak var geometryRegistry: TabBarItemGeometryRegistry?
     var onIndicatorIndexChanged: ((Int?) -> Void)?
 
+    private let dropIndexResolver: TabDropIndexResolver
     private var presentedIndicatorIndex: Int?
 
     override init(frame frameRect: NSRect) {
+        dropIndexResolver = TabDropIndexResolver()
         super.init(frame: frameRect)
         registerForDraggedTypes([
             TabBarDropHandler.tabTransferPasteboardType,
@@ -119,7 +121,7 @@ final class TabBarDropDestinationNSView: NSView {
             guard let frame = geometryRegistry.frame(for: tab.id, in: self) else { return nil }
             return TabDropIndexResolver.IndexedFrame(index: index, frame: frame)
         }
-        return TabDropIndexResolver.insertionIndex(
+        return dropIndexResolver.insertionIndex(
             at: convert(sender.draggingLocation, from: nil),
             in: bounds,
             indexedTabFrames: indexedFrames,
