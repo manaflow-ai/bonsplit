@@ -12,7 +12,7 @@ struct TabBarDropHandler {
     let splitViewController: SplitViewController
 
     var hasLiveTabDrag: Bool {
-        liveDragSourcePaneId != nil
+        splitViewController.tabDragSession != nil
     }
 
     func operation(for pasteboard: NSPasteboard) -> NSDragOperation {
@@ -98,18 +98,15 @@ struct TabBarDropHandler {
     }
 
     private var liveDragSourcePaneId: PaneID? {
-        guard splitViewController.activeDragTab != nil || splitViewController.draggingTab != nil else {
-            return nil
-        }
-        return splitViewController.activeDragSourcePaneId ?? splitViewController.dragSourcePaneId
+        splitViewController.tabDragSession?.sourcePaneId
     }
 
     private var liveSamePaneSourceIndex: Int? {
-        guard let draggedTab = splitViewController.activeDragTab ?? splitViewController.draggingTab,
-              liveDragSourcePaneId == pane.id else {
+        guard let dragSession = splitViewController.tabDragSession,
+              dragSession.sourcePaneId == pane.id else {
             return nil
         }
-        return pane.tabs.firstIndex(where: { $0.id == draggedTab.id })
+        return pane.tabs.firstIndex(where: { $0.id == dragSession.tab.id })
     }
 
     private func permitsTabMove(from sourcePaneId: PaneID) -> Bool {
@@ -119,10 +116,11 @@ struct TabBarDropHandler {
     }
 
     private func performTabDrop(from pasteboard: NSPasteboard, at targetIndex: Int) -> Bool {
-        if let draggedTab = splitViewController.activeDragTab ?? splitViewController.draggingTab,
-           let sourcePaneId = liveDragSourcePaneId {
+        if let dragSession = splitViewController.tabDragSession {
             defer { splitViewController.clearTabDragState() }
 
+            let draggedTab = dragSession.tab
+            let sourcePaneId = dragSession.sourcePaneId
             if sourcePaneId == pane.id,
                let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }),
                Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) {

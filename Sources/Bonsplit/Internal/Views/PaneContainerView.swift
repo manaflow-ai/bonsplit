@@ -165,7 +165,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     }
 
     private var isTabDragActive: Bool {
-        controller.draggingTab != nil || controller.activeDragTab != nil
+        controller.tabDragSession != nil
     }
 
     var body: some View {
@@ -183,12 +183,11 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
-        .onChange(of: controller.draggingTab) { _, newValue in
+        .onChange(of: controller.tabDragSession?.generation) { _, newValue in
 #if DEBUG
             dlog(
                 "pane.dragState pane=\(pane.id.id.uuidString.prefix(5)) " +
-                "draggingTab=\(newValue != nil ? 1 : 0) " +
-                "activeDragTab=\(controller.activeDragTab != nil ? 1 : 0) " +
+                "tabDragSession=\(newValue != nil ? 1 : 0) " +
                 "dropHit=\(isTabDragActive ? 1 : 0)"
             )
 #endif
@@ -356,13 +355,12 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         guard !shouldHandleFileDrop(info, zone: defaultZone) else {
             return defaultZone
         }
-        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
-              let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
+        guard let dragSession = controller.tabDragSession else {
             return defaultZone
         }
         guard let adjacentPaneMoveZone = adjacentPaneMoveZone(
-            for: draggedTab,
-            sourcePaneId: sourcePaneId,
+            for: dragSession.tab,
+            sourcePaneId: dragSession.sourcePaneId,
             defaultZone: defaultZone
         ) else {
             return defaultZone
@@ -403,9 +401,8 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 #if DEBUG
         dlog(
             "pane.drop pane=\(pane.id.id.uuidString.prefix(5)) zone=\(zone) " +
-            "source=\(controller.dragSourcePaneId?.id.uuidString.prefix(5) ?? "nil") " +
-            "hasDrag=\(controller.draggingTab != nil ? 1 : 0) " +
-            "hasActive=\(controller.activeDragTab != nil ? 1 : 0)"
+            "source=\(controller.tabDragSession?.sourcePaneId.id.uuidString.prefix(5) ?? "nil") " +
+            "hasDrag=\(controller.tabDragSession != nil ? 1 : 0)"
         )
 #endif
 
@@ -429,22 +426,19 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         }
         guard !hasTabTransfer || tabTransferPermitted else { return false }
 
-        // Read from non-observable drag state. @Observable writes from createItemProvider
-        // may not have propagated yet when performDrop runs.
+        // Read the controller's single drag session synchronously; SwiftUI view
+        // invalidation may be deferred, but the model write is immediately visible.
         if Self.shouldUseLocalTabDrag(
             hasTabTransfer: hasTabTransfer,
             hasFileURL: hasFileURL,
-            hasLocalTabDrag: controller.activeDragTab != nil || controller.draggingTab != nil
+            hasLocalTabDrag: controller.tabDragSession != nil
         ),
-           let draggedTab = controller.activeDragTab ?? controller.draggingTab,
-           let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId {
-            // Clear both observable and non-observable drag state.
+           let dragSession = controller.tabDragSession {
+            let draggedTab = dragSession.tab
+            let sourcePaneId = dragSession.sourcePaneId
             dropLifecycle = .idle
             activeDropZone = nil
-            controller.draggingTab = nil
-            controller.dragSourcePaneId = nil
-            controller.activeDragTab = nil
-            controller.activeDragSourcePaneId = nil
+            controller.clearTabDragState()
 
             if zone == .center {
                 if sourcePaneId != pane.id {
@@ -518,8 +512,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 #if DEBUG
         dlog(
             "pane.dropEntered pane=\(pane.id.id.uuidString.prefix(5)) zone=\(zone) " +
-            "hasDrag=\(controller.draggingTab != nil ? 1 : 0) " +
-            "hasActive=\(controller.activeDragTab != nil ? 1 : 0)"
+            "hasDrag=\(controller.tabDragSession != nil ? 1 : 0)"
         )
 #endif
     }
@@ -592,7 +585,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             }
         } else if !tabTransferPermitted {
             return false
-        } else if controller.activeDragTab != nil || controller.draggingTab != nil {
+        } else if controller.tabDragSession != nil {
             // Local tab drags use in-memory state and are always same-process.
             return true
         } else if hasTabTransfer {
@@ -603,12 +596,11 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             }
         }
 #if DEBUG
-        let hasDrag = controller.draggingTab != nil
-        let hasActive = controller.activeDragTab != nil
+        let hasDrag = controller.tabDragSession != nil
         dlog(
             "pane.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) " +
             "hasTab=\(hasTabTransfer ? 1 : 0) hasFile=\(hasFileURL ? 1 : 0) " +
-            "hasDrag=\(hasDrag ? 1 : 0) hasActive=\(hasActive ? 1 : 0)"
+            "hasDrag=\(hasDrag ? 1 : 0)"
         )
 #endif
         return true
@@ -677,7 +669,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
     private func permitsTabTransfer(hasTabTransfer: Bool, zone: DropZone) -> Bool {
         guard hasTabTransfer else { return false }
-        let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId
+        let sourcePaneId = controller.tabDragSession?.sourcePaneId
         if zone == .center, sourcePaneId == pane.id {
             return true
         }

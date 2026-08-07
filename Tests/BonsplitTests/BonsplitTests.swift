@@ -1695,17 +1695,13 @@ final class BonsplitTests: XCTestCase {
         let generation = controller.beginTabDrag(tab, from: pane.id)
 
         XCTAssertEqual(controller.dragGeneration, generation)
-        XCTAssertEqual(controller.draggingTab?.id, tab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, pane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, tab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, tab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, generation)
 
         controller.cancelTabDragIfGenerationMatches(generation)
 
-        XCTAssertNil(controller.draggingTab)
-        XCTAssertNil(controller.dragSourcePaneId)
-        XCTAssertNil(controller.activeDragTab)
-        XCTAssertNil(controller.activeDragSourcePaneId)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
@@ -1734,10 +1730,34 @@ final class BonsplitTests: XCTestCase {
         controller.cancelTabDragIfGenerationMatches(staleGeneration)
 
         XCTAssertEqual(controller.dragGeneration, currentGeneration)
-        XCTAssertEqual(controller.draggingTab?.id, secondTab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, secondPane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, secondTab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, secondTab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, currentGeneration)
+    }
+
+    @MainActor
+    func testAppResignClearsTabDragLifecycle() async {
+        let controller = SplitViewController()
+        let pane = controller.focusedPane!
+        let tab = pane.selectedTab!
+
+        _ = controller.makeTabDragItemProvider(
+            for: tab,
+            from: pane.id,
+            clearDropState: {}
+        )
+        XCTAssertNotNil(controller.tabDragSession)
+
+        NotificationCenter.default.post(
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        await Task.yield()
+
+        XCTAssertNil(
+            controller.tabDragSession,
+            "A tab drag must not keep pane hit-testing disabled after the app resigns active."
+        )
     }
 
     @MainActor

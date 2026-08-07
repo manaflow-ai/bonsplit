@@ -827,7 +827,7 @@ struct TabBarView: View {
 
     /// Whether this tab bar should show full saturation (focused or drag source)
     private var shouldShowFullSaturation: Bool {
-        isFocused || splitViewController.dragSourcePaneId == pane.id
+        isFocused || splitViewController.tabDragSession?.sourcePaneId == pane.id
     }
 
     private var tabBarSaturation: Double {
@@ -1164,12 +1164,11 @@ struct TabBarView: View {
             }
         }
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
-        .onChange(of: splitViewController.draggingTab) { _, newValue in
+        .onChange(of: splitViewController.tabDragSession?.generation) { _, newValue in
 #if DEBUG
             dlog(
                 "tab.dragState pane=\(pane.id.id.uuidString.prefix(5)) " +
-                "draggingTab=\(newValue != nil ? 1 : 0) " +
-                "activeDragTab=\(splitViewController.activeDragTab != nil ? 1 : 0)"
+                "tabDragSession=\(newValue != nil ? 1 : 0)"
             )
 #endif
             if newValue == nil {

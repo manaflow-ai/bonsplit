@@ -8,29 +8,30 @@ extension SplitViewController {
 #if DEBUG
         dlog("tab.dragStart pane=\(paneId.id.uuidString.prefix(5)) tab=\(tab.id.uuidString.prefix(5)) title=\"\(tab.title)\"")
 #endif
+        clearTabDragState()
         dragGeneration += 1
-        draggingTab = tab
-        dragSourcePaneId = paneId
-        activeDragTab = tab
-        activeDragSourcePaneId = paneId
+        let session = TabDragSession(tab: tab, sourcePaneId: paneId, generation: dragGeneration)
+        tabDragSession = session
+        let monitor = TabDragLifecycleMonitor(generation: session.generation) { [weak self] generation in
+            self?.cancelTabDragIfGenerationMatches(generation)
+        }
+        tabDragLifecycleMonitor = monitor
+        monitor.start()
         return dragGeneration
     }
 
     func clearTabDragState() {
-        draggingTab = nil
-        dragSourcePaneId = nil
-        activeDragTab = nil
-        activeDragSourcePaneId = nil
+        tabDragLifecycleMonitor?.stop()
+        tabDragLifecycleMonitor = nil
+        tabDragSession = nil
     }
 
     func cancelTabDragIfGenerationMatches(_ generation: Int) {
-        guard dragGeneration == generation else { return }
-        if draggingTab != nil || activeDragTab != nil {
+        guard tabDragSession?.generation == generation else { return }
 #if DEBUG
-            dlog("tab.dragCancel (stale draggingTab cleared)")
+        dlog("tab.dragCancel (stale tabDragSession cleared)")
 #endif
-            clearTabDragState()
-        }
+        clearTabDragState()
     }
 
     func makeTabDragItemProvider(
@@ -42,8 +43,7 @@ extension SplitViewController {
         NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
 #endif
         clearDropState()
-        let dragGeneration = beginTabDrag(tab, from: paneId)
-        installCancelledTabDragCleanup(forGeneration: dragGeneration)
+        _ = beginTabDrag(tab, from: paneId)
 
         let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
         if let data = try? JSONEncoder().encode(transfer) {
@@ -66,19 +66,4 @@ extension SplitViewController {
         return NSItemProvider()
     }
 
-    private func installCancelledTabDragCleanup(forGeneration generation: Int) {
-        var monitorRef: Any?
-        monitorRef = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            // One-shot: remove ourselves AND nil the capture box, or the cycle
-            // monitor -> closure -> box -> monitor leaks one monitor per drag.
-            if let m = monitorRef {
-                NSEvent.removeMonitor(m)
-                monitorRef = nil
-            }
-            DispatchQueue.main.async {
-                self?.cancelTabDragIfGenerationMatches(generation)
-            }
-            return event
-        }
-    }
 }

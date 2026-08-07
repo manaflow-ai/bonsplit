@@ -86,8 +86,11 @@ final class TabBarDropDestinationNSView: NSView {
         }
         guard let eventType else { return true }
         switch eventType {
+        case .leftMouseUp:
+            // The drag pasteboard retains types after a drag ends. A normal click's
+            // mouse-up may only be captured while the controller owns a live session.
+            return hasLocalTabDrag
         case .leftMouseDragged,
-             .leftMouseUp,
              .mouseMoved,
              .cursorUpdate,
              .periodic,

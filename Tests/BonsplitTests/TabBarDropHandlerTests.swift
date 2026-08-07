@@ -168,6 +168,15 @@ final class TabBarDropHandlerTests: XCTestCase {
             eventType: .leftMouseDragged,
             pasteboardTypes: nil
         ))
+        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseUp,
+            pasteboardTypes: [TabBarDropHandler.tabTransferPasteboardType]
+        ))
+        XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseUp,
+            pasteboardTypes: [TabBarDropHandler.tabTransferPasteboardType],
+            hasLocalTabDrag: true
+        ))
     }
 
     func testTranslatedDestinationHitTestsInSuperviewCoordinates() throws {
