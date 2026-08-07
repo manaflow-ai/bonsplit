@@ -1,18 +1,41 @@
 import AppKit
 
 /// Ground-truth exits for a tab drag that never reaches a SwiftUI drop callback.
-/// Event callbacks enqueue cancellation after returning so AppKit can finish
-/// delivering a real drop first; the session generation rejects stale callbacks.
+/// AppKit delivers event-monitor callbacks on the main thread, so one synchronous
+/// bridge ends the matching generation without a deferred cleanup race.
 @MainActor
 final class TabDragLifecycleMonitor {
+    private struct Registrations {
+        var appResignObserver: (any NSObjectProtocol)?
+        var keyDownMonitor: Any?
+        var localMouseUpMonitor: Any?
+        var globalMouseUpMonitor: Any?
+
+        mutating func removeAll() {
+            if let appResignObserver {
+                NotificationCenter.default.removeObserver(appResignObserver)
+                self.appResignObserver = nil
+            }
+            if let keyDownMonitor {
+                NSEvent.removeMonitor(keyDownMonitor)
+                self.keyDownMonitor = nil
+            }
+            if let localMouseUpMonitor {
+                NSEvent.removeMonitor(localMouseUpMonitor)
+                self.localMouseUpMonitor = nil
+            }
+            if let globalMouseUpMonitor {
+                NSEvent.removeMonitor(globalMouseUpMonitor)
+                self.globalMouseUpMonitor = nil
+            }
+        }
+    }
+
     private static let escapeKeyCode: UInt16 = 53
 
     private let generation: Int
     private let onRequestEnd: @MainActor (Int) -> Void
-    private var appResignObserver: (any NSObjectProtocol)?
-    private var keyDownMonitor: Any?
-    private var localMouseUpMonitor: Any?
-    private var globalMouseUpMonitor: Any?
+    private var registrations = Registrations()
     private var endRequested = false
     private var isStopped = false
 
@@ -21,55 +44,48 @@ final class TabDragLifecycleMonitor {
         self.onRequestEnd = onRequestEnd
     }
 
+    isolated deinit {
+        registrations.removeAll()
+    }
+
     func start() {
-        appResignObserver = NotificationCenter.default.addObserver(
+        registrations.appResignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            self?.requestEnd()
+            self?.requestEndFromMainThreadCallback()
         }
-        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        registrations.keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == Self.escapeKeyCode {
-                self?.requestEnd()
+                self?.requestEndFromMainThreadCallback()
             }
             return event
         }
-        localMouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            self?.requestEnd()
+        registrations.localMouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+            self?.requestEndFromMainThreadCallback()
             return event
         }
-        globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
-            self?.requestEnd()
+        registrations.globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
+            self?.requestEndFromMainThreadCallback()
         }
     }
 
     func stop() {
         guard !isStopped else { return }
         isStopped = true
-        if let appResignObserver {
-            NotificationCenter.default.removeObserver(appResignObserver)
-            self.appResignObserver = nil
-        }
-        if let keyDownMonitor {
-            NSEvent.removeMonitor(keyDownMonitor)
-            self.keyDownMonitor = nil
-        }
-        if let localMouseUpMonitor {
-            NSEvent.removeMonitor(localMouseUpMonitor)
-            self.localMouseUpMonitor = nil
-        }
-        if let globalMouseUpMonitor {
-            NSEvent.removeMonitor(globalMouseUpMonitor)
-            self.globalMouseUpMonitor = nil
+        registrations.removeAll()
+    }
+
+    private nonisolated func requestEndFromMainThreadCallback() {
+        MainActor.assumeIsolated {
+            requestEnd()
         }
     }
 
-    private nonisolated func requestEnd() {
-        Task { @MainActor [weak self] in
-            guard let self, !self.isStopped, !self.endRequested else { return }
-            self.endRequested = true
-            self.onRequestEnd(self.generation)
-        }
+    private func requestEnd() {
+        guard !isStopped, !endRequested else { return }
+        endRequested = true
+        onRequestEnd(generation)
     }
 }
