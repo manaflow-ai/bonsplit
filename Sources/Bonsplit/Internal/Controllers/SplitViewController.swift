@@ -30,8 +30,8 @@ final class SplitViewController {
     /// copied into ``tabDragSession`` to invalidate stale lifecycle callbacks.
     var dragGeneration: Int = 0
 
-    /// Controller-owned ground-truth cleanup for cancelled drags.
-    @ObservationIgnored var tabDragLifecycleMonitor: TabDragLifecycleMonitor?
+    /// Native sources stay alive independently of SwiftUI tab/view teardown.
+    @ObservationIgnored var nativeTabDragSources: [Int: TabDragSessionSource] = [:]
 
     /// When false, drop delegates reject all drags and NSViews are hidden.
     /// Mirrors BonsplitController.isInteractive. Must be observable so

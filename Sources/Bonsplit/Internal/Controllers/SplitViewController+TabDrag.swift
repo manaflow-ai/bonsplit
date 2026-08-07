@@ -12,17 +12,10 @@ extension SplitViewController {
         dragGeneration += 1
         let session = TabDragSession(tab: tab, sourcePaneId: paneId, generation: dragGeneration)
         tabDragSession = session
-        let monitor = TabDragLifecycleMonitor(generation: session.generation) { [weak self] generation in
-            self?.cancelTabDragIfGenerationMatches(generation)
-        }
-        tabDragLifecycleMonitor = monitor
-        monitor.start()
         return dragGeneration
     }
 
     func clearTabDragState() {
-        tabDragLifecycleMonitor?.stop()
-        tabDragLifecycleMonitor = nil
         tabDragSession = nil
     }
 
@@ -34,36 +27,43 @@ extension SplitViewController {
         clearTabDragState()
     }
 
-    func makeTabDragItemProvider(
-        for tab: TabItem,
+    @discardableResult
+    func beginNativeTabDrag(
+        _ tab: TabItem,
         from paneId: PaneID,
-        clearDropState: () -> Void
-    ) -> NSItemProvider {
+        pasteboardItem: NSPasteboardItem,
+        sourceView: NSView,
+        event: NSEvent,
+        draggingFrame: NSRect,
+        dragImage: NSImage
+    ) -> Bool {
 #if DEBUG
-        NSLog("[Bonsplit Drag] createItemProvider for tab: \(tab.title)")
+        NSLog("[Bonsplit Drag] begin native session for tab: \(tab.title)")
 #endif
-        clearDropState()
-        _ = beginTabDrag(tab, from: paneId)
+        let generation = beginTabDrag(tab, from: paneId)
+        let source = TabDragSessionSource(generation: generation, controller: self)
+        nativeTabDragSources[generation] = source
 
-        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
-        if let data = try? JSONEncoder().encode(transfer) {
-            let provider = NSItemProvider()
-            provider.registerDataRepresentation(
-                forTypeIdentifier: UTType.tabTransfer.identifier,
-                visibility: .ownProcess
-            ) { completion in
-                completion(data, nil)
-                return nil
-            }
-#if DEBUG
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-                let types = NSPasteboard(name: .drag).types?.map(\.rawValue).joined(separator: ",") ?? "-"
-                dlog("tab.dragPasteboard types=\(types)")
-            }
-#endif
-            return provider
-        }
-        return NSItemProvider()
+        let draggingItem = NSDraggingItem(pasteboardWriter: pasteboardItem)
+        draggingItem.setDraggingFrame(draggingFrame, contents: dragImage)
+        sourceView.beginDraggingSession(
+            with: [draggingItem],
+            event: event,
+            source: source
+        )
+        return true
     }
 
+    func makeTabDragPasteboardItem(for tab: TabItem, from paneId: PaneID) -> NSPasteboardItem? {
+        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
+        guard let data = try? JSONEncoder().encode(transfer) else { return nil }
+        let item = NSPasteboardItem()
+        item.setData(data, forType: NSPasteboard.PasteboardType(UTType.tabTransfer.identifier))
+        return item
+    }
+
+    func nativeTabDragSessionDidEnd(generation: Int) {
+        nativeTabDragSources[generation] = nil
+        cancelTabDragIfGenerationMatches(generation)
+    }
 }

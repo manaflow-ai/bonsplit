@@ -1741,11 +1741,7 @@ final class BonsplitTests: XCTestCase {
         let pane = controller.focusedPane!
         let tab = pane.selectedTab!
 
-        _ = controller.makeTabDragItemProvider(
-            for: tab,
-            from: pane.id,
-            clearDropState: {}
-        )
+        let generation = controller.beginTabDrag(tab, from: pane.id)
         XCTAssertNotNil(controller.tabDragSession)
 
         NotificationCenter.default.post(
@@ -1758,7 +1754,8 @@ final class BonsplitTests: XCTestCase {
             "App deactivation can happen while a native drag is crossing windows or applications; only the drag source lifecycle may end its identity."
         )
 
-        controller.clearTabDragState()
+        controller.nativeTabDragSessionDidEnd(generation: generation)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
