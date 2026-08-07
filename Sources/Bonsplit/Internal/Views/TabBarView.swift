@@ -828,7 +828,7 @@ struct TabBarView: View {
 
     /// Whether this tab bar should show full saturation (focused or drag source)
     private var shouldShowFullSaturation: Bool {
-        isFocused || splitViewController.dragSourcePaneId == pane.id
+        isFocused || splitViewController.tabDragSession?.sourcePaneId == pane.id
     }
 
     private var tabBarSaturation: Double {
@@ -1158,12 +1158,11 @@ struct TabBarView: View {
             }
         }
         // Clear drop state when drag ends elsewhere (cancelled, dropped in another pane, etc.)
-        .onChange(of: splitViewController.draggingTab) { _, newValue in
+        .onChange(of: splitViewController.tabDragSession?.generation) { _, newValue in
 #if DEBUG
             dlog(
                 "tab.dragState pane=\(pane.id.id.uuidString.prefix(5)) " +
-                "draggingTab=\(newValue != nil ? 1 : 0) " +
-                "activeDragTab=\(splitViewController.activeDragTab != nil ? 1 : 0)"
+                "tabDragSession=\(newValue != nil ? 1 : 0)"
             )
 #endif
             if newValue == nil {
@@ -2913,10 +2912,9 @@ struct TabDropDelegate: DropDelegate {
             }
         }
 
-        // Read from non-observable drag state — @Observable writes from createItemProvider
-        // may not have propagated yet when performDrop runs.
-        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
-              let sourcePaneId = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId else {
+        // Read the controller's single drag session synchronously; SwiftUI view
+        // invalidation may be deferred, but the model write is immediately visible.
+        guard let dragSession = controller.tabDragSession else {
             if let transfer = decodeTransfer(from: info) {
                 if transfer.isFromCurrentProcess {
                     return performSameProcessTransfer(transfer)
@@ -2926,6 +2924,8 @@ struct TabDropDelegate: DropDelegate {
             return performFileDrop(info: info)
         }
 
+        let draggedTab = dragSession.tab
+        let sourcePaneId = dragSession.sourcePaneId
         if sourcePaneId == pane.id {
             guard bonsplitController.configuration.allowTabReordering else { return false }
         } else {
@@ -2959,8 +2959,7 @@ struct TabDropDelegate: DropDelegate {
         NSLog("[Bonsplit Drag] dropEntered at index: \(targetIndex)")
         dlog(
             "tab.dropEntered pane=\(pane.id.id.uuidString.prefix(5)) targetIndex=\(targetIndex) " +
-            "hasDrag=\(controller.draggingTab != nil ? 1 : 0) " +
-            "hasActive=\(controller.activeDragTab != nil ? 1 : 0)"
+            "hasDrag=\(controller.tabDragSession != nil ? 1 : 0)"
         )
         #endif
         dropLifecycle = .hovering
@@ -3015,8 +3014,8 @@ struct TabDropDelegate: DropDelegate {
         }
 
         // Local drags use in-memory state and are always same-process.
-        if controller.activeDragTab != nil || controller.draggingTab != nil {
-            let sourcePaneID = controller.activeDragSourcePaneId ?? controller.dragSourcePaneId
+        if let dragSession = controller.tabDragSession {
+            let sourcePaneID = dragSession.sourcePaneId
             if sourcePaneID == pane.id {
                 return bonsplitController.configuration.allowTabReordering
             }
@@ -3036,11 +3035,10 @@ struct TabDropDelegate: DropDelegate {
             guard bonsplitController.configuration.allowCrossPaneTabMove else { return false }
         }
 #if DEBUG
-        let hasDrag = controller.draggingTab != nil
-        let hasActive = controller.activeDragTab != nil
+        let hasDrag = controller.tabDragSession != nil
         dlog(
             "tab.validateDrop pane=\(pane.id.id.uuidString.prefix(5)) " +
-            "allowed=\(hasTabTransfer ? 1 : 0) hasDrag=\(hasDrag ? 1 : 0) hasActive=\(hasActive ? 1 : 0)"
+            "allowed=\(hasTabTransfer ? 1 : 0) hasDrag=\(hasDrag ? 1 : 0)"
         )
 #endif
         return true
@@ -3052,10 +3050,7 @@ struct TabDropDelegate: DropDelegate {
     }
 
     private func clearControllerDragState() {
-        controller.draggingTab = nil
-        controller.dragSourcePaneId = nil
-        controller.activeDragTab = nil
-        controller.activeDragSourcePaneId = nil
+        controller.clearTabDragState()
     }
 
     static func samePaneDropTarget(sourceIndex: Int, targetIndex: Int) -> Int? {
@@ -3196,11 +3191,11 @@ struct TabDropDelegate: DropDelegate {
     }
 
     private func samePaneLocalDragSourceIndex() -> Int? {
-        guard let draggedTab = controller.activeDragTab ?? controller.draggingTab,
-              (controller.activeDragSourcePaneId ?? controller.dragSourcePaneId) == pane.id else {
+        guard let dragSession = controller.tabDragSession,
+              dragSession.sourcePaneId == pane.id else {
             return nil
         }
-        return pane.tabs.firstIndex(where: { $0.id == draggedTab.id })
+        return pane.tabs.firstIndex(where: { $0.id == dragSession.tab.id })
     }
 
     private func shouldSuppressIndicatorForNoopSamePaneDrop() -> Bool {
