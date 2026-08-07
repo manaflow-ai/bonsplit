@@ -5,37 +5,17 @@ import AppKit
 /// bridge ends the matching generation without a deferred cleanup race.
 @MainActor
 final class TabDragLifecycleMonitor {
-    private struct Registrations {
-        var appResignObserver: (any NSObjectProtocol)?
-        var keyDownMonitor: Any?
-        var localMouseUpMonitor: Any?
-        var globalMouseUpMonitor: Any?
-
-        mutating func removeAll() {
-            if let appResignObserver {
-                NotificationCenter.default.removeObserver(appResignObserver)
-                self.appResignObserver = nil
-            }
-            if let keyDownMonitor {
-                NSEvent.removeMonitor(keyDownMonitor)
-                self.keyDownMonitor = nil
-            }
-            if let localMouseUpMonitor {
-                NSEvent.removeMonitor(localMouseUpMonitor)
-                self.localMouseUpMonitor = nil
-            }
-            if let globalMouseUpMonitor {
-                NSEvent.removeMonitor(globalMouseUpMonitor)
-                self.globalMouseUpMonitor = nil
-            }
-        }
-    }
-
     private static let escapeKeyCode: UInt16 = 53
 
     private let generation: Int
     private let onRequestEnd: @MainActor (Int) -> Void
-    private var registrations = Registrations()
+    // Registration tokens are mutated only by main-actor start/stop. Deinit
+    // reads them after the monitor's last owner has released it, when no
+    // actor-isolated access can remain in flight.
+    private nonisolated(unsafe) var appResignObserver: (any NSObjectProtocol)?
+    private nonisolated(unsafe) var keyDownMonitor: Any?
+    private nonisolated(unsafe) var localMouseUpMonitor: Any?
+    private nonisolated(unsafe) var globalMouseUpMonitor: Any?
     private var endRequested = false
     private var isStopped = false
 
@@ -44,29 +24,34 @@ final class TabDragLifecycleMonitor {
         self.onRequestEnd = onRequestEnd
     }
 
-    isolated deinit {
-        registrations.removeAll()
+    deinit {
+        Self.removeRegistrations(
+            appResignObserver: appResignObserver,
+            keyDownMonitor: keyDownMonitor,
+            localMouseUpMonitor: localMouseUpMonitor,
+            globalMouseUpMonitor: globalMouseUpMonitor
+        )
     }
 
     func start() {
-        registrations.appResignObserver = NotificationCenter.default.addObserver(
+        appResignObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didResignActiveNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
             self?.requestEndFromMainThreadCallback()
         }
-        registrations.keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == Self.escapeKeyCode {
                 self?.requestEndFromMainThreadCallback()
             }
             return event
         }
-        registrations.localMouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+        localMouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
             self?.requestEndFromMainThreadCallback()
             return event
         }
-        registrations.globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
+        globalMouseUpMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] _ in
             self?.requestEndFromMainThreadCallback()
         }
     }
@@ -74,7 +59,16 @@ final class TabDragLifecycleMonitor {
     func stop() {
         guard !isStopped else { return }
         isStopped = true
-        registrations.removeAll()
+        Self.removeRegistrations(
+            appResignObserver: appResignObserver,
+            keyDownMonitor: keyDownMonitor,
+            localMouseUpMonitor: localMouseUpMonitor,
+            globalMouseUpMonitor: globalMouseUpMonitor
+        )
+        appResignObserver = nil
+        keyDownMonitor = nil
+        localMouseUpMonitor = nil
+        globalMouseUpMonitor = nil
     }
 
     private nonisolated func requestEndFromMainThreadCallback() {
@@ -87,5 +81,25 @@ final class TabDragLifecycleMonitor {
         guard !isStopped, !endRequested else { return }
         endRequested = true
         onRequestEnd(generation)
+    }
+
+    private nonisolated static func removeRegistrations(
+        appResignObserver: (any NSObjectProtocol)?,
+        keyDownMonitor: Any?,
+        localMouseUpMonitor: Any?,
+        globalMouseUpMonitor: Any?
+    ) {
+        if let appResignObserver {
+            NotificationCenter.default.removeObserver(appResignObserver)
+        }
+        if let keyDownMonitor {
+            NSEvent.removeMonitor(keyDownMonitor)
+        }
+        if let localMouseUpMonitor {
+            NSEvent.removeMonitor(localMouseUpMonitor)
+        }
+        if let globalMouseUpMonitor {
+            NSEvent.removeMonitor(globalMouseUpMonitor)
+        }
     }
 }
