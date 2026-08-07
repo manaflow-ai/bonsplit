@@ -1741,6 +1741,33 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testAppResignClearsTabDragLifecycle() async {
+        let controller = SplitViewController()
+        let pane = controller.focusedPane!
+        let tab = pane.selectedTab!
+
+        _ = controller.makeTabDragItemProvider(
+            for: tab,
+            from: pane.id,
+            clearDropState: {}
+        )
+        XCTAssertNotNil(controller.draggingTab)
+        XCTAssertNotNil(controller.activeDragTab)
+
+        NotificationCenter.default.post(
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+        await Task.yield()
+
+        XCTAssertNil(
+            controller.draggingTab,
+            "A tab drag must not keep pane hit-testing disabled after the app resigns active."
+        )
+        XCTAssertNil(controller.activeDragTab)
+    }
+
+    @MainActor
     func testRequestTabContextActionForwardsToDelegate() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!
