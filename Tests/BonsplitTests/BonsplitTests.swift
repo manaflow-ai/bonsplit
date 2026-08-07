@@ -1736,16 +1736,12 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testAppResignClearsTabDragLifecycleSynchronously() {
+    func testAppResignDoesNotPreemptTabDragSourceLifecycle() {
         let controller = SplitViewController()
         let pane = controller.focusedPane!
         let tab = pane.selectedTab!
 
-        _ = controller.makeTabDragItemProvider(
-            for: tab,
-            from: pane.id,
-            clearDropState: {}
-        )
+        let generation = controller.beginTabDrag(tab, from: pane.id)
         XCTAssertNotNil(controller.tabDragSession)
 
         NotificationCenter.default.post(
@@ -1753,10 +1749,13 @@ final class BonsplitTests: XCTestCase {
             object: nil
         )
 
-        XCTAssertNil(
+        XCTAssertNotNil(
             controller.tabDragSession,
-            "A tab drag must not keep pane hit-testing disabled after the app resigns active."
+            "App deactivation can happen while a native drag is crossing windows or applications; only the drag source lifecycle may end its identity."
         )
+
+        controller.nativeTabDragSessionDidEnd(generation: generation)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor

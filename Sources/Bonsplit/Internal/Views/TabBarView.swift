@@ -1007,6 +1007,25 @@ struct TabBarView: View {
             isMinimalMode: isMinimalMode,
             geometryRegistry: tabItemGeometryRegistry,
             tabIds: tabIds,
+            onBeginTabDrag: { tabId, sourceView, event, draggingFrame, dragImage in
+                guard let tab = pane.tabs.first(where: { $0.id == tabId }),
+                      let pasteboardItem = splitViewController.makeTabDragPasteboardItem(
+                          for: tab,
+                          from: pane.id
+                      ) else {
+                    return false
+                }
+                dropTargetIndex = nil
+                return splitViewController.beginNativeTabDrag(
+                    tab,
+                    from: pane.id,
+                    pasteboardItem: pasteboardItem,
+                    sourceView: sourceView,
+                    event: event,
+                    draggingFrame: draggingFrame,
+                    dragImage: dragImage
+                )
+            },
             onDoubleClick: {
                 performNewTerminalSplitButtonAction()
             },
@@ -1278,11 +1297,6 @@ struct TabBarView: View {
                 geometryRegistry: tabItemGeometryRegistry
             )
         )
-        .onDrag {
-            createItemProvider(for: tab)
-        } preview: {
-            TabDragPreview(tab: tab, appearance: appearance)
-        }
         .overlay(alignment: .leading) {
             if dropTargetIndex == index {
                 dropIndicator
@@ -1300,14 +1314,6 @@ struct TabBarView: View {
             controller: controller,
             splitViewController: splitViewController
         )
-    }
-
-    // MARK: - Item Provider
-
-    private func createItemProvider(for tab: TabItem) -> NSItemProvider {
-        splitViewController.makeTabDragItemProvider(for: tab, from: pane.id) {
-            dropTargetIndex = nil
-        }
     }
 
     private func tabControlShortcutDigit(for index: Int, tabCount: Int) -> Int? {
@@ -1952,14 +1958,23 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
     }
 }
 
-/// Background view that provides window-drag-from-empty-space in minimal mode
-/// and hover tracking via NSTrackingArea (replacing .contentShape + .onHover).
-/// As a .background(), AppKit routes clicks to tabs/buttons in front first;
-/// this view only receives hits in truly empty space.
+/// Background view that provides window dragging from empty space, hover
+/// tracking, and one geometry-routed tab-drag source monitor. The monitor does
+/// not replace normal click dispatch; it consumes only the drag event that
+/// crosses the reorder threshold and starts an AppKit session.
 private struct TabBarDragAndHoverView: NSViewRepresentable {
+    typealias BeginTabDrag = @MainActor (
+        _ tabId: UUID,
+        _ sourceView: NSView,
+        _ mouseDownEvent: NSEvent,
+        _ draggingFrame: NSRect,
+        _ dragImage: NSImage
+    ) -> Bool
+
     let isMinimalMode: Bool
     let geometryRegistry: TabBarItemGeometryRegistry
     let tabIds: [UUID]
+    let onBeginTabDrag: BeginTabDrag
     let onDoubleClick: () -> Bool
     let onHoverChanged: (Bool) -> Void
 
@@ -1968,6 +1983,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         view.isMinimalMode = isMinimalMode
         view.geometryRegistry = geometryRegistry
         view.tabIds = tabIds
+        view.onBeginTabDrag = onBeginTabDrag
         view.onDoubleClick = onDoubleClick
         view.onHoverChanged = onHoverChanged
         return view
@@ -1977,14 +1993,23 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         nsView.isMinimalMode = isMinimalMode
         nsView.geometryRegistry = geometryRegistry
         nsView.tabIds = tabIds
+        nsView.onBeginTabDrag = onBeginTabDrag
         nsView.onDoubleClick = onDoubleClick
         nsView.onHoverChanged = onHoverChanged
     }
 
     final class TabBarBackgroundNSView: NSView, BonsplitTabItemHitRegionProviding {
+        private struct PendingTabDrag {
+            let tabId: UUID
+            let mouseDownEvent: NSEvent
+            let startPoint: NSPoint
+            let frame: NSRect
+        }
+
         var isMinimalMode = false
         nonisolated(unsafe) var tabIds: [UUID] = []
         weak var geometryRegistry: TabBarItemGeometryRegistry?
+        var onBeginTabDrag: BeginTabDrag?
         var onDoubleClick: (() -> Bool)?
         var onHoverChanged: ((Bool) -> Void)?
         private var hoverTrackingArea: NSTrackingArea?
@@ -1992,6 +2017,8 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         private var windowDidResignKeyObserver: NSObjectProtocol?
         private var localMouseMonitor: Any?
         private var isHovering = false
+        private var pendingTabDrag: PendingTabDrag?
+        private let tabDragThresholdSquared: CGFloat = 16
 
         override var mouseDownCanMoveWindow: Bool { false }
 
@@ -2016,6 +2043,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
                 syncHoverStateToCurrentMouseLocation()
             } else {
                 removeLocalMouseMonitor()
+                pendingTabDrag = nil
                 emitHoverChanged(false)
             }
         }
@@ -2115,10 +2143,18 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
         private func installLocalMouseMonitorIfNeeded() {
             guard localMouseMonitor == nil else { return }
             localMouseMonitor = NSEvent.addLocalMonitorForEvents(
-                matching: [.mouseMoved, .mouseEntered, .mouseExited, .leftMouseDown, .leftMouseDragged]
+                matching: [
+                    .mouseMoved,
+                    .mouseEntered,
+                    .mouseExited,
+                    .leftMouseDown,
+                    .leftMouseDragged,
+                    .leftMouseUp,
+                ]
             ) { [weak self] event in
-                self?.updateHover(from: event)
-                return event
+                guard let self else { return event }
+                updateHover(from: event)
+                return handleTabDragEvent(event)
             }
         }
 
@@ -2126,6 +2162,107 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             if let localMouseMonitor {
                 NSEvent.removeMonitor(localMouseMonitor)
                 self.localMouseMonitor = nil
+            }
+            pendingTabDrag = nil
+        }
+
+        private func handleTabDragEvent(_ event: NSEvent) -> NSEvent? {
+            switch event.type {
+            case .leftMouseDown:
+                trackTabMouseDown(event)
+                return event
+            case .leftMouseDragged:
+                return handleTabMouseDragged(event)
+            case .leftMouseUp:
+                pendingTabDrag = nil
+                return event
+            default:
+                return event
+            }
+        }
+
+        private func trackTabMouseDown(_ event: NSEvent) {
+            pendingTabDrag = nil
+            guard event.clickCount == 1,
+                  !event.modifierFlags.contains(.control),
+                  let window,
+                  event.windowNumber == window.windowNumber else {
+                return
+            }
+            let point = convert(event.locationInWindow, from: nil)
+            let frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            guard bounds.contains(point),
+                  !Self.isNativeInteraction(at: event.locationInWindow, in: window),
+                  let tabId = tabIds.first(where: { frames[$0]?.contains(point) == true }),
+                  let frame = frames[tabId] else {
+                return
+            }
+            pendingTabDrag = PendingTabDrag(
+                tabId: tabId,
+                mouseDownEvent: event,
+                startPoint: point,
+                frame: frame
+            )
+        }
+
+        private func handleTabMouseDragged(_ event: NSEvent) -> NSEvent? {
+            guard let pendingTabDrag,
+                  let window,
+                  event.windowNumber == window.windowNumber else {
+                self.pendingTabDrag = nil
+                return event
+            }
+            let point = convert(event.locationInWindow, from: nil)
+            let deltaX = point.x - pendingTabDrag.startPoint.x
+            let deltaY = point.y - pendingTabDrag.startPoint.y
+            guard (deltaX * deltaX) + (deltaY * deltaY) >= tabDragThresholdSquared else {
+                return event
+            }
+            self.pendingTabDrag = nil
+
+            guard let dragImage = dragImage(for: pendingTabDrag.frame),
+                  let onBeginTabDrag else {
+                return event
+            }
+            let didBegin = onBeginTabDrag(
+                pendingTabDrag.tabId,
+                self,
+                pendingTabDrag.mouseDownEvent,
+                pendingTabDrag.frame,
+                dragImage
+            )
+            return didBegin ? nil : event
+        }
+
+        private func dragImage(for frame: NSRect) -> NSImage? {
+            guard frame.width > 0,
+                  frame.height > 0,
+                  let contentView = window?.contentView else {
+                return nil
+            }
+            let contentFrame = convert(frame, to: contentView)
+            guard let representation = contentView.bitmapImageRepForCachingDisplay(in: contentFrame) else {
+                return nil
+            }
+            contentView.cacheDisplay(in: contentFrame, to: representation)
+            let image = NSImage(size: frame.size)
+            image.addRepresentation(representation)
+            return image
+        }
+
+        private static func isNativeInteraction(
+            at windowPoint: NSPoint,
+            in window: NSWindow
+        ) -> Bool {
+            guard let contentView = window.contentView else { return false }
+            let contentPoint = contentView.convert(windowPoint, from: nil)
+            guard var candidate = contentView.hitTest(contentPoint) else { return false }
+            while true {
+                if candidate is NSControl || candidate is NSTextView {
+                    return true
+                }
+                guard let parent = candidate.superview else { return false }
+                candidate = parent
             }
         }
 
