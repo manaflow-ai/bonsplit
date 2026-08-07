@@ -74,6 +74,31 @@ struct TabDropIndexResolverTests {
         )
     }
 
+    @Test("Registered frames preserve their model insertion indices")
+    func indexedFramesPreserveModelIndices() {
+        let indexedFrames = [
+            TabDropIndexResolver.IndexedFrame(index: 1, frame: tabFrames[1]),
+            TabDropIndexResolver.IndexedFrame(index: 2, frame: tabFrames[2]),
+        ]
+
+        #expect(
+            TabDropIndexResolver.insertionIndex(
+                at: CGPoint(x: 120, y: bounds.midY),
+                in: bounds,
+                indexedTabFrames: indexedFrames,
+                tabCount: tabFrames.count
+            ) == 1
+        )
+        #expect(
+            TabDropIndexResolver.insertionIndex(
+                at: CGPoint(x: 280, y: bounds.midY),
+                in: bounds,
+                indexedTabFrames: indexedFrames,
+                tabCount: tabFrames.count
+            ) == 3
+        )
+    }
+
     private func insertionIndex(x: CGFloat) -> Int? {
         TabDropIndexResolver.insertionIndex(
             at: CGPoint(x: x, y: bounds.midY),
