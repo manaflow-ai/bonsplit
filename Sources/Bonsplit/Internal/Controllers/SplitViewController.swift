@@ -101,7 +101,7 @@ final class SplitViewController {
     convenience init(rootNode: SplitNode? = nil) {
         self.init(
             rootNode: rootNode,
-            tabDragTransferRegistry: .process
+            tabDragTransferRegistry: TabDragTransferRegistry()
         )
     }
 

@@ -27,9 +27,9 @@ struct TabDragTransferRegistryTests {
 
     @Test("A registered capability routes across controllers")
     func registeredCapabilityRoutesAcrossControllers() throws {
-        let sourceController = makeController()
-        let targetController = makeController()
-        let registry = sourceController.internalController.tabDragTransferRegistry
+        let registry = TabDragTransferRegistry()
+        let sourceController = makeController(registry: registry)
+        let targetController = makeController(registry: registry)
         let sourcePane = try #require(sourceController.internalController.focusedPane)
         let sourceTab = try #require(sourcePane.selectedTab)
         let targetPane = try #require(targetController.internalController.focusedPane)
