@@ -1955,9 +1955,10 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
 
 /// Background view that provides window dragging from empty space, hover
 /// tracking, and one geometry-routed tab-drag source monitor. The monitor does
-/// not replace normal click dispatch; it consumes only the drag event that
-/// crosses the reorder threshold and starts an AppKit session.
-private struct TabBarDragAndHoverView: NSViewRepresentable {
+/// not replace normal click dispatch; it starts an AppKit session when a drag
+/// crosses the reorder threshold and forwards that event so SwiftUI can cancel
+/// the pending tab press.
+struct TabBarDragAndHoverView: NSViewRepresentable {
     typealias BeginTabDrag = @MainActor (
         _ tabId: UUID,
         _ sourceView: NSView,
@@ -2161,7 +2162,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             pendingTabDrag = nil
         }
 
-        private func handleTabDragEvent(_ event: NSEvent) -> NSEvent? {
+        func handleTabDragEvent(_ event: NSEvent) -> NSEvent? {
             switch event.type {
             case .leftMouseDown:
                 trackTabMouseDown(event)
@@ -2219,14 +2220,17 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
                   let onBeginTabDrag else {
                 return event
             }
-            let didBegin = onBeginTabDrag(
+            _ = onBeginTabDrag(
                 pendingTabDrag.tabId,
                 self,
                 pendingTabDrag.mouseDownEvent,
                 pendingTabDrag.frame,
                 dragImage
             )
-            return didBegin ? nil : event
+            // SwiftUI already received the mouse-down. Forward the threshold-
+            // crossing move so its pending tap/press fails before AppKit owns
+            // the native drag session and terminal mouse-up.
+            return event
         }
 
         private func dragImage(for frame: NSRect) -> NSImage? {
