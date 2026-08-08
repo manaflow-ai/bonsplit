@@ -4,18 +4,18 @@ import AppKit
 @MainActor
 final class TabDragSessionSource: NSObject, NSDraggingSource {
     private let generation: Int
-    private let transferToken: UUID
+    private let transferRegistration: TabDragTransferRegistration
     private let transferRegistry: TabDragTransferRegistry
     private weak var controller: SplitViewController?
 
     init(
         generation: Int,
-        transferToken: UUID,
+        transferRegistration: TabDragTransferRegistration,
         transferRegistry: TabDragTransferRegistry,
         controller: SplitViewController
     ) {
         self.generation = generation
-        self.transferToken = transferToken
+        self.transferRegistration = transferRegistration
         self.transferRegistry = transferRegistry
         self.controller = controller
     }
@@ -36,7 +36,7 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
     }
 
     func finishDrag() {
-        transferRegistry.end(token: transferToken)
+        transferRegistry.end(transferRegistration)
         controller?.nativeTabDragSessionDidEnd(generation: generation)
     }
 }

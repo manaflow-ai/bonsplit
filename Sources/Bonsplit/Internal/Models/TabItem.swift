@@ -133,14 +133,3 @@ extension TabItem: Transferable {
         CodableRepresentation(contentType: .tabItem)
     }
 }
-
-/// Process-local transfer data resolved from an opaque live-drag capability.
-struct TabTransferData {
-    let tab: TabItem
-    let sourcePaneId: UUID
-
-    init(tab: TabItem, sourcePaneId: UUID) {
-        self.tab = tab
-        self.sourcePaneId = sourcePaneId
-    }
-}

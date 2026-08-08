@@ -58,9 +58,10 @@ struct PublicTabDragTransferRegistryTests {
             tab: Tab(title: "Ephemeral"),
             sourcePaneId: PaneID()
         )
-        var registration: TabDragTransferRegistration? = try #require(
+        let firstRegistration = try #require(
             registry.register(transfer)
         )
+        var registration: TabDragTransferRegistration? = firstRegistration
         let pasteboard = makePasteboard()
         #expect(registration?.write(to: pasteboard) == true)
         #expect(registry.resolve(from: pasteboard) == transfer)
@@ -68,10 +69,13 @@ struct PublicTabDragTransferRegistryTests {
         registry.end(try #require(registration))
         #expect(registry.resolve(from: pasteboard) == nil)
 
-        registration = try #require(registry.register(transfer))
-        pasteboard.clearContents()
-        #expect(registration?.write(to: pasteboard) == true)
-        #expect(registry.resolve(from: pasteboard) == transfer)
+        do {
+            let secondRegistration = try #require(registry.register(transfer))
+            registration = secondRegistration
+            pasteboard.clearContents()
+            #expect(registration?.write(to: pasteboard) == true)
+            #expect(registry.resolve(from: pasteboard) == transfer)
+        }
 
         registration = nil
         #expect(registry.resolve(from: pasteboard) == nil)
