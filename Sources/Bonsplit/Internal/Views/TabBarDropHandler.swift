@@ -41,7 +41,7 @@ struct TabBarDropHandler {
             guard let transfer = splitViewController.tabDragTransferRegistry.resolve(from: pasteboard) else {
                 return []
             }
-            let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+            let sourcePaneId = transfer.sourcePaneId
             guard sourcePaneId != pane.id,
                   bonsplitController.configuration.allowCrossPaneTabMove,
                   bonsplitController.onExternalTabDrop != nil else {
@@ -81,15 +81,15 @@ struct TabBarDropHandler {
     }
 
     private static func externalFallbackRequest(
-        transfer: TabTransferData,
+        transfer: TabDragTransfer,
         targetPane: PaneID,
         targetIndex: Int,
         allowCrossPaneTabMove: Bool
     ) -> BonsplitController.ExternalTabDropRequest? {
-        let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+        let sourcePaneId = transfer.sourcePaneId
         guard sourcePaneId != targetPane, allowCrossPaneTabMove else { return nil }
         return BonsplitController.ExternalTabDropRequest(
-            tabId: TabID(id: transfer.tab.id),
+            tabId: transfer.tab.id,
             sourcePaneId: sourcePaneId,
             destination: .insert(targetPane: targetPane, targetIndex: targetIndex)
         )

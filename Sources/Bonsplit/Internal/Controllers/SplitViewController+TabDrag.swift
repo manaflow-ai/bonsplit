@@ -38,14 +38,14 @@ extension SplitViewController {
 #if DEBUG
         NSLog("[Bonsplit Drag] begin native session for tab: \(tab.title)")
 #endif
-        let transfer = TabTransferData(tab: tab, sourcePaneId: paneId.id)
+        let transfer = TabDragTransfer(tab: Tab(from: tab), sourcePaneId: paneId)
         guard let registration = tabDragTransferRegistry.register(transfer) else {
             return false
         }
         let generation = beginTabDrag(tab, from: paneId)
         let source = TabDragSessionSource(
             generation: generation,
-            transferToken: registration.token,
+            transferRegistration: registration,
             transferRegistry: tabDragTransferRegistry,
             controller: self
         )

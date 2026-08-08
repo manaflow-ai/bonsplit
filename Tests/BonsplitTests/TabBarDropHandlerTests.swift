@@ -237,7 +237,10 @@ final class TabBarDropHandlerTests: XCTestCase {
 
     private func makePasteboard(for tab: TabItem, in harness: Harness) throws -> NSPasteboard {
         let pasteboard = makeEmptyPasteboard()
-        let transfer = TabTransferData(tab: tab, sourcePaneId: harness.pane.id.id)
+        let transfer = TabDragTransfer(
+            tab: Tab(from: tab),
+            sourcePaneId: harness.pane.id
+        )
         let registration = try XCTUnwrap(harness.registry.register(transfer))
         XCTAssertTrue(pasteboard.writeObjects([registration.pasteboardItem]))
         return pasteboard

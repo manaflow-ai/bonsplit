@@ -12,7 +12,9 @@ struct TabDragTransferRegistryTests {
         let pane = try #require(controller.internalController.focusedPane)
         let tab = try #require(pane.selectedTab)
         let registration = try #require(
-            registry.register(TabTransferData(tab: tab, sourcePaneId: pane.id.id))
+            registry.register(
+                TabDragTransfer(tab: Tab(from: tab), sourcePaneId: pane.id)
+            )
         )
         let value = try #require(
             registration.pasteboardItem.string(forType: TabDragTransferRegistry.pasteboardType)
@@ -32,9 +34,11 @@ struct TabDragTransferRegistryTests {
         let sourceTab = try #require(sourcePane.selectedTab)
         let targetPane = try #require(targetController.internalController.focusedPane)
         let registration = try #require(
-            registry.register(TabTransferData(tab: sourceTab, sourcePaneId: sourcePane.id.id))
+            registry.register(
+                TabDragTransfer(tab: Tab(from: sourceTab), sourcePaneId: sourcePane.id)
+            )
         )
-        defer { registry.end(token: registration.token) }
+        defer { registry.end(registration) }
         let pasteboard = makePasteboard(item: registration.pasteboardItem)
         let handler = makeHandler(controller: targetController, pane: targetPane)
         var receivedRequest: BonsplitController.ExternalTabDropRequest?
@@ -72,11 +76,13 @@ struct TabDragTransferRegistryTests {
         let targetPane = try #require(targetController.internalController.focusedPane)
         let generation = sourceController.internalController.beginTabDrag(sourceTab, from: sourcePane.id)
         let registration = try #require(
-            registry.register(TabTransferData(tab: sourceTab, sourcePaneId: sourcePane.id.id))
+            registry.register(
+                TabDragTransfer(tab: Tab(from: sourceTab), sourcePaneId: sourcePane.id)
+            )
         )
         let source = TabDragSessionSource(
             generation: generation,
-            transferToken: registration.token,
+            transferRegistration: registration,
             transferRegistry: registry,
             controller: sourceController.internalController
         )

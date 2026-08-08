@@ -483,8 +483,8 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             }
 
             let request = BonsplitController.ExternalTabDropRequest(
-                tabId: TabID(id: transfer.tab.id),
-                sourcePaneId: PaneID(id: transfer.sourcePaneId),
+                tabId: transfer.tab.id,
+                sourcePaneId: transfer.sourcePaneId,
                 destination: destination
             )
             let handled = bonsplitController.onExternalTabDrop?(request) ?? false
@@ -741,7 +741,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         !fileURLs(from: pasteboard).isEmpty
     }
 
-    private func resolveTransfer() -> TabTransferData? {
+    private func resolveTransfer() -> TabDragTransfer? {
         controller.tabDragTransferRegistry.resolve(from: NSPasteboard(name: .drag))
     }
 }
