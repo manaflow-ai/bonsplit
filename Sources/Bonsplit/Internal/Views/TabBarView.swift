@@ -1957,7 +1957,7 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
 /// tracking, and one geometry-routed tab-drag source monitor. The monitor does
 /// not replace normal click dispatch; it consumes only the drag event that
 /// crosses the reorder threshold and starts an AppKit session.
-private struct TabBarDragAndHoverView: NSViewRepresentable {
+struct TabBarDragAndHoverView: NSViewRepresentable {
     typealias BeginTabDrag = @MainActor (
         _ tabId: UUID,
         _ sourceView: NSView,
@@ -2161,7 +2161,7 @@ private struct TabBarDragAndHoverView: NSViewRepresentable {
             pendingTabDrag = nil
         }
 
-        private func handleTabDragEvent(_ event: NSEvent) -> NSEvent? {
+        func handleTabDragEvent(_ event: NSEvent) -> NSEvent? {
             switch event.type {
             case .leftMouseDown:
                 trackTabMouseDown(event)
