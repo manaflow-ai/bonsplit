@@ -53,6 +53,17 @@ struct TabDragTransferRegistryTests {
         #expect(receivedRequest?.sourcePaneId == sourcePane.id)
     }
 
+    @Test("Controllers do not share an implicit capability registry")
+    func defaultControllersHaveIsolatedCapabilityRegistries() {
+        let firstController = makeController()
+        let secondController = makeController()
+
+        #expect(
+            firstController.internalController.tabDragTransferRegistry
+                !== secondController.internalController.tabDragTransferRegistry
+        )
+    }
+
     @Test("An unregistered capability is rejected")
     func unregisteredCapabilityIsRejected() throws {
         let registry = TabDragTransferRegistry()
