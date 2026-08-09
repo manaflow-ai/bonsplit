@@ -4,6 +4,7 @@ import AppKit
 import Observation
 import QuartzCore
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -2169,6 +2170,110 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuUpdateReevaluatesForkConversationAvailability() throws {
+        let target = TabContextMenuActionTarget()
+        var availability = TabContextForkConversationAvailability.refreshing
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            forkConversationDefaultAction: .forkConversationRight,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] },
+            forkConversationAvailabilityProvider: { availability }
+        )
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+
+        XCTAssertFalse(forkItem.isEnabled)
+        XCTAssertFalse(forkSubmenuItem.isEnabled)
+
+        availability = .available
+        menu.delegate?.menuNeedsUpdate?(menu)
+
+        XCTAssertTrue(forkItem.isEnabled)
+        XCTAssertTrue(forkSubmenuItem.isEnabled)
+        XCTAssertEqual(
+            forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem }.map(\.isEnabled),
+            Array(repeating: true, count: 6)
+        )
+    }
+
+    @MainActor
+    func testTabContextMenuRefreshReevaluatesForkConversationAvailability() async throws {
+        let target = TabContextMenuActionTarget()
+        var availability = TabContextForkConversationAvailability.refreshing
+        var refreshCount = 0
+        let refreshStarted = expectation(description: "Fork availability refresh started")
+        let availabilityReevaluated = expectation(description: "Fork availability reevaluated")
+        var didObserveAvailable = false
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: true,
+            canCloseToRight: true,
+            canCloseOthers: true,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            forkConversationDefaultAction: .forkConversationRight,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: UUID(),
+            state: state,
+            moveDestinationsProvider: { [] },
+            forkConversationAvailabilityProvider: {
+                if availability == .available, !didObserveAvailable {
+                    didObserveAvailable = true
+                    availabilityReevaluated.fulfill()
+                }
+                return availability
+            },
+            forkConversationAvailabilityRefreshHandler: {
+                refreshCount += 1
+                availability = .available
+                refreshStarted.fulfill()
+            }
+        )
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+
+        menu.menuWillOpen(menu)
+        menu.menuWillOpen(menu)
+        await fulfillment(of: [refreshStarted, availabilityReevaluated], timeout: 1)
+
+        XCTAssertEqual(refreshCount, 1)
+        XCTAssertEqual(menu.forkConversationAvailability, .available)
+        XCTAssertTrue(forkItem.isEnabled)
+        XCTAssertTrue(forkSubmenuItem.isEnabled)
+        menu.menuDidClose(menu)
+    }
+
+    @MainActor
     func testTabContextMenuShowsDisconnectRemoteOnlyWhenAvailable() throws {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?
@@ -2322,6 +2427,132 @@ final class BonsplitTests: XCTestCase {
 
         XCTAssertNil(spy.requestedKind)
         XCTAssertNil(spy.requestedPaneId)
+    }
+
+    @MainActor
+    func testTrailingTabBarChromeDropDestinationStaysOffTabPixels() throws {
+        let appearance = BonsplitConfiguration.Appearance(splitButtons: [])
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(appearance: appearance)
+        )
+        controller.tabShortcutHintsEnabled = false
+        let pane = controller.internalController.rootNode.allPanes.first!
+        let tab = TabItem(title: "Tab", icon: nil)
+        pane.tabs = [tab]
+        pane.selectedTabId = tab.id
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: true)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 60),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        guard let contentView = window.contentView else {
+            XCTFail("Expected content view")
+            return
+        }
+
+        hostingView.frame = contentView.bounds
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+        window.makeKeyAndOrderFront(nil)
+
+        func setDragHitTesting(_ view: NSView) {
+            (view as? TabBarDragZoneView.DragNSView)?.hitTestEventTypeOverride = .leftMouseDragged
+            for subview in view.subviews {
+                setDragHitTesting(subview)
+            }
+        }
+        func tabDropDestinations(in view: NSView) -> [NSView] {
+            var matches: [NSView] = []
+            if view.registeredDraggedTypes.contains(where: { pasteboardType in
+                guard let registeredType = UTType(pasteboardType.rawValue) else { return false }
+                return UTType.tabTransfer.conforms(to: registeredType)
+            }) {
+                matches.append(view)
+            }
+            for subview in view.subviews {
+                matches.append(contentsOf: tabDropDestinations(in: subview))
+            }
+            return matches
+        }
+        func dragZones(in view: NSView) -> [TabBarDragZoneView.DragNSView] {
+            var matches = (view as? TabBarDragZoneView.DragNSView).map { [$0] } ?? []
+            for subview in view.subviews {
+                matches.append(contentsOf: dragZones(in: subview))
+            }
+            return matches
+        }
+        func framesMatch(_ lhs: NSView, _ rhs: NSView) -> Bool {
+            let lhsFrame = lhs.convert(lhs.bounds, to: nil)
+            let rhsFrame = rhs.convert(rhs.bounds, to: nil)
+            return abs(lhsFrame.minX - rhsFrame.minX) <= 0.5
+                && abs(lhsFrame.maxX - rhsFrame.maxX) <= 0.5
+                && abs(lhsFrame.minY - rhsFrame.minY) <= 0.5
+                && abs(lhsFrame.maxY - rhsFrame.maxY) <= 0.5
+        }
+
+        let tabPoint = NSPoint(x: 90, y: 30)
+        let trailingEmptyPoint = NSPoint(x: 460, y: 30)
+        let registrationDeadline = Date().addingTimeInterval(0.5)
+        var dropDestinations: [NSView] = []
+        var dragZoneViews: [TabBarDragZoneView.DragNSView] = []
+
+        func dropDestination(at point: NSPoint) -> NSView? {
+            let pointInWindow = hostingView.convert(point, to: nil)
+            return dropDestinations.first { view in
+                view.convert(view.bounds, to: nil).contains(pointInWindow)
+            }
+        }
+        func chromeDragZones(at point: NSPoint) -> [TabBarDragZoneView.DragNSView] {
+            let pointInWindow = hostingView.convert(point, to: nil)
+            return dragZoneViews.filter { dragZone in
+                dragZone.convert(dragZone.bounds, to: nil).contains(pointInWindow)
+            }
+        }
+
+        repeat {
+            contentView.layoutSubtreeIfNeeded()
+            setDragHitTesting(hostingView)
+            dropDestinations = tabDropDestinations(in: hostingView)
+            dragZoneViews = dragZones(in: hostingView)
+            let tabPointInWindow = hostingView.convert(tabPoint, to: nil)
+            if BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPointInWindow, in: window),
+               dropDestination(at: trailingEmptyPoint) != nil {
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+        } while Date() < registrationDeadline
+
+        guard dropDestination(at: trailingEmptyPoint) != nil else {
+            throw XCTSkip(
+                "This SwiftUI runtime does not expose view-local onDrop registration through registeredDraggedTypes"
+            )
+        }
+
+        let tabPointInWindow = hostingView.convert(tabPoint, to: nil)
+        XCTAssertTrue(
+            BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPointInWindow, in: window),
+            "The test point should be owned by the rendered pane tab"
+        )
+
+        for dragZone in chromeDragZones(at: tabPoint) {
+            XCTAssertFalse(
+                dropDestinations.contains(where: { framesMatch(dragZone, $0) }),
+                "Empty tab-bar chrome must not register an end-drop destination over a rendered tab"
+            )
+        }
+
+        XCTAssertNotNil(
+            dropDestination(at: trailingEmptyPoint),
+            "Actual empty trailing tab-bar space should still route tab transfers to the end-drop destination"
+        )
     }
 
     @MainActor

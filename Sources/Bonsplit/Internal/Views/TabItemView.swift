@@ -286,6 +286,7 @@ struct TabItemView: View {
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
+    let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
     let onSelect: () -> Void
     let onClose: (TabCloseRequestSource) -> Void
     let onZoomToggle: () -> Void
@@ -351,7 +352,8 @@ struct TabItemView: View {
                         tabId: tab.id,
                         state: contextMenuState,
                         moveDestinationsProvider: moveDestinationsProvider,
-                        forkConversationAvailabilityProvider: forkConversationAvailabilityProvider
+                        forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
+                        forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
                     ),
                     onContextAction: onContextAction,
                     onMoveDestination: onMoveDestination
@@ -1343,41 +1345,29 @@ private struct MiddleClickMonitorView: NSViewRepresentable {
     }
 }
 
-struct TabContextMenuSnapshot {
-    let tabId: UUID
-    let state: TabContextMenuState
-    let moveDestinationsProvider: () -> [TabContextMoveDestination]
-    let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
-}
-
-final class TabContextMenuActionTarget: NSObject {
-    var onContextAction: ((TabContextAction) -> Void)?
-    var onMoveDestination: ((String) -> Void)?
-
-    @objc func performContextAction(_ sender: NSMenuItem) {
-        guard let rawValue = sender.representedObject as? String,
-              let action = TabContextAction(rawValue: rawValue) else {
-            return
-        }
-        onContextAction?(action)
-    }
-
-    @objc func performMoveDestination(_ sender: NSMenuItem) {
-        guard let destinationId = sender.representedObject as? String else { return }
-        onMoveDestination?(destinationId)
-    }
-}
-
+@MainActor
 enum TabContextMenuBuilder {
+    private static let forkConversationSeparatorIdentifier = NSUserInterfaceItemIdentifier(
+        "Bonsplit.TabContextMenu.ForkConversationSeparator"
+    )
+    private static let forkConversationItemIdentifier = NSUserInterfaceItemIdentifier(
+        "Bonsplit.TabContextMenu.ForkConversation"
+    )
+    private static let forkConversationSubmenuIdentifier = NSUserInterfaceItemIdentifier(
+        "Bonsplit.TabContextMenu.ForkConversationSubmenu"
+    )
+
     static func makeMenu(
         snapshot: TabContextMenuSnapshot,
         target: TabContextMenuActionTarget
-    ) -> NSMenu {
+    ) -> TabContextMenu {
         let state = snapshot.state
         let forkConversationAvailability = snapshot.forkConversationAvailabilityProvider()
         let forkConversationEnabled = forkConversationAvailability == .available
-        let menu = NSMenu()
-        menu.autoenablesItems = false
+        let menu = TabContextMenu(
+            snapshot: snapshot,
+            forkConversationAvailability: forkConversationAvailability
+        )
 
         addAction(
             title: localized("tabContext.renameTab", defaultValue: "Rename Tab…"),
@@ -1446,8 +1436,10 @@ enum TabContextMenuBuilder {
         }
 
         if forkConversationAvailability != .hidden {
-            menu.addItem(.separator())
-            addAction(
+            let separator = NSMenuItem.separator()
+            separator.identifier = forkConversationSeparatorIdentifier
+            menu.addItem(separator)
+            let forkConversationItem = addAction(
                 title: forkConversationDefaultTitle(for: state.forkConversationDefaultAction),
                 action: .forkConversation,
                 enabled: forkConversationEnabled,
@@ -1455,11 +1447,14 @@ enum TabContextMenuBuilder {
                 target: target,
                 to: menu
             )
-            menu.addItem(forkConversationSubmenuItem(
+            forkConversationItem.identifier = forkConversationItemIdentifier
+            let forkConversationSubmenu = forkConversationSubmenuItem(
                 state: state,
                 target: target,
                 enabled: forkConversationEnabled
-            ))
+            )
+            forkConversationSubmenu.identifier = forkConversationSubmenuIdentifier
+            menu.addItem(forkConversationSubmenu)
         }
 
         menu.addItem(.separator())
@@ -1582,6 +1577,29 @@ enum TabContextMenuBuilder {
         )
 
         return menu
+    }
+
+    static func updateForkConversationAvailability(
+        _ availability: TabContextForkConversationAvailability,
+        in menu: NSMenu
+    ) {
+        let isVisible = availability != .hidden
+        let isEnabled = availability == .available
+
+        menu.items.first { $0.identifier == forkConversationSeparatorIdentifier }?.isHidden = !isVisible
+
+        if let item = menu.items.first(where: { $0.identifier == forkConversationItemIdentifier }) {
+            item.isHidden = !isVisible
+            item.isEnabled = isEnabled
+        }
+
+        if let item = menu.items.first(where: { $0.identifier == forkConversationSubmenuIdentifier }) {
+            item.isHidden = !isVisible
+            item.isEnabled = isEnabled
+            for destinationItem in item.submenu?.items ?? [] where !destinationItem.isSeparatorItem {
+                destinationItem.isEnabled = isEnabled
+            }
+        }
     }
 
     private static func moveSubmenuItem(
@@ -1804,70 +1822,5 @@ private extension EventModifiers {
         if contains(.option) { flags.insert(.option) }
         if contains(.control) { flags.insert(.control) }
         return flags
-    }
-}
-
-struct TabContextMenuPresenter: NSViewRepresentable {
-    let snapshot: TabContextMenuSnapshot
-    let onContextAction: (TabContextAction) -> Void
-    let onMoveDestination: (String) -> Void
-
-    final class Coordinator {
-        var snapshot: TabContextMenuSnapshot
-        let actionTarget = TabContextMenuActionTarget()
-        weak var view: NSView?
-        var monitor: Any?
-
-        init(snapshot: TabContextMenuSnapshot) {
-            self.snapshot = snapshot
-        }
-
-        deinit {
-            if let monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-        }
-
-        func presentMenu(at point: NSPoint, in view: NSView) {
-            let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: actionTarget)
-            menu.popUp(positioning: nil, at: point, in: view)
-        }
-    }
-
-    func makeCoordinator() -> Coordinator {
-        let coordinator = Coordinator(snapshot: snapshot)
-        coordinator.actionTarget.onContextAction = onContextAction
-        coordinator.actionTarget.onMoveDestination = onMoveDestination
-        return coordinator
-    }
-
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        view.wantsLayer = true
-        view.layer?.backgroundColor = NSColor.clear.cgColor
-
-        context.coordinator.view = view
-
-        let coordinator = context.coordinator
-        coordinator.monitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak coordinator] event in
-            guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return event }
-            guard let coordinator, let view = coordinator.view, let window = view.window else { return event }
-            guard event.window === window else { return event }
-
-            let point = view.convert(event.locationInWindow, from: nil)
-            guard view.bounds.contains(point) else { return event }
-
-            coordinator.presentMenu(at: point, in: view)
-            return nil
-        }
-
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.view = nsView
-        context.coordinator.snapshot = snapshot
-        context.coordinator.actionTarget.onContextAction = onContextAction
-        context.coordinator.actionTarget.onMoveDestination = onMoveDestination
     }
 }
