@@ -5,12 +5,6 @@ import UniformTypeIdentifiers
 /// Process-local capability store shared by tab-drag sources and destinations.
 @MainActor
 public final class TabDragTransferRegistry {
-    /// The registry used by Bonsplit controllers created with the default initializer.
-    ///
-    /// AppKit exposes one drag pasteboard for the process, so the default registry
-    /// is process-wide as well. Construct a separate registry for isolated tests.
-    public static let process = TabDragTransferRegistry()
-
     /// The AppKit pasteboard type that carries opaque tab-drag capabilities.
     public static let pasteboardType = NSPasteboard.PasteboardType(
         UTType.tabTransfer.identifier

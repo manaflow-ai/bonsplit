@@ -27,9 +27,9 @@ struct TabDragTransferRegistryTests {
 
     @Test("A registered capability routes across controllers")
     func registeredCapabilityRoutesAcrossControllers() throws {
-        let sourceController = makeController()
-        let targetController = makeController()
-        let registry = sourceController.internalController.tabDragTransferRegistry
+        let registry = TabDragTransferRegistry()
+        let sourceController = makeController(registry: registry)
+        let targetController = makeController(registry: registry)
         let sourcePane = try #require(sourceController.internalController.focusedPane)
         let sourceTab = try #require(sourcePane.selectedTab)
         let targetPane = try #require(targetController.internalController.focusedPane)
@@ -51,6 +51,17 @@ struct TabDragTransferRegistryTests {
         #expect(handler.performDrop(from: pasteboard, at: 0))
         #expect(receivedRequest?.tabId == TabID(id: sourceTab.id))
         #expect(receivedRequest?.sourcePaneId == sourcePane.id)
+    }
+
+    @Test("Controllers do not share an implicit capability registry")
+    func defaultControllersHaveIsolatedCapabilityRegistries() {
+        let firstController = makeController()
+        let secondController = makeController()
+
+        #expect(
+            firstController.internalController.tabDragTransferRegistry
+                !== secondController.internalController.tabDragTransferRegistry
+        )
     }
 
     @Test("An unregistered capability is rejected")
