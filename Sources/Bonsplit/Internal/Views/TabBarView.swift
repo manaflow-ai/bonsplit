@@ -685,6 +685,7 @@ struct TabContextMenuState {
     let isAudioMuted: Bool
     let isTerminal: Bool
     let hasCustomTitle: Bool
+    let hasCustomColor: Bool
     let canCloseToLeft: Bool
     let canCloseToRight: Bool
     let canCloseOthers: Bool
@@ -713,6 +714,7 @@ struct TabContextMenuState {
         isAudioMuted: Bool,
         isTerminal: Bool,
         hasCustomTitle: Bool,
+        hasCustomColor: Bool = false,
         canCloseToLeft: Bool,
         canCloseToRight: Bool,
         canCloseOthers: Bool,
@@ -732,6 +734,7 @@ struct TabContextMenuState {
         self.isAudioMuted = isAudioMuted
         self.isTerminal = isTerminal
         self.hasCustomTitle = hasCustomTitle
+        self.hasCustomColor = hasCustomColor
         self.canCloseToLeft = canCloseToLeft
         self.canCloseToRight = canCloseToRight
         self.canCloseOthers = canCloseOthers
@@ -774,6 +777,7 @@ struct TabContextMenuState {
             isAudioMuted: tab.isAudioMuted,
             isTerminal: tab.kind == "terminal",
             hasCustomTitle: tab.hasCustomTitle,
+            hasCustomColor: tab.customColor != nil,
             canCloseToLeft: canCloseToLeft,
             canCloseToRight: canCloseToRight,
             canCloseOthers: canCloseOthers,

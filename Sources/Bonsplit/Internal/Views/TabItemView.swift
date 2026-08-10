@@ -533,6 +533,14 @@ struct TabItemView: View {
         HStack(spacing: 0) {
             // Icon + title block uses the standard spacing, but keep the close affordance tight.
             HStack(spacing: scaledContentSpacing) {
+                if let color = customColorMarker {
+                    Circle()
+                        .fill(color)
+                        .frame(width: 7, height: 7)
+                        .overlay(Circle().stroke(.primary.opacity(0.22), lineWidth: 0.5))
+                        .accessibilityHidden(true)
+                }
+
                 leadingIcon
 
                 Text(tab.title)
@@ -858,6 +866,17 @@ struct TabItemView: View {
     /// Spacing between the leading icon and the title, scaled to the font.
     private var scaledContentSpacing: CGFloat {
         TabBarMetrics.contentSpacing * fontScale
+    }
+
+    private var customColorMarker: Color? {
+        guard let raw = tab.customColor else { return nil }
+        let body = raw.hasPrefix("#") ? String(raw.dropFirst()) : raw
+        guard body.count == 6, let value = UInt64(body, radix: 16) else { return nil }
+        return Color(
+            red: Double((value >> 16) & 0xFF) / 255,
+            green: Double((value >> 8) & 0xFF) / 255,
+            blue: Double(value & 0xFF) / 255
+        )
     }
 
     private func glyphSize(for iconName: String) -> CGFloat {
@@ -1387,6 +1406,23 @@ enum TabContextMenuBuilder {
             )
         }
 
+        addAction(
+            title: localized("tabContext.setTabColor", defaultValue: "Set Tab Color…"),
+            action: .setColor,
+            state: state,
+            target: target,
+            to: menu
+        )
+        if state.hasCustomColor {
+            addAction(
+                title: localized("tabContext.clearTabColor", defaultValue: "Clear Tab Color"),
+                action: .clearColor,
+                state: state,
+                target: target,
+                to: menu
+            )
+        }
+
         menu.addItem(.separator())
 
         addAction(
@@ -1759,6 +1795,8 @@ enum TabContextMenuBuilder {
              .moveToNewWorkspace,
              .moveToLeftPane,
              .moveToRightPane,
+             .setColor,
+             .clearColor,
              .newTerminalToRight,
              .newBrowserToRight,
              .reload,
