@@ -1524,9 +1524,11 @@ struct TabBarView: View {
         HStack(spacing: TabBarStyling.splitButtonsSpacing) {
             ForEach(buttons.indices, id: \.self) { index in
                 let button = buttons[index]
+                let tooltip = splitActionButtonTooltip(button, tooltips: tooltips)
                 splitActionButton(button, tooltips: tooltips)
-                .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
-                .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
+                    .accessibilityIdentifier(splitActionButtonAccessibilityIdentifier(button))
+                    .accessibilityLabel(tooltip)
+                    .safeHelp(tooltip)
             }
         }
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
@@ -1551,7 +1553,6 @@ struct TabBarView: View {
                     }
                 )
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel(splitActionButtonTooltip(button, tooltips: tooltips))
                 .accessibilityAddTraits(.isButton)
         } else {
             Button {
