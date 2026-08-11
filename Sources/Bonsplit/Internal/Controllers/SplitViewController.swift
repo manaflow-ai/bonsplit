@@ -268,7 +268,8 @@ final class SplitViewController {
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
     ) {
-        guard paneIndexes.panes[paneId] != nil else { return }
+        guard paneIndexes.panes[paneId] != nil,
+              newPaneID.map({ paneIndexes.panes[$0] == nil }) ?? true else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeRecursively(
@@ -359,7 +360,8 @@ final class SplitViewController {
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
     ) {
-        guard paneIndexes.panes[paneId] != nil else { return }
+        guard paneIndexes.panes[paneId] != nil,
+              newPaneID.map({ paneIndexes.panes[$0] == nil }) ?? true else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeWithTabRecursively(

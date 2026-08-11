@@ -127,7 +127,7 @@ public extension BonsplitController {
     ) throws {
         switch node {
         case .pane(let pane):
-            guard pane.id.id != Self.zeroAuthoritativeUUID else {
+            guard pane.id.id != Self.emptyIdentityUUID else {
                 throw BonsplitAuthoritativeTreeError.emptyPaneID
             }
             guard accumulator.paneIDs.insert(pane.id).inserted else {
@@ -142,7 +142,7 @@ public extension BonsplitController {
             accumulator.paneOrder.append(pane.id)
             var paneTabs: Set<TabID> = []
             for tab in pane.tabs {
-                guard tab.uuid != Self.zeroAuthoritativeUUID else {
+                guard tab.uuid != Self.emptyIdentityUUID else {
                     throw BonsplitAuthoritativeTreeError.emptyTabID
                 }
                 guard paneTabs.insert(tab).inserted,
@@ -159,7 +159,7 @@ public extension BonsplitController {
             }
 
         case .split(let split):
-            guard split.id != Self.zeroAuthoritativeUUID else {
+            guard split.id != Self.emptyIdentityUUID else {
                 throw BonsplitAuthoritativeTreeError.emptySplitID
             }
             guard accumulator.splitIDs.insert(split.id).inserted else {
@@ -298,9 +298,6 @@ public extension BonsplitController {
         }
     }
 
-    private static let zeroAuthoritativeUUID = UUID(uuid: (
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    ))
 }
 
 private extension Set where Element == TabID {

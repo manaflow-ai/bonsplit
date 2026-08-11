@@ -6,6 +6,10 @@ import SwiftUI
 @Observable
 public final class BonsplitController {
 
+    static let emptyIdentityUUID = UUID(uuid: (
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ))
+
     public struct ExternalTabDropRequest {
         public enum Destination {
             case insert(targetPane: PaneID, targetIndex: Int?)
@@ -224,7 +228,8 @@ public final class BonsplitController {
         inPane pane: PaneID? = nil
     ) -> TabID? {
         let tabId = tabID ?? TabID()
-        guard tab(tabId) == nil else { return nil }
+        guard tabId.uuid != Self.emptyIdentityUUID,
+              tab(tabId) == nil else { return nil }
         let tab = Tab(
             id: tabId,
             title: title,
@@ -553,7 +558,8 @@ public final class BonsplitController {
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
     ) -> PaneID? {
-        guard configuration.allowSplits else { return nil }
+        guard configuration.allowSplits,
+              canCreatePane(with: newPaneID) else { return nil }
 
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return nil }
@@ -626,7 +632,8 @@ public final class BonsplitController {
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
     ) -> PaneID? {
-        guard configuration.allowSplits else { return nil }
+        guard configuration.allowSplits,
+              canCreatePane(with: newPaneID) else { return nil }
 
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return nil }
@@ -684,6 +691,12 @@ public final class BonsplitController {
         )
     }
 
+    private func canCreatePane(with newPaneID: PaneID?) -> Bool {
+        guard let newPaneID else { return true }
+        return newPaneID.id != Self.emptyIdentityUUID
+            && internalController.paneState(for: newPaneID) == nil
+    }
+
     /// Split a pane by moving an existing tab into the new pane.
     ///
     /// This mirrors the "drag a tab to a pane edge to create a split" interaction:
@@ -705,7 +718,8 @@ public final class BonsplitController {
         newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits,
-              configuration.allowCrossPaneTabMove else { return nil }
+              configuration.allowCrossPaneTabMove,
+              canCreatePane(with: newPaneID) else { return nil }
 
         // Find the existing tab and its source pane.
         guard let (sourcePane, tabIndex) = findTabInternal(tabId) else { return nil }

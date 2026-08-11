@@ -118,4 +118,34 @@ final class EmbeddedConfigurationTests: XCTestCase {
         )
         XCTAssertEqual(Set(controller.allPaneIds), [rootPane, secondPane])
     }
+
+    func testCallerCannotInstallDuplicateOrEmptyPaneIdentities() throws {
+        let rootPane = PaneID(id: UUID())
+        let secondPane = PaneID(id: UUID())
+        let emptyPane = PaneID(id: BonsplitController.emptyIdentityUUID)
+        let controller = BonsplitController(initialPaneID: rootPane)
+
+        XCTAssertEqual(
+            controller.splitPane(rootPane, orientation: .horizontal, newPaneID: secondPane),
+            secondPane
+        )
+        let paneIDsBefore = controller.allPaneIds
+        let focusedPaneBefore = controller.focusedPaneId
+
+        XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: rootPane))
+        XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: secondPane))
+        XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: emptyPane))
+        XCTAssertEqual(controller.allPaneIds, paneIDsBefore)
+        XCTAssertEqual(controller.focusedPaneId, focusedPaneBefore)
+    }
+
+    func testCallerCannotCreateTabWithEmptyIdentity() throws {
+        let controller = BonsplitController()
+        let rootPane = try XCTUnwrap(controller.allPaneIds.first)
+        let tabIDsBefore = controller.tabs(inPane: rootPane).map(\.id)
+        let emptyTab = TabID(uuid: BonsplitController.emptyIdentityUUID)
+
+        XCTAssertNil(controller.createTab(title: "invalid", tabID: emptyTab, inPane: rootPane))
+        XCTAssertEqual(controller.tabs(inPane: rootPane).map(\.id), tabIDsBefore)
+    }
 }
