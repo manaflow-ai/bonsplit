@@ -115,13 +115,44 @@ public final class BonsplitController {
 
     // MARK: - Initialization
 
-    /// Create a new controller with the specified configuration
+    /// Creates an isolated controller with the specified configuration and
+    /// optional stable identity for its initial pane.
+    ///
+    /// Use ``init(configuration:initialPaneID:tabDragTransferRegistry:)`` when
+    /// multiple controllers may exchange tabs.
     public init(
         configuration: BonsplitConfiguration = .default,
         initialPaneID: PaneID? = nil
     ) {
         self.configuration = configuration
         self.internalController = SplitViewController(initialPaneID: initialPaneID)
+        configureInternalController()
+    }
+
+    /// Creates a controller with explicit ownership of its tab-drag capabilities.
+    ///
+    /// Controllers that exchange tabs must receive the same registry. Controllers
+    /// created without one are isolated, which keeps independent hosts and tests
+    /// from sharing hidden process state.
+    ///
+    /// - Parameters:
+    ///   - configuration: The controller's behavior and appearance.
+    ///   - tabDragTransferRegistry: The capability registry shared by controllers
+    ///     that may exchange tabs.
+    public init(
+        configuration: BonsplitConfiguration,
+        initialPaneID: PaneID? = nil,
+        tabDragTransferRegistry: TabDragTransferRegistry
+    ) {
+        self.configuration = configuration
+        self.internalController = SplitViewController(
+            initialPaneID: initialPaneID,
+            tabDragTransferRegistry: tabDragTransferRegistry
+        )
+        configureInternalController()
+    }
+
+    private func configureInternalController() {
         internalController.publicController = self
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }
@@ -450,18 +481,11 @@ public final class BonsplitController {
         let sourcePaneId = sourcePane.id
 
         if sourcePaneId == targetPane.id {
-            guard configuration.allowTabReordering else { return false }
-            // Reorder within same pane.
             let destinationIndex: Int = {
                 if let index { return max(0, min(index, sourcePane.tabs.count)) }
                 return sourcePane.tabs.count
             }()
-            sourcePane.moveTab(from: sourceIndex, to: destinationIndex)
-            sourcePane.selectTab(tabItem.id)
-            internalController.focusPane(sourcePane.id)
-            delegate?.splitTabBar(self, didSelectTab: movedTab, inPane: sourcePane.id)
-            notifyGeometryChange()
-            return true
+            return reorderTab(tabId, toIndex: destinationIndex)
         }
 
         guard configuration.allowCrossPaneTabMove else { return false }
@@ -471,7 +495,7 @@ public final class BonsplitController {
         return true
     }
 
-    /// Reorder a tab within its pane.
+    /// Reorder a tab within its pane and report an actual order change to the delegate.
     /// - Parameters:
     ///   - tabId: The tab to reorder.
     ///   - toIndex: Destination index.
@@ -481,9 +505,18 @@ public final class BonsplitController {
         guard configuration.allowTabReordering else { return false }
         guard let (pane, sourceIndex) = findTabInternal(tabId) else { return false }
         let destinationIndex = max(0, min(toIndex, pane.tabs.count))
+        let orderBeforeReorder = pane.tabs.map(\.id)
         pane.moveTab(from: sourceIndex, to: destinationIndex)
         pane.selectTab(tabId.id)
         internalController.focusPane(pane.id)
+        let orderAfterReorder = pane.tabs.map(\.id)
+        if orderAfterReorder != orderBeforeReorder {
+            delegate?.splitTabBar(
+                self,
+                didReorderTabsInPane: pane.id,
+                orderedTabIds: orderAfterReorder.map { TabID(id: $0) }
+            )
+        }
         if let tabIndex = pane.tabs.firstIndex(where: { $0.id == tabId.id }) {
             let tab = Tab(from: pane.tabs[tabIndex])
             delegate?.splitTabBar(self, didSelectTab: tab, inPane: pane.id)

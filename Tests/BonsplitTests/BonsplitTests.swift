@@ -1747,17 +1747,13 @@ final class BonsplitTests: XCTestCase {
         let generation = controller.beginTabDrag(tab, from: pane.id)
 
         XCTAssertEqual(controller.dragGeneration, generation)
-        XCTAssertEqual(controller.draggingTab?.id, tab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, pane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, tab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, tab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, generation)
 
         controller.cancelTabDragIfGenerationMatches(generation)
 
-        XCTAssertNil(controller.draggingTab)
-        XCTAssertNil(controller.dragSourcePaneId)
-        XCTAssertNil(controller.activeDragTab)
-        XCTAssertNil(controller.activeDragSourcePaneId)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
@@ -1786,10 +1782,32 @@ final class BonsplitTests: XCTestCase {
         controller.cancelTabDragIfGenerationMatches(staleGeneration)
 
         XCTAssertEqual(controller.dragGeneration, currentGeneration)
-        XCTAssertEqual(controller.draggingTab?.id, secondTab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, secondPane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, secondTab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, secondTab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, currentGeneration)
+    }
+
+    @MainActor
+    func testAppResignDoesNotPreemptTabDragSourceLifecycle() {
+        let controller = SplitViewController()
+        let pane = controller.focusedPane!
+        let tab = pane.selectedTab!
+
+        let generation = controller.beginTabDrag(tab, from: pane.id)
+        XCTAssertNotNil(controller.tabDragSession)
+
+        NotificationCenter.default.post(
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+
+        XCTAssertNotNil(
+            controller.tabDragSession,
+            "App deactivation can happen while a native drag is crossing windows or applications; only the drag source lifecycle may end its identity."
+        )
+
+        controller.nativeTabDragSessionDidEnd(generation: generation)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
@@ -2430,7 +2448,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
-    func testTrailingTabBarChromeDropDestinationStaysOffTabPixels() throws {
+    func testTabBarDropDestinationSpansTabsAndTrailingChrome() throws {
         let appearance = BonsplitConfiguration.Appearance(splitButtons: [])
         let controller = BonsplitController(
             configuration: BonsplitConfiguration(appearance: appearance)
@@ -2463,12 +2481,6 @@ final class BonsplitTests: XCTestCase {
         contentView.addSubview(hostingView)
         window.makeKeyAndOrderFront(nil)
 
-        func setDragHitTesting(_ view: NSView) {
-            (view as? TabBarDragZoneView.DragNSView)?.hitTestEventTypeOverride = .leftMouseDragged
-            for subview in view.subviews {
-                setDragHitTesting(subview)
-            }
-        }
         func tabDropDestinations(in view: NSView) -> [NSView] {
             var matches: [NSView] = []
             if view.registeredDraggedTypes.contains(where: { pasteboardType in
@@ -2482,27 +2494,17 @@ final class BonsplitTests: XCTestCase {
             }
             return matches
         }
-        func dragZones(in view: NSView) -> [TabBarDragZoneView.DragNSView] {
-            var matches = (view as? TabBarDragZoneView.DragNSView).map { [$0] } ?? []
-            for subview in view.subviews {
-                matches.append(contentsOf: dragZones(in: subview))
+        func firstTabHitRegion(in view: NSView) -> TabItemHitRegionView.RegionNSView? {
+            if let region = view as? TabItemHitRegionView.RegionNSView {
+                return region
             }
-            return matches
-        }
-        func framesMatch(_ lhs: NSView, _ rhs: NSView) -> Bool {
-            let lhsFrame = lhs.convert(lhs.bounds, to: nil)
-            let rhsFrame = rhs.convert(rhs.bounds, to: nil)
-            return abs(lhsFrame.minX - rhsFrame.minX) <= 0.5
-                && abs(lhsFrame.maxX - rhsFrame.maxX) <= 0.5
-                && abs(lhsFrame.minY - rhsFrame.minY) <= 0.5
-                && abs(lhsFrame.maxY - rhsFrame.maxY) <= 0.5
+            return view.subviews.lazy.compactMap { firstTabHitRegion(in: $0) }.first
         }
 
-        let tabPoint = NSPoint(x: 90, y: 30)
         let trailingEmptyPoint = NSPoint(x: 460, y: 30)
         let registrationDeadline = Date().addingTimeInterval(0.5)
         var dropDestinations: [NSView] = []
-        var dragZoneViews: [TabBarDragZoneView.DragNSView] = []
+        var tabPoint: NSPoint?
 
         func dropDestination(at point: NSPoint) -> NSView? {
             let pointInWindow = hostingView.convert(point, to: nil)
@@ -2510,20 +2512,22 @@ final class BonsplitTests: XCTestCase {
                 view.convert(view.bounds, to: nil).contains(pointInWindow)
             }
         }
-        func chromeDragZones(at point: NSPoint) -> [TabBarDragZoneView.DragNSView] {
-            let pointInWindow = hostingView.convert(point, to: nil)
-            return dragZoneViews.filter { dragZone in
-                dragZone.convert(dragZone.bounds, to: nil).contains(pointInWindow)
-            }
-        }
-
         repeat {
             contentView.layoutSubtreeIfNeeded()
-            setDragHitTesting(hostingView)
             dropDestinations = tabDropDestinations(in: hostingView)
-            dragZoneViews = dragZones(in: hostingView)
-            let tabPointInWindow = hostingView.convert(tabPoint, to: nil)
-            if BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPointInWindow, in: window),
+            if let tabRegion = firstTabHitRegion(in: hostingView), !tabRegion.bounds.isEmpty {
+                let centerInWindow = tabRegion.convert(
+                    NSPoint(x: tabRegion.bounds.midX, y: tabRegion.bounds.midY),
+                    to: nil
+                )
+                tabPoint = hostingView.convert(centerInWindow, from: nil)
+            }
+            if let tabPoint,
+               BonsplitTabItemHitRegionRegistry.containsWindowPoint(
+                   hostingView.convert(tabPoint, to: nil),
+                   in: window
+               ),
+               dropDestination(at: tabPoint) != nil,
                dropDestination(at: trailingEmptyPoint) != nil {
                 break
             }
@@ -2532,26 +2536,25 @@ final class BonsplitTests: XCTestCase {
 
         guard dropDestination(at: trailingEmptyPoint) != nil else {
             throw XCTSkip(
-                "This SwiftUI runtime does not expose view-local onDrop registration through registeredDraggedTypes"
+                "This SwiftUI runtime did not mount the native tab-bar drop destination"
             )
         }
 
-        let tabPointInWindow = hostingView.convert(tabPoint, to: nil)
+        let resolvedTabPoint = try XCTUnwrap(tabPoint, "Expected a mounted pane tab hit region")
+        let tabPointInWindow = hostingView.convert(resolvedTabPoint, to: nil)
         XCTAssertTrue(
             BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPointInWindow, in: window),
             "The test point should be owned by the rendered pane tab"
         )
 
-        for dragZone in chromeDragZones(at: tabPoint) {
-            XCTAssertFalse(
-                dropDestinations.contains(where: { framesMatch(dragZone, $0) }),
-                "Empty tab-bar chrome must not register an end-drop destination over a rendered tab"
-            )
-        }
+        XCTAssertNotNil(
+            dropDestination(at: resolvedTabPoint),
+            "The strip-wide destination must resolve insertion slots over rendered tabs"
+        )
 
         XCTAssertNotNil(
             dropDestination(at: trailingEmptyPoint),
-            "Actual empty trailing tab-bar space should still route tab transfers to the end-drop destination"
+            "The same destination must retain the final insertion slot in trailing chrome"
         )
     }
 

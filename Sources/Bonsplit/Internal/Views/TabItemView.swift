@@ -298,7 +298,7 @@ struct TabItemView: View {
     @State private var isZoomHovered = false
     @State private var isAudioHovered = false
     @State private var showGlobeFallback = true
-    @State private var globeFallbackWorkItem: DispatchWorkItem?
+    @State private var globeFallbackScheduler = TabIconFallbackScheduler()
     @State private var lastIsLoadingObserved = false
     @State private var lastLoadingStoppedAt: Date?
     @State private var renderedFaviconData: Data?
@@ -740,8 +740,7 @@ struct TabItemView: View {
             updateGlobeFallback()
         }
         .onDisappear {
-            globeFallbackWorkItem?.cancel()
-            globeFallbackWorkItem = nil
+            globeFallbackScheduler.cancel()
         }
         .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
         .onChange(of: tab.iconImageData) { _ in
@@ -943,8 +942,7 @@ struct TabItemView: View {
         }
         lastIsLoadingObserved = tab.isLoading
 
-        globeFallbackWorkItem?.cancel()
-        globeFallbackWorkItem = nil
+        globeFallbackScheduler.cancel()
 
         // Only delay the globe fallback right after a navigation completes, when a favicon is likely to
         // arrive soon. Otherwise (e.g. a brand-new tab), show the globe immediately.
@@ -959,12 +957,11 @@ struct TabItemView: View {
         }
 
         showGlobeFallback = false
-        let work = DispatchWorkItem {
-            showGlobeFallback = true
+        // Keep the queued action independent of the TabItemView value snapshot.
+        let showGlobeFallbackBinding = $showGlobeFallback
+        globeFallbackScheduler.schedule(after: .milliseconds(900)) { [showGlobeFallbackBinding] in
+            showGlobeFallbackBinding.wrappedValue = true
         }
-        globeFallbackWorkItem = work
-        // Give favicon fetches a little longer before showing the globe fallback to reduce brief flashes.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.90, execute: work)
     }
 
     private func updateRenderedFaviconImage() {
