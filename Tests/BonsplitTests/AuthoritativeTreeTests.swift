@@ -244,11 +244,11 @@ final class AuthoritativeTreeTests: XCTestCase {
         let currentTabs: Set<TabID> = [first, second, third]
         let otherPane = PaneID()
 
-        assertValidationError(
-            .paneHasNoTabs(pane),
-            controller: controller,
-            tree: .init(root: .pane(.init(id: pane, tabs: []))),
-            exactTabIDs: []
+        XCTAssertNoThrow(
+            try controller.validateAuthoritativeTree(
+                .init(root: .pane(.init(id: pane, tabs: []))),
+                exactTabIDs: []
+            )
         )
         assertValidationError(
             .duplicatePane(pane),
@@ -370,6 +370,34 @@ final class AuthoritativeTreeTests: XCTestCase {
             tree: .init(root: .pane(.init(id: pane, tabs: [first, second, unexpected]))),
             exactTabIDs: currentTabs
         )
+    }
+
+    @MainActor
+    func testAuthoritativeTreeCanRebuildSupportedEmptyPane() throws {
+        let controller = BonsplitController()
+        let firstPane = try XCTUnwrap(controller.focusedPaneId)
+        let welcomeTab = try XCTUnwrap(controller.tabs(inPane: firstPane).first?.id)
+        let emptyPane = try XCTUnwrap(controller.splitPane(
+            firstPane,
+            orientation: .horizontal
+        ))
+        guard case .split(let snapshot) = controller.treeSnapshot(),
+              let splitID = UUID(uuidString: snapshot.id) else {
+            XCTFail("Expected split root")
+            return
+        }
+        let replacement = BonsplitAuthoritativeTree(root: .split(.init(
+            id: splitID,
+            orientation: .vertical,
+            ratio: 0.6,
+            first: .pane(.init(id: firstPane, tabs: [welcomeTab])),
+            second: .pane(.init(id: emptyPane, tabs: []))
+        )))
+
+        XCTAssertNoThrow(try controller.validateAuthoritativeTree(replacement))
+        XCTAssertTrue(try controller.applyAuthoritativeTree(replacement))
+        XCTAssertTrue(controller.tabs(inPane: emptyPane).isEmpty)
+        XCTAssertNil(controller.selectedTabId(inPane: emptyPane))
     }
 
     @MainActor

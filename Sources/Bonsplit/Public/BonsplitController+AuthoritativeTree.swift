@@ -136,9 +136,6 @@ public extension BonsplitController {
             guard accumulator.nodeIDs.insert(pane.id.id).inserted else {
                 throw BonsplitAuthoritativeTreeError.duplicateNodeIdentity(pane.id.id)
             }
-            guard !pane.tabs.isEmpty else {
-                throw BonsplitAuthoritativeTreeError.paneHasNoTabs(pane.id)
-            }
             accumulator.paneOrder.append(pane.id)
             var paneTabs: Set<TabID> = []
             for tab in pane.tabs {
@@ -204,11 +201,11 @@ public extension BonsplitController {
             let existing = internalController.paneState(for: requested.id)
             let tabs = requested.tabs.map { currentTabs[$0.id]! }
             let tabIDs = Set(requested.tabs.map(\.id))
-            let selectedTabID: UUID
+            let selectedTabID: UUID?
             switch requested.selection {
             case .preserve:
                 selectedTabID = existing?.selectedTabId.flatMap { tabIDs.contains($0) ? $0 : nil }
-                    ?? tabs[0].id
+                    ?? tabs.first?.id
             case .tab(let selected):
                 selectedTabID = selected.id
             }
