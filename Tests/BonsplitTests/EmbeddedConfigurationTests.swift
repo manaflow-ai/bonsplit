@@ -131,12 +131,28 @@ final class EmbeddedConfigurationTests: XCTestCase {
         )
         let paneIDsBefore = controller.allPaneIds
         let focusedPaneBefore = controller.focusedPaneId
+        guard case .split(let split) = controller.treeSnapshot(),
+              let splitID = UUID(uuidString: split.id) else {
+            XCTFail("Expected split root with a stable identity")
+            return
+        }
+        let splitIdentityAsPane = PaneID(id: splitID)
 
         XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: rootPane))
         XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: secondPane))
         XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: emptyPane))
+        XCTAssertNil(controller.splitPane(rootPane, orientation: .vertical, newPaneID: splitIdentityAsPane))
         XCTAssertEqual(controller.allPaneIds, paneIDsBefore)
         XCTAssertEqual(controller.focusedPaneId, focusedPaneBefore)
+    }
+
+    func testEmptyInitialPaneIdentityIsReplaced() throws {
+        let emptyPane = PaneID(id: BonsplitController.emptyIdentityUUID)
+        let controller = BonsplitController(initialPaneID: emptyPane)
+
+        let resolvedPane = try XCTUnwrap(controller.allPaneIds.first)
+        XCTAssertNotEqual(resolvedPane, emptyPane)
+        XCTAssertEqual(controller.focusedPaneId, resolvedPane)
     }
 
     func testCallerCannotCreateTabWithEmptyIdentity() throws {

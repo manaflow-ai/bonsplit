@@ -308,6 +308,19 @@ final class AuthoritativeTreeTests: XCTestCase {
             ))),
             exactTabIDs: currentTabs
         )
+        let outOfConfigurationRangeSplit = UUID()
+        assertValidationError(
+            .invalidSplitRatio(split: outOfConfigurationRangeSplit, ratio: 0.05),
+            controller: controller,
+            tree: .init(root: .split(.init(
+                id: outOfConfigurationRangeSplit,
+                orientation: .horizontal,
+                ratio: 0.05,
+                first: .pane(.init(id: pane, tabs: [first])),
+                second: .pane(.init(id: otherPane, tabs: [second, third]))
+            ))),
+            exactTabIDs: currentTabs
+        )
 
         let absentTab = TabID()
         assertValidationError(

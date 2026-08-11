@@ -127,7 +127,16 @@ final class SplitViewController {
         } else {
             // Initialize with a single pane containing a welcome tab
             let welcomeTab = TabItem(title: "Welcome", icon: "star")
-            let initialPane = PaneState(id: initialPaneID ?? PaneID(), tabs: [welcomeTab])
+            let resolvedInitialPaneID: PaneID
+            if let initialPaneID,
+               initialPaneID.id != UUID(uuid: (
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+               )) {
+                resolvedInitialPaneID = initialPaneID
+            } else {
+                resolvedInitialPaneID = PaneID()
+            }
+            let initialPane = PaneState(id: resolvedInitialPaneID, tabs: [welcomeTab])
             resolvedRoot = .pane(initialPane)
             initialFocusedPaneId = initialPane.id
         }
@@ -269,7 +278,9 @@ final class SplitViewController {
         newPaneID: PaneID? = nil
     ) {
         guard paneIndexes.panes[paneId] != nil,
-              newPaneID.map({ paneIndexes.panes[$0] == nil }) ?? true else { return }
+              newPaneID.map({
+                  paneIndexes.panes[$0] == nil && findSplit($0.id) == nil
+              }) ?? true else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeRecursively(
@@ -361,7 +372,9 @@ final class SplitViewController {
         newPaneID: PaneID? = nil
     ) {
         guard paneIndexes.panes[paneId] != nil,
-              newPaneID.map({ paneIndexes.panes[$0] == nil }) ?? true else { return }
+              newPaneID.map({
+                  paneIndexes.panes[$0] == nil && findSplit($0.id) == nil
+              }) ?? true else { return }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeWithTabRecursively(

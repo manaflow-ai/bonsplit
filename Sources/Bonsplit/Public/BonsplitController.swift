@@ -695,6 +695,7 @@ public final class BonsplitController {
         guard let newPaneID else { return true }
         return newPaneID.id != Self.emptyIdentityUUID
             && internalController.paneState(for: newPaneID) == nil
+            && internalController.findSplit(newPaneID.id) == nil
     }
 
     /// Split a pane by moving an existing tab into the new pane.

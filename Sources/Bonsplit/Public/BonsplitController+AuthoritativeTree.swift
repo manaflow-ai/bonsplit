@@ -170,7 +170,9 @@ public extension BonsplitController {
             }
             guard split.ratio.isFinite,
                   split.ratio > 0,
-                  split.ratio < 1 else {
+                  split.ratio < 1,
+                  split.ratio >= Double(configuration.dividerPositionRange.lowerBound),
+                  split.ratio <= Double(configuration.dividerPositionRange.upperBound) else {
                 throw BonsplitAuthoritativeTreeError.invalidSplitRatio(
                     split: split.id,
                     ratio: split.ratio
