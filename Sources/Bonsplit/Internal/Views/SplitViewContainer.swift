@@ -8,6 +8,7 @@ struct SplitViewContainer<Content: View, EmptyContent: View>: View {
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     let appearance: BonsplitConfiguration.Appearance
     let dividerPositionRange: ClosedRange<CGFloat>
+    let allowDividerResizing: Bool
     var showSplitButtons: Bool = true
     var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
@@ -47,6 +48,7 @@ struct SplitViewContainer<Content: View, EmptyContent: View>: View {
             emptyPaneBuilder: emptyPaneBuilder,
             appearance: appearance,
             dividerPositionRange: dividerPositionRange,
+            allowDividerResizing: allowDividerResizing,
             showSplitButtons: showSplitButtons,
             tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle,

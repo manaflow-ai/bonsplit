@@ -6,6 +6,10 @@ import SwiftUI
 @Observable
 public final class BonsplitController {
 
+    static let emptyIdentityUUID = UUID(uuid: (
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    ))
+
     public struct ExternalTabDropRequest {
         public enum Destination {
             case insert(targetPane: PaneID, targetIndex: Int?)
@@ -115,15 +119,17 @@ public final class BonsplitController {
 
     // MARK: - Initialization
 
-    /// Creates an isolated controller with the specified configuration.
+    /// Creates an isolated controller with the specified configuration and
+    /// optional stable identity for its initial pane.
     ///
-    /// Use ``init(configuration:tabDragTransferRegistry:)`` when multiple
-    /// controllers may exchange tabs.
-    ///
-    /// - Parameter configuration: The controller's behavior and appearance.
-    public init(configuration: BonsplitConfiguration = .default) {
+    /// Use ``init(configuration:initialPaneID:tabDragTransferRegistry:)`` when
+    /// multiple controllers may exchange tabs.
+    public init(
+        configuration: BonsplitConfiguration = .default,
+        initialPaneID: PaneID? = nil
+    ) {
         self.configuration = configuration
-        self.internalController = SplitViewController()
+        self.internalController = SplitViewController(initialPaneID: initialPaneID)
         configureInternalController()
     }
 
@@ -139,10 +145,12 @@ public final class BonsplitController {
     ///     that may exchange tabs.
     public init(
         configuration: BonsplitConfiguration,
+        initialPaneID: PaneID? = nil,
         tabDragTransferRegistry: TabDragTransferRegistry
     ) {
         self.configuration = configuration
         self.internalController = SplitViewController(
+            initialPaneID: initialPaneID,
             tabDragTransferRegistry: tabDragTransferRegistry
         )
         configureInternalController()
@@ -204,6 +212,7 @@ public final class BonsplitController {
     @discardableResult
     public func createTab(
         title: String,
+        tabID: TabID? = nil,
         hasCustomTitle: Bool = false,
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
@@ -218,7 +227,9 @@ public final class BonsplitController {
         showsRemoteIndicator: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
-        let tabId = TabID()
+        let tabId = tabID ?? TabID()
+        guard tabId.uuid != Self.emptyIdentityUUID,
+              tab(tabId) == nil else { return nil }
         let tab = Tab(
             id: tabId,
             title: title,
@@ -241,6 +252,7 @@ public final class BonsplitController {
         if delegate?.splitTabBar(self, shouldCreateTab: tab, inPane: targetPane) == false {
             return nil
         }
+        guard self.tab(tabId) == nil else { return nil }
 
         // Calculate insertion index based on configuration
         let insertIndex: Int?
@@ -544,9 +556,11 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         withTab tab: Tab? = nil,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
-        guard configuration.allowSplits else { return nil }
+        guard configuration.allowSplits,
+              canCreatePane(with: newPaneID) else { return nil }
 
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return nil }
@@ -580,15 +594,13 @@ public final class BonsplitController {
 
         // Perform split
         let dividerPosition = normalizedInitialDividerPosition(initialDividerPosition)
-        internalController.splitPane(
+        guard let newPaneId = internalController.splitPane(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             with: internalTab,
-            initialDividerPosition: dividerPosition
-        )
-
-        // Find new pane (will be focused after split)
-        let newPaneId = focusedPaneId!
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
+        ) else { return nil }
 
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
@@ -615,9 +627,11 @@ public final class BonsplitController {
         orientation: SplitOrientation,
         withTab tab: Tab,
         insertFirst: Bool,
-        initialDividerPosition: CGFloat? = nil
+        initialDividerPosition: CGFloat? = nil,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
-        guard configuration.allowSplits else { return nil }
+        guard configuration.allowSplits,
+              canCreatePane(with: newPaneID) else { return nil }
 
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return nil }
@@ -646,15 +660,14 @@ public final class BonsplitController {
 
         // Perform split with insertion side.
         let dividerPosition = normalizedInitialDividerPosition(initialDividerPosition)
-        internalController.splitPaneWithTab(
+        guard let newPaneId = internalController.splitPaneWithTab(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             tab: internalTab,
             insertFirst: insertFirst,
-            initialDividerPosition: dividerPosition
-        )
-
-        let newPaneId = focusedPaneId!
+            initialDividerPosition: dividerPosition,
+            newPaneID: newPaneID
+        ) else { return nil }
 
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
@@ -674,6 +687,13 @@ public final class BonsplitController {
         )
     }
 
+    private func canCreatePane(with newPaneID: PaneID?) -> Bool {
+        guard let newPaneID else { return true }
+        return newPaneID.id != Self.emptyIdentityUUID
+            && internalController.paneState(for: newPaneID) == nil
+            && internalController.findSplit(newPaneID.id) == nil
+    }
+
     /// Split a pane by moving an existing tab into the new pane.
     ///
     /// This mirrors the "drag a tab to a pane edge to create a split" interaction:
@@ -691,10 +711,12 @@ public final class BonsplitController {
         _ paneId: PaneID? = nil,
         orientation: SplitOrientation,
         movingTab tabId: TabID,
-        insertFirst: Bool
+        insertFirst: Bool,
+        newPaneID: PaneID? = nil
     ) -> PaneID? {
         guard configuration.allowSplits,
-              configuration.allowCrossPaneTabMove else { return nil }
+              configuration.allowCrossPaneTabMove,
+              canCreatePane(with: newPaneID) else { return nil }
 
         // Find the existing tab and its source pane.
         guard let (sourcePane, tabIndex) = findTabInternal(tabId) else { return nil }
@@ -708,6 +730,8 @@ public final class BonsplitController {
         if delegate?.splitTabBar(self, shouldSplitPane: targetPaneId, orientation: orientation) == false {
             return nil
         }
+        guard canCreatePane(with: newPaneID),
+              internalController.paneState(for: targetPaneId) != nil else { return nil }
 
         // Remove from source first.
         guard internalController.removeTab(tabItem.id, fromPane: sourcePane.id) != nil else {
@@ -731,15 +755,17 @@ public final class BonsplitController {
 
         // Perform split with the moved tab. Forward the clamped default so the
         // moved-tab path honors dividerPositionRange like the other overloads.
-        internalController.splitPaneWithTab(
+        guard let newPaneId = internalController.splitPaneWithTab(
             PaneID(id: targetPaneId.id),
             orientation: orientation,
             tab: tabItem,
             insertFirst: insertFirst,
-            initialDividerPosition: normalizedInitialDividerPosition(nil)
-        )
-
-        let newPaneId = focusedPaneId!
+            initialDividerPosition: normalizedInitialDividerPosition(nil),
+            newPaneID: newPaneID
+        ) else {
+            internalController.addTab(tabItem, toPane: sourcePane.id, atIndex: tabIndex)
+            return nil
+        }
 
         // Notify delegate
         delegate?.splitTabBar(self, didSplitPane: targetPaneId, newPane: newPaneId, orientation: orientation)
@@ -1164,9 +1190,8 @@ public final class BonsplitController {
     /// - Parameters:
     ///   - isDragging: Whether the change is due to active divider dragging
     ///   - force: Deliver even inside the external-update suppression window.
-    ///     Only the drag-end path passes true: its notification is the one
-    ///     the delegate contract guarantees, so the anti-echo gate must not
-    ///     swallow it.
+    ///     Drag-end and authoritative tree replacement pass true because each
+    ///     operation guarantees one final geometry notification.
     internal func notifyGeometryChange(isDragging: Bool = false, force: Bool = false) {
         guard force || !internalController.isExternalUpdateInProgress else { return }
 

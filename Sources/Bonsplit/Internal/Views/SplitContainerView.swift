@@ -3,8 +3,14 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
+class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor?
+    var isDividerInteractionEnabled = true {
+        didSet {
+            guard oldValue != isDividerInteractionEnabled else { return }
+            window?.invalidateCursorRects(for: self)
+        }
+    }
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
     weak var stampedInternalController: SplitViewController?
@@ -51,6 +57,7 @@ private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     /// divider cursor rects (added by super) with the custom cursor over
     /// each divider's expanded effective rect.
     override func resetCursorRects() {
+        guard isDividerInteractionEnabled else { return }
         let custom = isVertical ? BonsplitDividerCursors.vertical : BonsplitDividerCursors.horizontal
         guard let custom else {
             super.resetCursorRects()
@@ -107,6 +114,7 @@ private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var onDividerDragSession: ((Bool) -> Void)?
 
     override func mouseDown(with event: NSEvent) {
+        guard isDividerInteractionEnabled else { return }
         // Any mouseDown that reaches the split view itself is a divider
         // interaction: arranged subviews cover all pane content, so content
         // clicks never route here, and reconstructing AppKit's exact
@@ -200,6 +208,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     let controller: SplitViewController
     let appearance: BonsplitConfiguration.Appearance
     let dividerPositionRange: ClosedRange<CGFloat>
+    let allowDividerResizing: Bool
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
     var showSplitButtons: Bool = true
@@ -246,6 +255,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
         splitView.customDividerThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         splitView.customDividerHitExpansion = appearance.dividerHitExpansion
+        splitView.isDividerInteractionEnabled = allowDividerResizing
         splitView.stampedInternalController = controller
         splitView.stampedSplitId = splitState.id
         splitView.isVertical = splitState.orientation == .horizontal
@@ -508,6 +518,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         let dividerThicknessChanged = (splitView as? ThemedSplitView)?.customDividerThickness != resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerThickness = resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerHitExpansion = appearance.dividerHitExpansion
+        (splitView as? ThemedSplitView)?.isDividerInteractionEnabled = allowDividerResizing
         (splitView as? ThemedSplitView)?.stampedInternalController = controller
         (splitView as? ThemedSplitView)?.stampedSplitId = splitState.id
         // Re-install alongside the identity stamps above so a reused
@@ -681,6 +692,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 controller: controller,
                 appearance: appearance,
                 dividerPositionRange: dividerPositionRange,
+                allowDividerResizing: allowDividerResizing,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
                 showSplitButtons: showSplitButtons,

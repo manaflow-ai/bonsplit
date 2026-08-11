@@ -62,6 +62,9 @@ public struct BonsplitConfiguration: Sendable {
     /// Whether to allow moving tabs between panes
     public var allowCrossPaneTabMove: Bool
 
+    /// Whether split dividers accept pointer-driven resizing.
+    public var allowDividerResizing: Bool
+
     /// Whether tabs install and present their standard context menu.
     public var allowsTabContextMenu: Bool
 
@@ -102,7 +105,8 @@ public struct BonsplitConfiguration: Sendable {
         allowSplits: false,
         allowCloseTabs: false,
         allowTabReordering: false,
-        allowCrossPaneTabMove: false
+        allowCrossPaneTabMove: false,
+        allowDividerResizing: false
     )
 
     // MARK: - Initializer
@@ -113,6 +117,7 @@ public struct BonsplitConfiguration: Sendable {
         allowCloseLastPane: Bool = false,
         allowTabReordering: Bool = true,
         allowCrossPaneTabMove: Bool = true,
+        allowDividerResizing: Bool = true,
         allowsTabContextMenu: Bool = true,
         autoCloseEmptyPanes: Bool = true,
         contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch,
@@ -126,6 +131,7 @@ public struct BonsplitConfiguration: Sendable {
         self.allowCloseLastPane = allowCloseLastPane
         self.allowTabReordering = allowTabReordering
         self.allowCrossPaneTabMove = allowCrossPaneTabMove
+        self.allowDividerResizing = allowDividerResizing
         self.allowsTabContextMenu = allowsTabContextMenu
         self.autoCloseEmptyPanes = autoCloseEmptyPanes
         self.contentViewLifecycle = contentViewLifecycle
