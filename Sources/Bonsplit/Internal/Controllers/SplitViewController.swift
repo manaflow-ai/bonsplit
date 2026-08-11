@@ -276,11 +276,9 @@ final class SplitViewController {
         with newTab: TabItem? = nil,
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
-    ) {
+    ) -> PaneID? {
         guard paneIndexes.panes[paneId] != nil,
-              newPaneID.map({
-                  paneIndexes.panes[$0] == nil && findSplit($0.id) == nil
-              }) ?? true else { return }
+              let resolvedNewPaneID = availablePaneID(requested: newPaneID) else { return nil }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeRecursively(
@@ -289,12 +287,14 @@ final class SplitViewController {
             orientation: orientation,
             newTab: newTab,
             initialDividerPosition: initialDividerPosition,
-            newPaneID: newPaneID,
+            newPaneID: resolvedNewPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
             registerPane(createdPane)
+            return createdPane.id
         }
+        return nil
     }
 
     private func splitNodeRecursively(
@@ -303,7 +303,7 @@ final class SplitViewController {
         orientation: SplitOrientation,
         newTab: TabItem?,
         initialDividerPosition: CGFloat?,
-        newPaneID: PaneID?,
+        newPaneID: PaneID,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
@@ -312,9 +312,9 @@ final class SplitViewController {
                 // Create new pane - empty if no tab provided (gives developer full control)
                 let newPane: PaneState
                 if let tab = newTab {
-                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
+                    newPane = PaneState(id: newPaneID, tabs: [tab])
                 } else {
-                    newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [])
+                    newPane = PaneState(id: newPaneID, tabs: [])
                 }
 
                 // Start with divider at the edge so there's no flash before animation
@@ -370,11 +370,9 @@ final class SplitViewController {
         insertFirst: Bool,
         initialDividerPosition: CGFloat? = nil,
         newPaneID: PaneID? = nil
-    ) {
+    ) -> PaneID? {
         guard paneIndexes.panes[paneId] != nil,
-              newPaneID.map({
-                  paneIndexes.panes[$0] == nil && findSplit($0.id) == nil
-              }) ?? true else { return }
+              let resolvedNewPaneID = availablePaneID(requested: newPaneID) else { return nil }
         clearPaneZoom()
         var createdPane: PaneState?
         rootNode = splitNodeWithTabRecursively(
@@ -384,12 +382,14 @@ final class SplitViewController {
             tab: tab,
             insertFirst: insertFirst,
             initialDividerPosition: initialDividerPosition,
-            newPaneID: newPaneID,
+            newPaneID: resolvedNewPaneID,
             createdPane: &createdPane
         )
         if let createdPane {
             registerPane(createdPane)
+            return createdPane.id
         }
+        return nil
     }
 
     private func splitNodeWithTabRecursively(
@@ -399,14 +399,14 @@ final class SplitViewController {
         tab: TabItem,
         insertFirst: Bool,
         initialDividerPosition: CGFloat?,
-        newPaneID: PaneID?,
+        newPaneID: PaneID,
         createdPane: inout PaneState?
     ) -> SplitNode {
         switch node {
         case .pane(let paneState):
             if paneState.id == targetPaneId {
                 // Create new pane with the tab
-                let newPane = PaneState(id: newPaneID ?? PaneID(), tabs: [tab])
+                let newPane = PaneState(id: newPaneID, tabs: [tab])
 
                 // Start with divider at the edge so there's no flash before animation
                 let splitState: SplitState
@@ -468,6 +468,23 @@ final class SplitViewController {
     private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat {
         guard let position else { return 0.5 }
         return min(max(position, 0), 1)
+    }
+
+    private func availablePaneID(requested: PaneID?) -> PaneID? {
+        if let requested {
+            guard requested.id != UUID(uuid: (
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+            )),
+                  paneIndexes.panes[requested] == nil,
+                  findSplit(requested.id) == nil else { return nil }
+            return requested
+        }
+
+        var candidate = PaneID()
+        while paneIndexes.panes[candidate] != nil || findSplit(candidate.id) != nil {
+            candidate = PaneID()
+        }
+        return candidate
     }
 
     /// Close a pane and collapse the split
