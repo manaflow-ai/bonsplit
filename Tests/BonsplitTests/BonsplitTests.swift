@@ -1737,6 +1737,28 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testClosePaneWithNoFocusMovesFocusToSibling() {
+        let controller = SplitViewController()
+        let firstPane = controller.focusedPane!
+        controller.splitPaneWithTab(
+            firstPane.id,
+            orientation: .horizontal,
+            tab: TabItem(title: "Second"),
+            insertFirst: false
+        )
+        let closingPane = controller.focusedPane!
+        controller.focusedPaneId = nil
+
+        controller.closePane(closingPane.id)
+
+        XCTAssertEqual(
+            controller.focusedPaneId,
+            firstPane.id,
+            "Closing a pane with no current focus should adopt its sibling"
+        )
+    }
+
+    @MainActor
     func testClosePaneRepairsStaleFocus() {
         let controller = SplitViewController()
         let firstPane = controller.focusedPane!
