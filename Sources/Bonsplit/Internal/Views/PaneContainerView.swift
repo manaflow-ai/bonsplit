@@ -436,7 +436,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
            let dragSession = controller.tabDragSession {
             dropLifecycle = .idle
             activeDropZone = nil
-            controller.clearTabDragState()
             return performLocalTabDrop(dragSession, zone: zone)
         }
 
@@ -477,16 +476,21 @@ struct UnifiedPaneDropDelegate: DropDelegate {
     ) -> Bool {
         let draggedTab = dragSession.tab
         let sourcePaneId = dragSession.sourcePaneId
+        let handled: Bool
 
         if zone == .center {
             if sourcePaneId != pane.id {
+                var moved = false
                 withTransaction(Transaction(animation: nil)) {
-                    _ = bonsplitController.moveTab(
+                    moved = bonsplitController.moveTab(
                         TabID(id: draggedTab.id),
                         toPane: pane.id,
                         atIndex: nil
                     )
                 }
+                handled = moved
+            } else {
+                handled = true
             }
         } else if let orientation = zone.orientation {
 #if DEBUG
@@ -509,8 +513,13 @@ struct UnifiedPaneDropDelegate: DropDelegate {
                 "newPane=\(newPaneId?.id.uuidString.prefix(5) ?? "nil")"
             )
 #endif
+            handled = newPaneId != nil
+        } else {
+            handled = false
         }
 
+        guard handled else { return false }
+        controller.clearTabDragState()
         controller.tabDragTransferRegistry.finish(from: pasteboard)
         return true
     }
