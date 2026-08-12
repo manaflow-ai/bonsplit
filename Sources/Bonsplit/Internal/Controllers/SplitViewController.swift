@@ -422,6 +422,7 @@ final class SplitViewController {
     func closePane(_ paneId: PaneID) {
         // Don't close the last pane
         guard paneStatesById.count > 1, paneStatesById[paneId] != nil else { return }
+        let shouldFocusSibling = focusedPaneId == paneId || focusedPaneId == nil
 
         let (newRoot, siblingPaneId) = closePaneRecursively(node: rootNode, targetPaneId: paneId)
 
@@ -430,11 +431,12 @@ final class SplitViewController {
         }
         unregisterPane(paneId)
 
-        // Focus the sibling or first available pane
-        if let siblingPaneId {
-            focusedPaneId = siblingPaneId
-        } else if let firstPane = rootNode.allPaneIds.first {
-            focusedPaneId = firstPane
+        // Only the pane that owned focus may transfer it to its sibling. Repair a
+        // stale focus independently so an unrelated close cannot choose its target.
+        if shouldFocusSibling {
+            focusedPaneId = siblingPaneId ?? rootNode.allPaneIds.first
+        } else if focusedPane == nil {
+            focusedPaneId = rootNode.allPaneIds.first
         }
 
         if let zoomedPaneId, paneStatesById[zoomedPaneId] == nil {
