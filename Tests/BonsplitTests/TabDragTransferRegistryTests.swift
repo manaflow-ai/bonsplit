@@ -113,6 +113,36 @@ struct TabDragTransferRegistryTests {
         #expect(handler.operation(for: pasteboard).isEmpty)
     }
 
+    @Test("An accepted cross-controller drop finishes its native source")
+    func acceptedCrossControllerDropFinishesNativeSource() throws {
+        let registry = TabDragTransferRegistry()
+        let sourceController = makeController(registry: registry)
+        let targetController = makeController(registry: registry)
+        let sourcePane = try #require(sourceController.internalController.focusedPane)
+        let sourceTab = try #require(sourcePane.selectedTab)
+        let targetPane = try #require(targetController.internalController.focusedPane)
+        let generation = sourceController.internalController.beginTabDrag(sourceTab, from: sourcePane.id)
+        let registration = try #require(
+            registry.register(
+                TabDragTransfer(tab: Tab(from: sourceTab), sourcePaneId: sourcePane.id)
+            )
+        )
+        let source = TabDragSessionSource(
+            generation: generation,
+            transferRegistration: registration,
+            transferRegistry: registry,
+            controller: sourceController.internalController
+        )
+        let pasteboard = makePasteboard(item: registration.pasteboardItem)
+        let handler = makeHandler(controller: targetController, pane: targetPane)
+        targetController.onExternalTabDrop = { _ in true }
+
+        #expect(handler.performDrop(from: pasteboard, at: 0))
+        #expect(sourceController.internalController.tabDragSession == nil)
+        #expect(handler.operation(for: pasteboard).isEmpty)
+        withExtendedLifetime(source) {}
+    }
+
     private func makeController(
         registry: TabDragTransferRegistry? = nil
     ) -> BonsplitController {
