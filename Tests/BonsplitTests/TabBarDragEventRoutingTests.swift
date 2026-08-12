@@ -50,6 +50,55 @@ import Testing
         #expect(beganEvent === mouseDragged)
     }
 
+    @Test func secondClickOfDoubleClickStillArmsTabDrag() throws {
+        // Regression (issue 10033): selecting a tab and immediately dragging it
+        // delivers the press with clickCount == 2, because AppKit keeps counting
+        // clicks that land near the same point inside the double-click interval.
+        // Drag arming must accept those presses or the drag silently never starts.
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = try #require(window.contentView)
+        let sourceView = TabBarDragAndHoverView.TabBarBackgroundNSView(frame: contentView.bounds)
+        let tabView = NSView(frame: NSRect(x: 20, y: 20, width: 120, height: 30))
+        let tabId = UUID()
+        let geometryRegistry = TabBarItemGeometryRegistry()
+        var beganTabId: UUID?
+
+        contentView.addSubview(sourceView)
+        sourceView.addSubview(tabView)
+        geometryRegistry.register(tabView, for: tabId)
+        sourceView.geometryRegistry = geometryRegistry
+        sourceView.tabIds = [tabId]
+        sourceView.onBeginTabDrag = { tabId, _, _, _, _ in
+            beganTabId = tabId
+            return true
+        }
+        window.makeKeyAndOrderFront(nil)
+
+        let mouseDown = try mouseEvent(
+            type: .leftMouseDown,
+            in: sourceView,
+            at: NSPoint(x: 40, y: 35),
+            clickCount: 2
+        )
+        let mouseDragged = try mouseEvent(
+            type: .leftMouseDragged,
+            in: sourceView,
+            at: NSPoint(x: 50, y: 45),
+            clickCount: 2
+        )
+
+        _ = sourceView.handleTabDragEvent(mouseDown)
+        _ = sourceView.handleTabDragEvent(mouseDragged)
+
+        #expect(beganTabId == tabId)
+    }
+
     @Test func staticTitleControlDoesNotBlockTabDragArming() throws {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
@@ -148,7 +197,8 @@ import Testing
     private func mouseEvent(
         type: NSEvent.EventType,
         in view: NSView,
-        at point: NSPoint
+        at point: NSPoint,
+        clickCount: Int = 1
     ) throws -> NSEvent {
         let window = try #require(view.window)
         return try #require(NSEvent.mouseEvent(
@@ -159,7 +209,7 @@ import Testing
             windowNumber: window.windowNumber,
             context: nil,
             eventNumber: 0,
-            clickCount: 1,
+            clickCount: clickCount,
             pressure: 1
         ))
     }
