@@ -1,5 +1,6 @@
 import AppKit
 @testable import Bonsplit
+import SwiftUI
 import Testing
 
 @Suite("Native tab drag capabilities")
@@ -143,6 +144,58 @@ struct TabDragTransferRegistryTests {
         withExtendedLifetime(source) {}
     }
 
+    @Test("A failed local pane move keeps its native source live")
+    func failedLocalPaneMoveKeepsNativeSourceLive() throws {
+        let fixture = try makeLocalPaneDropFixture()
+        defer { fixture.source.finishDrag() }
+        let delegate = makePaneDropDelegate(
+            controller: fixture.controller,
+            pane: fixture.targetPane
+        )
+        #expect(fixture.controller.closeTab(TabID(id: fixture.dragSession.tab.id)))
+
+        let handled = withExtendedLifetime(fixture.source) {
+            delegate.performLocalTabDrop(
+                fixture.dragSession,
+                zone: .center,
+                pasteboard: fixture.pasteboard
+            )
+        }
+
+        #expect(!handled)
+        #expect(
+            fixture.controller.internalController.tabDragSession?.generation
+                == fixture.dragSession.generation
+        )
+        #expect(fixture.registry.resolve(from: fixture.pasteboard) != nil)
+    }
+
+    @Test("A failed local pane split keeps its native source live")
+    func failedLocalPaneSplitKeepsNativeSourceLive() throws {
+        let fixture = try makeLocalPaneDropFixture()
+        defer { fixture.source.finishDrag() }
+        let delegate = makePaneDropDelegate(
+            controller: fixture.controller,
+            pane: fixture.targetPane
+        )
+        fixture.controller.configuration.allowSplits = false
+
+        let handled = withExtendedLifetime(fixture.source) {
+            delegate.performLocalTabDrop(
+                fixture.dragSession,
+                zone: .left,
+                pasteboard: fixture.pasteboard
+            )
+        }
+
+        #expect(!handled)
+        #expect(
+            fixture.controller.internalController.tabDragSession?.generation
+                == fixture.dragSession.generation
+        )
+        #expect(fixture.registry.resolve(from: fixture.pasteboard) != nil)
+    }
+
     private func makeController(
         registry: TabDragTransferRegistry? = nil
     ) -> BonsplitController {
@@ -171,6 +224,59 @@ struct TabDragTransferRegistryTests {
         )
     }
 
+    private func makePaneDropDelegate(
+        controller: BonsplitController,
+        pane: PaneState
+    ) -> UnifiedPaneDropDelegate {
+        UnifiedPaneDropDelegate(
+            size: CGSize(width: 400, height: 300),
+            pane: pane,
+            controller: controller.internalController,
+            bonsplitController: controller,
+            activeDropZone: .constant(nil),
+            dropLifecycle: .constant(.hovering)
+        )
+    }
+
+    private func makeLocalPaneDropFixture() throws -> LocalPaneDropFixture {
+        let registry = TabDragTransferRegistry()
+        let controller = makeController(registry: registry)
+        let sourcePane = try #require(controller.internalController.focusedPane)
+        let draggedTab = try #require(sourcePane.selectedTab)
+        _ = try #require(controller.createTab(title: "Source survivor", inPane: sourcePane.id))
+        let targetPaneId = try #require(
+            controller.splitPane(sourcePane.id, orientation: .horizontal)
+        )
+        let targetPane = try #require(
+            controller.internalController.paneState(for: targetPaneId)
+        )
+        let generation = controller.internalController.beginTabDrag(
+            draggedTab,
+            from: sourcePane.id
+        )
+        let dragSession = try #require(controller.internalController.tabDragSession)
+        let registration = try #require(
+            registry.register(
+                TabDragTransfer(tab: Tab(from: draggedTab), sourcePaneId: sourcePane.id)
+            )
+        )
+        let source = TabDragSessionSource(
+            generation: generation,
+            transferRegistration: registration,
+            transferRegistry: registry,
+            controller: controller.internalController
+        )
+        let pasteboard = makePasteboard(item: registration.pasteboardItem)
+        return LocalPaneDropFixture(
+            registry: registry,
+            controller: controller,
+            targetPane: targetPane,
+            dragSession: dragSession,
+            source: source,
+            pasteboard: pasteboard
+        )
+    }
+
     private func makePasteboard(item: NSPasteboardItem) -> NSPasteboard {
         let pasteboard = emptyPasteboard()
         #expect(pasteboard.writeObjects([item]))
@@ -194,5 +300,14 @@ struct TabDragTransferRegistryTests {
         )
         pasteboard.clearContents()
         return pasteboard
+    }
+
+    private struct LocalPaneDropFixture {
+        let registry: TabDragTransferRegistry
+        let controller: BonsplitController
+        let targetPane: PaneState
+        let dragSession: TabDragSession
+        let source: TabDragSessionSource
+        let pasteboard: NSPasteboard
     }
 }
