@@ -434,47 +434,10 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             hasLocalTabDrag: controller.tabDragSession != nil
         ),
            let dragSession = controller.tabDragSession {
-            let draggedTab = dragSession.tab
-            let sourcePaneId = dragSession.sourcePaneId
             dropLifecycle = .idle
             activeDropZone = nil
             controller.clearTabDragState()
-
-            if zone == .center {
-                if sourcePaneId != pane.id {
-                    withTransaction(Transaction(animation: nil)) {
-                        _ = bonsplitController.moveTab(
-                            TabID(id: draggedTab.id),
-                            toPane: pane.id,
-                            atIndex: nil
-                        )
-                    }
-                }
-            } else if let orientation = zone.orientation {
-#if DEBUG
-                dlog(
-                    "pane.drop.splitRequest targetPane=\(pane.id.id.uuidString.prefix(5)) " +
-                    "sourcePane=\(sourcePaneId.id.uuidString.prefix(5)) zone=\(zone) " +
-                    "orientation=\(orientation) insertFirst=\(zone.insertsFirst ? 1 : 0) " +
-                    "draggedTab=\(draggedTab.id.uuidString.prefix(5))"
-                )
-#endif
-                let newPaneId = bonsplitController.splitPane(
-                    pane.id,
-                    orientation: orientation,
-                    movingTab: TabID(id: draggedTab.id),
-                    insertFirst: zone.insertsFirst
-                )
-#if DEBUG
-                dlog(
-                    "pane.drop.splitResult targetPane=\(pane.id.id.uuidString.prefix(5)) " +
-                    "newPane=\(newPaneId?.id.uuidString.prefix(5) ?? "nil")"
-                )
-#endif
-            }
-
-            controller.tabDragTransferRegistry.finish(from: NSPasteboard(name: .drag))
-            return true
+            return performLocalTabDrop(dragSession, zone: zone)
         }
 
         if info.hasItemsConforming(to: [.tabTransfer]) {
@@ -504,6 +467,52 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             activeDropZone = nil
         }
         return handled
+    }
+
+    /// Applies a live in-controller tab drop and completes its native source.
+    func performLocalTabDrop(
+        _ dragSession: TabDragSession,
+        zone: DropZone,
+        pasteboard: NSPasteboard = NSPasteboard(name: .drag)
+    ) -> Bool {
+        let draggedTab = dragSession.tab
+        let sourcePaneId = dragSession.sourcePaneId
+
+        if zone == .center {
+            if sourcePaneId != pane.id {
+                withTransaction(Transaction(animation: nil)) {
+                    _ = bonsplitController.moveTab(
+                        TabID(id: draggedTab.id),
+                        toPane: pane.id,
+                        atIndex: nil
+                    )
+                }
+            }
+        } else if let orientation = zone.orientation {
+#if DEBUG
+            dlog(
+                "pane.drop.splitRequest targetPane=\(pane.id.id.uuidString.prefix(5)) " +
+                "sourcePane=\(sourcePaneId.id.uuidString.prefix(5)) zone=\(zone) " +
+                "orientation=\(orientation) insertFirst=\(zone.insertsFirst ? 1 : 0) " +
+                "draggedTab=\(draggedTab.id.uuidString.prefix(5))"
+            )
+#endif
+            let newPaneId = bonsplitController.splitPane(
+                pane.id,
+                orientation: orientation,
+                movingTab: TabID(id: draggedTab.id),
+                insertFirst: zone.insertsFirst
+            )
+#if DEBUG
+            dlog(
+                "pane.drop.splitResult targetPane=\(pane.id.id.uuidString.prefix(5)) " +
+                "newPane=\(newPaneId?.id.uuidString.prefix(5) ?? "nil")"
+            )
+#endif
+        }
+
+        controller.tabDragTransferRegistry.finish(from: pasteboard)
+        return true
     }
 
     func dropEntered(info: DropInfo) {
