@@ -69,7 +69,11 @@ struct TabBarDropHandler {
             return performFileDrop(from: pasteboard, at: targetIndex)
         }
         if hasLiveTabDrag || hasTabTransfer {
-            return performTabDrop(from: pasteboard, at: targetIndex)
+            let handled = performTabDrop(from: pasteboard, at: targetIndex)
+            if handled {
+                splitViewController.tabDragTransferRegistry.finish(from: pasteboard)
+            }
+            return handled
         }
         return false
     }

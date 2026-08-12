@@ -13,6 +13,7 @@ public final class TabDragTransferRegistry {
     private final class Entry {
         weak var lifetime: TabDragTransferLifetime?
         let transfer: TabDragTransfer
+        var finishSource: (() -> Void)?
 
         init(lifetime: TabDragTransferLifetime, transfer: TabDragTransfer) {
             self.lifetime = lifetime
@@ -85,6 +86,34 @@ public final class TabDragTransferRegistry {
     public func end(from pasteboard: NSPasteboard) {
         guard let token = token(from: pasteboard) else { return }
         transfers[token] = nil
+    }
+
+    /// Finishes the live drag source represented by an accepted drop.
+    ///
+    /// The capability is revoked before the source callback runs, making this
+    /// safe when AppKit later delivers its native drag-ended callback too.
+    /// Rejected drops must not call this method.
+    ///
+    /// - Parameter pasteboard: The pasteboard presented by the accepted drop.
+    public func finish(from pasteboard: NSPasteboard) {
+        guard let token = token(from: pasteboard),
+              let entry = transfers.removeValue(forKey: token),
+              entry.lifetime != nil else {
+            return
+        }
+        entry.finishSource?()
+    }
+
+    /// Attaches the native source lifecycle to a registered capability.
+    func attachSourceCompletion(
+        to registration: TabDragTransferRegistration,
+        _ completion: @escaping () -> Void
+    ) {
+        guard let entry = transfers[registration.token],
+              entry.lifetime === registration.lifetime else {
+            return
+        }
+        entry.finishSource = completion
     }
 
     private func token(from pasteboard: NSPasteboard) -> UUID? {

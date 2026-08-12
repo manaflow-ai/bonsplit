@@ -825,13 +825,8 @@ struct TabBarView: View {
         return scrollOffset < tabsWidth - containerWidth
     }
 
-    /// Whether this tab bar should show full saturation (focused or drag source)
-    private var shouldShowFullSaturation: Bool {
-        isFocused || splitViewController.tabDragSession?.sourcePaneId == pane.id
-    }
-
     private var tabBarSaturation: Double {
-        shouldShowFullSaturation ? 1.0 : 0.0
+        isFocused ? 1.0 : 0.0
     }
 
     private var appearance: BonsplitConfiguration.Appearance {

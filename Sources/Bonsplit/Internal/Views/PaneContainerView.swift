@@ -473,6 +473,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 #endif
             }
 
+            controller.tabDragTransferRegistry.finish(from: NSPasteboard(name: .drag))
             return true
         }
 
@@ -491,6 +492,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             if handled {
                 dropLifecycle = .idle
                 activeDropZone = nil
+                controller.tabDragTransferRegistry.finish(from: NSPasteboard(name: .drag))
             }
             return handled
         }
