@@ -34,12 +34,16 @@ public final class TabDragTransferRegistry {
     ) -> TabDragTransferRegistration? {
         compactReleasedRegistrations()
         let token = UUID()
+        guard let capabilityValue = Self.capabilityValue(for: transfer, token: token) else {
+            return nil
+        }
         let item = NSPasteboardItem()
-        guard item.setString(token.uuidString, forType: Self.pasteboardType) else {
+        guard item.setString(capabilityValue, forType: Self.pasteboardType) else {
             return nil
         }
         let registration = TabDragTransferRegistration(
             token: token,
+            capabilityValue: capabilityValue,
             pasteboardItem: item
         )
         transfers[token] = Entry(
@@ -87,7 +91,50 @@ public final class TabDragTransferRegistry {
         guard let value = pasteboard.string(forType: Self.pasteboardType) else {
             return nil
         }
-        return UUID(uuidString: value)
+        if let token = UUID(uuidString: value) {
+            return token
+        }
+        guard let payload = try? JSONDecoder().decode(
+            CapabilityPayload.self,
+            from: Data(value.utf8)
+        ) else {
+            return nil
+        }
+        return payload.token
+    }
+
+    /// The pasteboard payload restores the 0.64.22 host drop-target contract:
+    /// host apps JSON-parse it for `tab.id`, `tab.kind`, `sourcePaneId`, and
+    /// `sourceProcessId` to render pane/browser drop targets, while the
+    /// registry resolves the live capability through the embedded `token`.
+    /// The tab title (and every other tab field) stays off the pasteboard.
+    private struct CapabilityPayload: Codable {
+        struct TabInfo: Codable {
+            let id: UUID
+            let kind: String?
+        }
+
+        let token: UUID
+        let tab: TabInfo
+        let sourcePaneId: UUID
+        let sourceProcessId: Int32
+    }
+
+    private static func capabilityValue(
+        for transfer: TabDragTransfer,
+        token: UUID
+    ) -> String? {
+        let payload = CapabilityPayload(
+            token: token,
+            tab: CapabilityPayload.TabInfo(
+                id: transfer.tab.id.uuid,
+                kind: transfer.tab.kind
+            ),
+            sourcePaneId: transfer.sourcePaneId.id,
+            sourceProcessId: Int32(ProcessInfo.processInfo.processIdentifier)
+        )
+        guard let data = try? JSONEncoder().encode(payload) else { return nil }
+        return String(decoding: data, as: UTF8.self)
     }
 
     private func compactReleasedRegistrations() {

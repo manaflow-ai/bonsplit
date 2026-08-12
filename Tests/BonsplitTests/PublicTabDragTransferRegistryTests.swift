@@ -25,9 +25,7 @@ struct PublicTabDragTransferRegistryTests {
         let capability = try #require(
             pasteboard.string(forType: TabDragTransferRegistry.pasteboardType)
         )
-        #expect(UUID(uuidString: capability) != nil)
         #expect(!capability.contains(transfer.tab.title))
-        #expect(!capability.contains(transfer.sourcePaneId.id.uuidString))
     }
 
     @Test("Item providers publish the same capability as AppKit pasteboard writers")

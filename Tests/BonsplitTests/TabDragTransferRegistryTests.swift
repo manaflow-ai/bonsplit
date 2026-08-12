@@ -5,7 +5,7 @@ import Testing
 @Suite("Native tab drag capabilities")
 @MainActor
 struct TabDragTransferRegistryTests {
-    @Test("Pasteboard publishes only an opaque capability")
+    @Test("Pasteboard payload keeps tab titles private")
     func pasteboardDoesNotExposeSerializedTabMetadata() throws {
         let registry = TabDragTransferRegistry()
         let controller = makeController(registry: registry)
@@ -20,9 +20,14 @@ struct TabDragTransferRegistryTests {
             registration.pasteboardItem.string(forType: TabDragTransferRegistry.pasteboardType)
         )
 
-        #expect(UUID(uuidString: value) != nil)
+        // Host drop targets parse tab.id / sourcePaneId / sourceProcessId from
+        // the payload (the 0.64.22 contract), but titles and every other tab
+        // field stay off the pasteboard.
         #expect(!value.contains(tab.title))
-        #expect(!value.contains(pane.id.id.uuidString))
+        let payload = try #require(
+            try JSONSerialization.jsonObject(with: Data(value.utf8)) as? [String: Any]
+        )
+        #expect((payload["token"] as? String).flatMap(UUID.init(uuidString:)) != nil)
     }
 
     @Test("A registered capability routes across controllers")
