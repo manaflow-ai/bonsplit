@@ -1962,7 +1962,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
     typealias BeginTabDrag = @MainActor (
         _ tabId: UUID,
         _ sourceView: NSView,
-        _ mouseDownEvent: NSEvent,
+        _ dragEvent: NSEvent,
         _ draggingFrame: NSRect,
         _ dragImage: NSImage
     ) -> Bool
@@ -1997,7 +1997,6 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
     final class TabBarBackgroundNSView: NSView, BonsplitTabItemHitRegionProviding {
         private struct PendingTabDrag {
             let tabId: UUID
-            let mouseDownEvent: NSEvent
             let startPoint: NSPoint
             let frame: NSRect
         }
@@ -2179,8 +2178,12 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 
         private func trackTabMouseDown(_ event: NSEvent) {
             pendingTabDrag = nil
-            guard event.clickCount == 1,
-                  !event.modifierFlags.contains(.control),
+            // Accept any clickCount: AppKit keeps counting presses that land
+            // near the same point inside the double-click interval, so the
+            // common "click to select, then drag" flow arrives as clickCount 2.
+            // A stationary double-click is unaffected because the drag only
+            // begins once the pointer crosses the movement threshold.
+            guard !event.modifierFlags.contains(.control),
                   let window,
                   event.windowNumber == window.windowNumber else {
                 return
@@ -2195,7 +2198,6 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             }
             pendingTabDrag = PendingTabDrag(
                 tabId: tabId,
-                mouseDownEvent: event,
                 startPoint: point,
                 frame: frame
             )
@@ -2216,15 +2218,21 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             }
             self.pendingTabDrag = nil
 
-            guard let dragImage = dragImage(for: pendingTabDrag.frame),
+            // Focus/hover can reveal an accessory or scroll the strip between
+            // the press and the threshold event. Refresh the source frame so
+            // AppKit's item and the destination's geometry snapshot agree at
+            // the moment the session starts.
+            let draggingFrame = geometryRegistry?.frame(for: pendingTabDrag.tabId, in: self)
+                ?? pendingTabDrag.frame
+            guard let dragImage = dragImage(for: draggingFrame),
                   let onBeginTabDrag else {
                 return event
             }
             _ = onBeginTabDrag(
                 pendingTabDrag.tabId,
                 self,
-                pendingTabDrag.mouseDownEvent,
-                pendingTabDrag.frame,
+                event,
+                draggingFrame,
                 dragImage
             )
             // SwiftUI already received the mouse-down. Forward the threshold-
@@ -2249,6 +2257,11 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             return image
         }
 
+        /// Returns whether the pointer is over a native control that owns its
+        /// own gesture. SwiftUI renders static tab titles through AppKit text
+        /// controls too; treating every ``NSControl`` as interactive therefore
+        /// made drag arming depend on title width and renderer details. Only
+        /// controls that can actually consume the press veto the tab source.
         private static func isNativeInteraction(
             at windowPoint: NSPoint,
             in window: NSWindow
@@ -2257,7 +2270,19 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             let contentPoint = contentView.convert(windowPoint, from: nil)
             guard var candidate = contentView.hitTest(contentPoint) else { return false }
             while true {
-                if candidate is NSControl || candidate is NSTextView {
+                if let button = candidate as? NSButton, button.isEnabled {
+                    return true
+                }
+                if let textField = candidate as? NSTextField, textField.isEditable {
+                    return true
+                }
+                if let textView = candidate as? NSTextView, textView.isEditable {
+                    return true
+                }
+                if let control = candidate as? NSControl,
+                   control.isEnabled,
+                   control.target != nil,
+                   control.action != nil {
                     return true
                 }
                 guard let parent = candidate.superview else { return false }
