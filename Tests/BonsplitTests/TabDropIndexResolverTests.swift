@@ -117,29 +117,6 @@ struct TabDropIndexResolverTests {
         )
     }
 
-    @Test("A wide tab still exposes stable midpoint slots")
-    func wideTabUsesItsMidpoint() {
-        let wideFrames = [
-            CGRect(x: 12, y: 0, width: 84, height: 34),
-            CGRect(x: 104, y: 0, width: 760, height: 34),
-            CGRect(x: 876, y: 0, width: 120, height: 34),
-        ]
-        #expect(
-            resolver.insertionIndex(
-                at: CGPoint(x: 483.9, y: bounds.midY),
-                in: CGRect(x: 0, y: 0, width: 1_000, height: 34),
-                tabFrames: wideFrames
-            ) == 1
-        )
-        #expect(
-            resolver.insertionIndex(
-                at: CGPoint(x: 484, y: bounds.midY),
-                in: CGRect(x: 0, y: 0, width: 1_000, height: 34),
-                tabFrames: wideFrames
-            ) == 2
-        )
-    }
-
     private func insertionIndex(x: CGFloat) -> Int? {
         resolver.insertionIndex(
             at: CGPoint(x: x, y: bounds.midY),

@@ -40,7 +40,7 @@ final class TabBarDropHandlerTests: XCTestCase {
             harness.controller.internalController.paneState(for: targetPaneId)
         )
         let initialTargetIds = targetPane.tabs.map(\.id)
-        let pasteboard = try makePasteboard(for: movedTab, sourcePane: sourcePane)
+        let pasteboard = try makePasteboard(for: movedTab, in: harness)
         _ = harness.controller.internalController.beginTabDrag(movedTab, from: sourcePane.id)
 
         XCTAssertTrue(makeHandler(controller: harness.controller, pane: targetPane).performDrop(
@@ -146,7 +146,7 @@ final class TabBarDropHandlerTests: XCTestCase {
         let targetPane = try XCTUnwrap(
             harness.controller.internalController.paneState(for: targetPaneId)
         )
-        let pasteboard = try makePasteboard(for: sourcePane.tabs[1], sourcePane: sourcePane)
+        let pasteboard = try makePasteboard(for: sourcePane.tabs[1], in: harness)
         let handler = makeHandler(controller: harness.controller, pane: targetPane)
 
         XCTAssertEqual(handler.operation(for: pasteboard), [])
@@ -168,36 +168,13 @@ final class TabBarDropHandlerTests: XCTestCase {
             eventType: .leftMouseDragged,
             pasteboardTypes: nil
         ))
-    }
-
-    func testDestinationDoesNotCapturePassiveEventsFromStalePasteboard() {
-        let staleTypes = [
-            TabBarDropHandler.tabTransferPasteboardType,
-            NSPasteboard.PasteboardType.fileURL,
-        ]
-
-        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
-            eventType: .mouseMoved,
-            pasteboardTypes: staleTypes
-        ))
-        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
-            eventType: .cursorUpdate,
-            pasteboardTypes: staleTypes
-        ))
         XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
             eventType: .leftMouseUp,
-            pasteboardTypes: staleTypes
-        ))
-
-        // A real AppKit drag still reaches the strip for external file drops and
-        // cross-process tab transfers, even though neither owns local tab state.
-        XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
-            eventType: .leftMouseDragged,
-            pasteboardTypes: staleTypes
+            pasteboardTypes: [TabBarDropHandler.tabTransferPasteboardType]
         ))
         XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
-            eventType: .mouseMoved,
-            pasteboardTypes: staleTypes,
+            eventType: .leftMouseUp,
+            pasteboardTypes: [TabBarDropHandler.tabTransferPasteboardType],
             hasLocalTabDrag: true
         ))
     }
@@ -220,12 +197,14 @@ final class TabBarDropHandlerTests: XCTestCase {
     }
 
     private func makeHarness() throws -> Harness {
+        let registry = TabDragTransferRegistry()
         let controller = BonsplitController(
             configuration: BonsplitConfiguration(
                 allowTabReordering: true,
                 allowCrossPaneTabMove: true,
                 newTabPosition: .end
-            )
+            ),
+            tabDragTransferRegistry: registry
         )
         let paneId = try XCTUnwrap(controller.focusedPaneId)
         _ = controller.createTab(title: "Second")
@@ -233,7 +212,7 @@ final class TabBarDropHandlerTests: XCTestCase {
         _ = controller.createTab(title: "Fourth")
         let pane = try XCTUnwrap(controller.internalController.paneState(for: paneId))
         XCTAssertEqual(pane.tabs.count, 4)
-        return Harness(controller: controller, pane: pane)
+        return Harness(controller: controller, pane: pane, registry: registry)
     }
 
     private func makeHandler(_ harness: Harness) -> TabBarDropHandler {
@@ -257,14 +236,13 @@ final class TabBarDropHandlerTests: XCTestCase {
     }
 
     private func makePasteboard(for tab: TabItem, in harness: Harness) throws -> NSPasteboard {
-        try makePasteboard(for: tab, sourcePane: harness.pane)
-    }
-
-    private func makePasteboard(for tab: TabItem, sourcePane: PaneState) throws -> NSPasteboard {
         let pasteboard = makeEmptyPasteboard()
-        let transfer = TabTransferData(tab: tab, sourcePaneId: sourcePane.id.id)
-        let data = try JSONEncoder().encode(transfer)
-        XCTAssertTrue(pasteboard.setData(data, forType: TabBarDropHandler.tabTransferPasteboardType))
+        let transfer = TabDragTransfer(
+            tab: Tab(from: tab),
+            sourcePaneId: harness.pane.id
+        )
+        let registration = try XCTUnwrap(harness.registry.register(transfer))
+        XCTAssertTrue(pasteboard.writeObjects([registration.pasteboardItem]))
         return pasteboard
     }
 }
@@ -273,6 +251,7 @@ final class TabBarDropHandlerTests: XCTestCase {
 private struct Harness {
     let controller: BonsplitController
     let pane: PaneState
+    let registry: TabDragTransferRegistry
 }
 
 @MainActor

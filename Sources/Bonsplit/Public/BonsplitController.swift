@@ -115,10 +115,40 @@ public final class BonsplitController {
 
     // MARK: - Initialization
 
-    /// Create a new controller with the specified configuration
+    /// Creates an isolated controller with the specified configuration.
+    ///
+    /// Use ``init(configuration:tabDragTransferRegistry:)`` when multiple
+    /// controllers may exchange tabs.
+    ///
+    /// - Parameter configuration: The controller's behavior and appearance.
     public init(configuration: BonsplitConfiguration = .default) {
         self.configuration = configuration
         self.internalController = SplitViewController()
+        configureInternalController()
+    }
+
+    /// Creates a controller with explicit ownership of its tab-drag capabilities.
+    ///
+    /// Controllers that exchange tabs must receive the same registry. Controllers
+    /// created without one are isolated, which keeps independent hosts and tests
+    /// from sharing hidden process state.
+    ///
+    /// - Parameters:
+    ///   - configuration: The controller's behavior and appearance.
+    ///   - tabDragTransferRegistry: The capability registry shared by controllers
+    ///     that may exchange tabs.
+    public init(
+        configuration: BonsplitConfiguration,
+        tabDragTransferRegistry: TabDragTransferRegistry
+    ) {
+        self.configuration = configuration
+        self.internalController = SplitViewController(
+            tabDragTransferRegistry: tabDragTransferRegistry
+        )
+        configureInternalController()
+    }
+
+    private func configureInternalController() {
         internalController.publicController = self
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }

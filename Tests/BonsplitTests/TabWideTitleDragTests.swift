@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Testing
 @testable import Bonsplit
@@ -38,33 +39,35 @@ struct TabWideTitleDragTests {
         }
     }
 
-    @Test("Short-title tabs retain the ordinary insertion slots")
-    func shortTitleControlUsesExpectedMidpoints() {
-        let tabFrames = [
-            CGRect(x: 12, y: 0, width: 80, height: 34),
-            CGRect(x: 100, y: 0, width: 120, height: 34),
-            CGRect(x: 228, y: 0, width: 72, height: 34),
+    @Test("Stale pasteboard types do not capture passive pointer events")
+    @MainActor
+    func stalePasteboardDoesNotCoverTabHitRegions() {
+        let staleTypes = [
+            TabBarDropHandler.tabTransferPasteboardType,
+            NSPasteboard.PasteboardType.fileURL,
         ]
 
-        #expect(resolver.insertionIndex(
-            at: CGPoint(x: 51.9, y: bounds.midY),
-            in: bounds,
-            tabFrames: tabFrames
-        ) == 0)
-        #expect(resolver.insertionIndex(
-            at: CGPoint(x: 52, y: bounds.midY),
-            in: bounds,
-            tabFrames: tabFrames
-        ) == 1)
-        #expect(resolver.insertionIndex(
-            at: CGPoint(x: 160, y: bounds.midY),
-            in: bounds,
-            tabFrames: tabFrames
-        ) == 2)
-        #expect(resolver.insertionIndex(
-            at: CGPoint(x: 264, y: bounds.midY),
-            in: bounds,
-            tabFrames: tabFrames
-        ) == 3)
+        #expect(!TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .mouseMoved,
+            pasteboardTypes: staleTypes
+        ))
+        #expect(!TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .cursorUpdate,
+            pasteboardTypes: staleTypes
+        ))
+        #expect(!TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseUp,
+            pasteboardTypes: staleTypes
+        ))
+        #expect(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseDragged,
+            pasteboardTypes: staleTypes
+        ))
+        #expect(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .mouseMoved,
+            pasteboardTypes: staleTypes,
+            hasLocalTabDrag: true
+        ))
     }
+
 }

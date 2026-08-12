@@ -1796,17 +1796,13 @@ final class BonsplitTests: XCTestCase {
         let generation = controller.beginTabDrag(tab, from: pane.id)
 
         XCTAssertEqual(controller.dragGeneration, generation)
-        XCTAssertEqual(controller.draggingTab?.id, tab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, pane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, tab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, tab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, pane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, generation)
 
         controller.cancelTabDragIfGenerationMatches(generation)
 
-        XCTAssertNil(controller.draggingTab)
-        XCTAssertNil(controller.dragSourcePaneId)
-        XCTAssertNil(controller.activeDragTab)
-        XCTAssertNil(controller.activeDragSourcePaneId)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
@@ -1835,10 +1831,32 @@ final class BonsplitTests: XCTestCase {
         controller.cancelTabDragIfGenerationMatches(staleGeneration)
 
         XCTAssertEqual(controller.dragGeneration, currentGeneration)
-        XCTAssertEqual(controller.draggingTab?.id, secondTab.id)
-        XCTAssertEqual(controller.dragSourcePaneId, secondPane.id)
-        XCTAssertEqual(controller.activeDragTab?.id, secondTab.id)
-        XCTAssertEqual(controller.activeDragSourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.tab.id, secondTab.id)
+        XCTAssertEqual(controller.tabDragSession?.sourcePaneId, secondPane.id)
+        XCTAssertEqual(controller.tabDragSession?.generation, currentGeneration)
+    }
+
+    @MainActor
+    func testAppResignDoesNotPreemptTabDragSourceLifecycle() {
+        let controller = SplitViewController()
+        let pane = controller.focusedPane!
+        let tab = pane.selectedTab!
+
+        let generation = controller.beginTabDrag(tab, from: pane.id)
+        XCTAssertNotNil(controller.tabDragSession)
+
+        NotificationCenter.default.post(
+            name: NSApplication.didResignActiveNotification,
+            object: nil
+        )
+
+        XCTAssertNotNil(
+            controller.tabDragSession,
+            "App deactivation can happen while a native drag is crossing windows or applications; only the drag source lifecycle may end its identity."
+        )
+
+        controller.nativeTabDragSessionDidEnd(generation: generation)
+        XCTAssertNil(controller.tabDragSession)
     }
 
     @MainActor
@@ -2529,12 +2547,7 @@ final class BonsplitTests: XCTestCase {
             if let region = view as? TabItemHitRegionView.RegionNSView {
                 return region
             }
-            for subview in view.subviews {
-                if let region = firstTabHitRegion(in: subview) {
-                    return region
-                }
-            }
-            return nil
+            return view.subviews.lazy.compactMap { firstTabHitRegion(in: $0) }.first
         }
 
         let trailingEmptyPoint = NSPoint(x: 460, y: 30)

@@ -1,18 +1,17 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 /// Applies tab-strip drops through the controller's shared tab mutation APIs.
 @MainActor
 struct TabBarDropHandler {
-    static let tabTransferPasteboardType = NSPasteboard.PasteboardType(UTType.tabTransfer.identifier)
+    static let tabTransferPasteboardType = TabDragTransferRegistry.pasteboardType
 
     let pane: PaneState
     let bonsplitController: BonsplitController
     let splitViewController: SplitViewController
 
     var hasLiveTabDrag: Bool {
-        liveDragSourcePaneId != nil
+        splitViewController.tabDragSession != nil
     }
 
     func operation(for pasteboard: NSPasteboard) -> NSDragOperation {
@@ -39,10 +38,10 @@ struct TabBarDropHandler {
         }
 
         if hasTabTransfer {
-            guard let transfer = Self.decodeTransfer(from: pasteboard), transfer.isFromCurrentProcess else {
+            guard let transfer = splitViewController.tabDragTransferRegistry.resolve(from: pasteboard) else {
                 return []
             }
-            let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+            let sourcePaneId = transfer.sourcePaneId
             guard sourcePaneId != pane.id,
                   bonsplitController.configuration.allowCrossPaneTabMove,
                   bonsplitController.onExternalTabDrop != nil else {
@@ -81,35 +80,31 @@ struct TabBarDropHandler {
         targetIndex == sourceIndex || targetIndex == sourceIndex + 1
     }
 
-    static func sameProcessFallbackRequest(
-        transfer: TabTransferData,
+    private static func externalFallbackRequest(
+        transfer: TabDragTransfer,
         targetPane: PaneID,
         targetIndex: Int,
         allowCrossPaneTabMove: Bool
     ) -> BonsplitController.ExternalTabDropRequest? {
-        guard transfer.isFromCurrentProcess else { return nil }
-        let sourcePaneId = PaneID(id: transfer.sourcePaneId)
+        let sourcePaneId = transfer.sourcePaneId
         guard sourcePaneId != targetPane, allowCrossPaneTabMove else { return nil }
         return BonsplitController.ExternalTabDropRequest(
-            tabId: TabID(id: transfer.tab.id),
+            tabId: transfer.tab.id,
             sourcePaneId: sourcePaneId,
             destination: .insert(targetPane: targetPane, targetIndex: targetIndex)
         )
     }
 
     private var liveDragSourcePaneId: PaneID? {
-        guard splitViewController.activeDragTab != nil || splitViewController.draggingTab != nil else {
-            return nil
-        }
-        return splitViewController.activeDragSourcePaneId ?? splitViewController.dragSourcePaneId
+        splitViewController.tabDragSession?.sourcePaneId
     }
 
     private var liveSamePaneSourceIndex: Int? {
-        guard let draggedTab = splitViewController.activeDragTab ?? splitViewController.draggingTab,
-              liveDragSourcePaneId == pane.id else {
+        guard let dragSession = splitViewController.tabDragSession,
+              dragSession.sourcePaneId == pane.id else {
             return nil
         }
-        return pane.tabs.firstIndex(where: { $0.id == draggedTab.id })
+        return pane.tabs.firstIndex(where: { $0.id == dragSession.tab.id })
     }
 
     private func permitsTabMove(from sourcePaneId: PaneID) -> Bool {
@@ -119,10 +114,11 @@ struct TabBarDropHandler {
     }
 
     private func performTabDrop(from pasteboard: NSPasteboard, at targetIndex: Int) -> Bool {
-        if let draggedTab = splitViewController.activeDragTab ?? splitViewController.draggingTab,
-           let sourcePaneId = liveDragSourcePaneId {
+        if let dragSession = splitViewController.tabDragSession {
             defer { splitViewController.clearTabDragState() }
 
+            let draggedTab = dragSession.tab
+            let sourcePaneId = dragSession.sourcePaneId
             if sourcePaneId == pane.id,
                let sourceIndex = pane.tabs.firstIndex(where: { $0.id == draggedTab.id }),
                Self.isNoopSamePaneTarget(sourceIndex: sourceIndex, targetIndex: targetIndex) {
@@ -144,8 +140,8 @@ struct TabBarDropHandler {
             return handled
         }
 
-        guard let transfer = Self.decodeTransfer(from: pasteboard),
-              let request = Self.sameProcessFallbackRequest(
+        guard let transfer = splitViewController.tabDragTransferRegistry.resolve(from: pasteboard),
+              let request = Self.externalFallbackRequest(
                   transfer: transfer,
                   targetPane: pane.id,
                   targetIndex: targetIndex,
@@ -174,15 +170,4 @@ struct TabBarDropHandler {
         return splitViewController.onFileDrop?(urls, pane.id) ?? false
     }
 
-    private static func decodeTransfer(from pasteboard: NSPasteboard) -> TabTransferData? {
-        if let data = pasteboard.data(forType: tabTransferPasteboardType),
-           let transfer = try? JSONDecoder().decode(TabTransferData.self, from: data) {
-            return transfer
-        }
-        guard let rawValue = pasteboard.string(forType: tabTransferPasteboardType),
-              let data = rawValue.data(using: .utf8) else {
-            return nil
-        }
-        return try? JSONDecoder().decode(TabTransferData.self, from: data)
-    }
 }
