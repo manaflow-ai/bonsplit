@@ -53,11 +53,16 @@ extension SplitViewController {
 
         let draggingItem = NSDraggingItem(pasteboardWriter: registration.pasteboardItem)
         draggingItem.setDraggingFrame(draggingFrame, contents: dragImage)
-        sourceView.beginDraggingSession(
+        let session = sourceView.beginDraggingSession(
             with: [draggingItem],
             event: event,
             source: source
         )
+        // A tab drag is owned by the source lifecycle. Avoid AppKit's return
+        // animation delaying (or suppressing) `endedAt` when the pointer is
+        // released without a valid destination, so transfer state is revoked
+        // immediately and the next tab press can arm normally.
+        session.animatesToStartingPositionsOnCancelOrFail = false
         return true
     }
 
