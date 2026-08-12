@@ -1687,6 +1687,85 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testClosePanePreservesFocusOnSurvivingPane() {
+        let controller = SplitViewController()
+        let firstPane = controller.focusedPane!
+
+        controller.splitPaneWithTab(
+            firstPane.id,
+            orientation: .horizontal,
+            tab: TabItem(title: "Second"),
+            insertFirst: false
+        )
+        let secondPane = controller.focusedPane!
+        controller.splitPaneWithTab(
+            secondPane.id,
+            orientation: .vertical,
+            tab: TabItem(title: "Third"),
+            insertFirst: false
+        )
+        let focusedPane = controller.focusedPane!
+
+        controller.closePane(firstPane.id)
+
+        XCTAssertEqual(
+            controller.focusedPaneId,
+            focusedPane.id,
+            "Closing an unfocused pane must not change a valid surviving focus"
+        )
+    }
+
+    @MainActor
+    func testCloseFocusedPaneMovesFocusToSibling() {
+        let controller = SplitViewController()
+        let firstPane = controller.focusedPane!
+        controller.splitPaneWithTab(
+            firstPane.id,
+            orientation: .horizontal,
+            tab: TabItem(title: "Second"),
+            insertFirst: false
+        )
+        let focusedPane = controller.focusedPane!
+
+        controller.closePane(focusedPane.id)
+
+        XCTAssertEqual(
+            controller.focusedPaneId,
+            firstPane.id,
+            "Closing the focused pane should transfer focus to its sibling"
+        )
+    }
+
+    @MainActor
+    func testClosePaneRepairsStaleFocus() {
+        let controller = SplitViewController()
+        let firstPane = controller.focusedPane!
+        controller.splitPaneWithTab(
+            firstPane.id,
+            orientation: .horizontal,
+            tab: TabItem(title: "Second"),
+            insertFirst: false
+        )
+        let secondPane = controller.focusedPane!
+        controller.splitPaneWithTab(
+            secondPane.id,
+            orientation: .vertical,
+            tab: TabItem(title: "Third"),
+            insertFirst: false
+        )
+        let closingPane = controller.focusedPane!
+        controller.focusedPaneId = PaneID()
+
+        controller.closePane(closingPane.id)
+
+        XCTAssertEqual(
+            controller.focusedPaneId,
+            firstPane.id,
+            "Closing a pane should repair a focus reference that no longer names a live pane"
+        )
+    }
+
+    @MainActor
     func testBeginTabDragTracksStateAndCancelClearsMatchingGeneration() {
         let controller = SplitViewController()
         let pane = controller.focusedPane!
