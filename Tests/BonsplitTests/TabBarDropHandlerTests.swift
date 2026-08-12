@@ -170,6 +170,38 @@ final class TabBarDropHandlerTests: XCTestCase {
         ))
     }
 
+    func testDestinationDoesNotCapturePassiveEventsFromStalePasteboard() {
+        let staleTypes = [
+            TabBarDropHandler.tabTransferPasteboardType,
+            NSPasteboard.PasteboardType.fileURL,
+        ]
+
+        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .mouseMoved,
+            pasteboardTypes: staleTypes
+        ))
+        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .cursorUpdate,
+            pasteboardTypes: staleTypes
+        ))
+        XCTAssertFalse(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseUp,
+            pasteboardTypes: staleTypes
+        ))
+
+        // A real AppKit drag still reaches the strip for external file drops and
+        // cross-process tab transfers, even though neither owns local tab state.
+        XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .leftMouseDragged,
+            pasteboardTypes: staleTypes
+        ))
+        XCTAssertTrue(TabBarDropDestinationNSView.shouldCaptureHitTest(
+            eventType: .mouseMoved,
+            pasteboardTypes: staleTypes,
+            hasLocalTabDrag: true
+        ))
+    }
+
     func testTranslatedDestinationHitTestsInSuperviewCoordinates() throws {
         let harness = try makeHarness()
         _ = harness.controller.internalController.beginTabDrag(harness.pane.tabs[1], from: harness.pane.id)

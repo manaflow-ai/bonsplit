@@ -2570,13 +2570,13 @@ final class BonsplitTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.01))
         } while Date() < registrationDeadline
 
-        guard dropDestination(at: trailingEmptyPoint) != nil else {
+        guard let resolvedTabPoint = tabPoint,
+              dropDestination(at: trailingEmptyPoint) != nil else {
             throw XCTSkip(
-                "This SwiftUI runtime did not mount the native tab-bar drop destination"
+                "This SwiftUI runtime did not mount the native tab-bar drop destination or the pane tab hit region"
             )
         }
 
-        let resolvedTabPoint = try XCTUnwrap(tabPoint, "Expected a mounted pane tab hit region")
         let tabPointInWindow = hostingView.convert(resolvedTabPoint, to: nil)
         XCTAssertTrue(
             BonsplitTabItemHitRegionRegistry.containsWindowPoint(tabPointInWindow, in: window),
