@@ -84,20 +84,24 @@ final class TabBarDropDestinationNSView: NSView {
         guard hasLocalTabDrag || hasSupportedPasteboardType else {
             return false
         }
-        guard let eventType else { return true }
+        // NSPasteboard(name: .drag) retains its advertised types after a drag
+        // ends. A passive hit test must therefore be owned by the live local
+        // tab-drag session; otherwise stale file/tab types can cover the tab
+        // hit regions and swallow ordinary hover/cursor events.
+        guard let eventType else { return hasLocalTabDrag }
         switch eventType {
-        case .leftMouseUp:
-            // The drag pasteboard retains types after a drag ends. A normal click's
-            // mouse-up may only be captured while the controller owns a live session.
-            return hasLocalTabDrag
-        case .leftMouseDragged,
+        case .leftMouseDragged:
+            // External Finder and cross-process tab drags arrive through the
+            // AppKit drag event even though they have no local tab state.
+            return true
+        case .leftMouseUp,
              .mouseMoved,
              .cursorUpdate,
              .periodic,
              .appKitDefined,
              .applicationDefined,
              .systemDefined:
-            return true
+            return hasLocalTabDrag
         default:
             return false
         }
