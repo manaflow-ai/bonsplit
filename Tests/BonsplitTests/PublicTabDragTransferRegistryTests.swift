@@ -25,9 +25,7 @@ struct PublicTabDragTransferRegistryTests {
         let capability = try #require(
             pasteboard.string(forType: TabDragTransferRegistry.pasteboardType)
         )
-        #expect(UUID(uuidString: capability) != nil)
         #expect(!capability.contains(transfer.tab.title))
-        #expect(!capability.contains(transfer.sourcePaneId.id.uuidString))
     }
 
     @Test("Item providers publish the same capability as AppKit pasteboard writers")
@@ -48,6 +46,46 @@ struct PublicTabDragTransferRegistryTests {
             )
         )
         #expect(registration.write(to: pasteboard))
+        #expect(registry.resolve(from: pasteboard) == transfer)
+    }
+
+    @Test("Pasteboard payload keeps the 0.64.22 host drop-target contract")
+    func pasteboardPayloadRemainsLegacyJSONDecodable() throws {
+        // Regression (manaflow-ai/cmux#10033): host apps resolve pane/browser
+        // drop targets by JSON-parsing the tab-transfer pasteboard payload for
+        // tab.id, tab.kind, sourcePaneId, and sourceProcessId (the 0.64.22
+        // contract). Replacing the payload with a bare token blinded every
+        // host drop overlay: drags rendered but no drop targets appeared.
+        let registry = TabDragTransferRegistry()
+        let tabId = UUID()
+        let paneId = PaneID()
+        let transfer = TabDragTransfer(
+            tab: Tab(id: TabID(uuid: tabId), title: "Private tab title", kind: "terminal"),
+            sourcePaneId: paneId
+        )
+        let registration = try #require(registry.register(transfer))
+        let pasteboard = makePasteboard()
+        #expect(pasteboard.writeObjects([registration.pasteboardItem]))
+
+        let raw = try #require(
+            pasteboard.string(forType: TabDragTransferRegistry.pasteboardType)
+        )
+        let json = try #require(
+            try JSONSerialization.jsonObject(with: Data(raw.utf8)) as? [String: Any]
+        )
+        let tabJSON = try #require(json["tab"] as? [String: Any])
+        #expect((tabJSON["id"] as? String).flatMap(UUID.init(uuidString:)) == tabId)
+        #expect(tabJSON["kind"] as? String == "terminal")
+        #expect(
+            (json["sourcePaneId"] as? String).flatMap(UUID.init(uuidString:)) == paneId.id
+        )
+        #expect(
+            (json["sourceProcessId"] as? NSNumber)?.int32Value
+                == Int32(ProcessInfo.processInfo.processIdentifier)
+        )
+        // The tab title must stay off the pasteboard.
+        #expect(!raw.contains(transfer.tab.title))
+        // The registry still resolves its own capability from the same payload.
         #expect(registry.resolve(from: pasteboard) == transfer)
     }
 

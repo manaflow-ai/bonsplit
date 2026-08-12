@@ -21,9 +21,9 @@ public final class TabDragTransferRegistration {
     /// A pasteboard writer for AppKit-native dragging sessions.
     public let pasteboardItem: NSPasteboardItem
 
-    init(token: UUID, pasteboardItem: NSPasteboardItem) {
+    init(token: UUID, capabilityValue: String, pasteboardItem: NSPasteboardItem) {
         self.token = token
-        self.capabilityValue = token.uuidString
+        self.capabilityValue = capabilityValue
         self.pasteboardItem = pasteboardItem
     }
 
