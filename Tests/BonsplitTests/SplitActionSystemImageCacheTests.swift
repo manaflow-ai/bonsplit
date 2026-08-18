@@ -45,15 +45,18 @@ struct SplitActionSystemImageCacheTests {
     }
 
     @Test func theTabBarGoesThroughTheCache() {
-        // Two calls with no cache in between would resolve twice; the point of
-        // the accessor is that the second one costs a dictionary lookup.
+        // A name no other test in this file touches, so the shared cache has
+        // never seen it and the count below is exact. 200 says the accessor
+        // resolves every time; 0 says it went around the cache entirely.
+        let name = "rectangle.split.3x1"
+
         let before = SplitActionSystemImageCache.shared.resolutionCount
         for _ in 0..<200 {
-            _ = TabBarStyling.splitActionSystemImage(for: "square.split.2x1")
+            _ = TabBarStyling.splitActionSystemImage(for: name)
         }
         let resolutions = SplitActionSystemImageCache.shared.resolutionCount - before
 
-        #expect(resolutions <= 1)
+        #expect(resolutions == 1)
     }
 
     /// A repeat lookup must not reach AppKit at all. Timed rather than counted
