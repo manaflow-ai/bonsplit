@@ -38,6 +38,10 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
         operation: NSDragOperation
     ) {
         finishDrag()
+        // The system drag pasteboard advertises this session's transfer type
+        // until another drag replaces it, which keeps host drop-capture
+        // hit-testing armed forever and blocks the next tab drag from starting.
+        transferRegistration.clearResidualCapability(from: NSPasteboard(name: .drag))
     }
 
     func finishDrag() {

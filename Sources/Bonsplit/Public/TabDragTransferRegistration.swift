@@ -60,4 +60,21 @@ public final class TabDragTransferRegistration {
             forType: TabDragTransferRegistry.pasteboardType
         )
     }
+
+    /// Clears a pasteboard that still advertises this ended drag's capability.
+    ///
+    /// The system drag pasteboard keeps its last session's types until another
+    /// drag replaces them, so hosts that key hit-testing or drop routing off
+    /// Bonsplit's transfer type would otherwise keep capturing pointer events
+    /// long after the drag ended. A pasteboard carrying any other value — for
+    /// example a newer drag's capability — is left untouched.
+    ///
+    /// - Parameter pasteboard: The pasteboard the ended drag session wrote to.
+    public func clearResidualCapability(from pasteboard: NSPasteboard) {
+        guard pasteboard.string(forType: TabDragTransferRegistry.pasteboardType)
+            == capabilityValue else {
+            return
+        }
+        pasteboard.clearContents()
+    }
 }
