@@ -418,6 +418,74 @@ final class SplitViewController {
         return min(max(position, 0), 1)
     }
 
+    /// Moves an existing pane leaf to an edge of the complete split tree.
+    @discardableResult
+    func movePane(
+        _ paneId: PaneID,
+        toRootEdge edge: RootSplitEdge,
+        dividerPosition: CGFloat
+    ) -> Bool {
+        guard paneStatesById.count > 1,
+              let pane = paneStatesById[paneId],
+              !isPaneDirectRootChild(paneId, on: edge),
+              let remainder = removingPane(paneId, from: rootNode) else {
+            return false
+        }
+
+        clearPaneZoom()
+        let movedPane = SplitNode.pane(pane)
+        let splitState = SplitState(
+            orientation: edge.orientation,
+            first: edge.insertsFirst ? movedPane : remainder,
+            second: edge.insertsFirst ? remainder : movedPane,
+            dividerPosition: normalizedInitialDividerPosition(dividerPosition)
+        )
+        rootNode = .split(splitState)
+        focusedPaneId = paneId
+        return true
+    }
+
+    private func isPaneDirectRootChild(
+        _ paneId: PaneID,
+        on edge: RootSplitEdge
+    ) -> Bool {
+        guard case .split(let rootSplit) = rootNode,
+              rootSplit.orientation == edge.orientation else {
+            return false
+        }
+
+        let edgeNode = edge.insertsFirst ? rootSplit.first : rootSplit.second
+        guard case .pane(let pane) = edgeNode else { return false }
+        return pane.id == paneId
+    }
+
+    private func removingPane(
+        _ paneId: PaneID,
+        from node: SplitNode
+    ) -> SplitNode? {
+        switch node {
+        case .pane(let pane):
+            return pane.id == paneId ? nil : node
+
+        case .split(let split):
+            let first = removingPane(paneId, from: split.first)
+            let second = removingPane(paneId, from: split.second)
+
+            switch (first, second) {
+            case (nil, nil):
+                return nil
+            case (nil, let second?):
+                return second
+            case (let first?, nil):
+                return first
+            case (let first?, let second?):
+                split.first = first
+                split.second = second
+                return .split(split)
+            }
+        }
+    }
+
     /// Close a pane and collapse the split
     func closePane(_ paneId: PaneID) {
         // Don't close the last pane
