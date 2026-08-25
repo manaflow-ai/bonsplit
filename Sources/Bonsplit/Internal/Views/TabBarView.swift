@@ -801,6 +801,9 @@ struct TabBarView: View {
 
     @AppStorage("workspacePresentationMode") private var presentationMode = "standard"
     @AppStorage("debugFadeColorStyle") private var fadeColorStyle = -1
+    /// Opt-in multi-row layout. The app settings catalog stores the same key so
+    /// cmux.json and the Settings UI both update mounted tab bars live.
+    @AppStorage("app.tabBarWrap") private var tabBarWrap = false
     @State private var isHoveringTabBar = false
     @State private var dropTargetIndex: Int?
     @State private var scrollOffset: CGFloat = 0
@@ -837,10 +840,14 @@ struct TabBarView: View {
         pane.isFullWidthTabMode && !pane.tabs.isEmpty
     }
 
+    private var isWrappingTabs: Bool {
+        tabBarWrap && !isFullWidthTabMode
+    }
+
     /// Whether tabs should stretch to fill the pane's available tab-bar width.
     /// Full-width mode uses the same flexible tab item chrome as configured fill mode.
     private var fillsTabsToWidth: Bool {
-        appearance.tabWidthMode == .fill || isFullWidthTabMode
+        !isWrappingTabs && (appearance.tabWidthMode == .fill || isFullWidthTabMode)
     }
 
     /// Minimum width to impose on the (already trailing-inset-padded) tab row when
@@ -975,7 +982,8 @@ struct TabBarView: View {
             geometryRegistry: tabItemGeometryRegistry,
             indicatorColor: TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
             separatorColor: TabBarColors.nsColorSeparator(for: appearance),
-            mask: selectionChromeMask
+            mask: selectionChromeMask,
+            wrapsRows: isWrappingTabs
         )
         .allowsHitTesting(false)
     }
@@ -1015,6 +1023,23 @@ struct TabBarView: View {
                     draggingFrame: draggingFrame,
                     dragImage: dragImage
                 )
+            },
+            onDoubleClick: {
+                performNewTerminalSplitButtonAction()
+            },
+            onHoverChanged: { updateTabBarHover($0) }
+        )
+    }
+
+    /// Keep title-bar dragging, hover state, and empty-space double-clicks in
+    /// wrapping mode while declining the native one-dimensional reorder drag.
+    private var wrappedDragAndHoverBackground: some View {
+        TabBarDragAndHoverView(
+            isMinimalMode: isMinimalMode,
+            geometryRegistry: tabItemGeometryRegistry,
+            tabIds: tabIds,
+            onBeginTabDrag: { _, _, _, _, _ in
+                false
             },
             onDoubleClick: {
                 performNewTerminalSplitButtonAction()
@@ -1083,6 +1108,15 @@ struct TabBarView: View {
     }
 
     var body: some View {
+        if isWrappingTabs {
+            wrappedBody
+        } else {
+            legacyBody
+        }
+    }
+
+    @ViewBuilder
+    private var legacyBody: some View {
         HStack(spacing: 0) {
             if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
                 TabBarDragZoneView(
@@ -1202,6 +1236,117 @@ struct TabBarView: View {
         .onDisappear {
             controlKeyMonitor.stop()
         }
+    }
+
+    /// The opt-in wrapping path deliberately omits the horizontal scroll view
+    /// and native tab-reorder drop destination. Context-menu moves remain
+    /// available while the layout can use the full pane height for rows.
+    @ViewBuilder
+    private var wrappedTabContent: some View {
+        TabBarWrappingLayout(horizontalSpacing: TabBarMetrics.tabSpacing) {
+            ForEach(visibleTabEntries, id: \.tab.id) { entry in
+                tabItem(for: entry.tab, at: entry.index)
+                    .id(entry.tab.id)
+            }
+
+            if !isFullWidthTabMode {
+                dropZoneAfterTabs
+            }
+        }
+        .padding(.horizontal, TabBarMetrics.barPadding)
+        .padding(.trailing, trailingTabContentInset)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(nil, value: pane.tabs.map(\.id))
+    }
+
+    @ViewBuilder
+    private var wrappedBody: some View {
+        HStack(spacing: 0) {
+            if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
+                TabBarDragZoneView(
+                    isMinimalMode: isMinimalMode,
+                    isFocusedPane: isFocused,
+                    onSingleClick: focusPaneFromTabBarChrome
+                ) { return false }
+                    .frame(width: appearance.tabBarLeadingInset)
+                    .frame(maxHeight: .infinity)
+            }
+
+            wrappedTabContent
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .coordinateSpace(name: "tabBar")
+        .background(TabBarLayerBackedColor(color: chromeSnapshot.barColor))
+        .background(wrappedDragAndHoverBackground)
+        .background(
+            GeometryReader { containerGeo in
+                Color.clear
+                    .onAppear {
+                        updateWrappedContainerWidth(containerGeo.size.width)
+                    }
+                    .onChange(of: containerGeo.size.width) { _, newWidth in
+                        updateWrappedContainerWidth(newWidth)
+                    }
+            }
+        )
+        .overlay(selectionChrome)
+        .overlay(alignment: .topTrailing) {
+            splitButtonBackdropChrome
+                .opacity(shouldShowSplitButtons ? 1 : 0)
+                .allowsHitTesting(false)
+                .tabBarButtonAnimationsDisabled()
+        }
+        .overlay(trailingEmptyChromeDragZone)
+        .overlay(alignment: .topTrailing) {
+            splitButtonChrome
+                .frame(width: splitButtonsBackdropWidth, height: tabBarHeight, alignment: .trailing)
+                .mask {
+                    Rectangle()
+                        .frame(width: splitButtonsBackdropWidth, height: tabBarHeight)
+                }
+                .clipped()
+        }
+        .overlay(TabBarHoverTrackingView { updateTabBarHover($0) })
+        .background {
+            if splitViewController.tabShortcutHintsEnabled {
+                TabBarHostWindowReader { window in
+                    controlKeyMonitor.setHostWindow(window)
+                }
+                .frame(width: 0, height: 0)
+            }
+        }
+        .onAppear {
+            dropTargetIndex = nil
+            tabItemGeometryRegistry.setTrailingObscuredWidth(trailingTabContentInset)
+            tabItemGeometryRegistry.revealSelection(pane.selectedTabId)
+            if splitViewController.tabShortcutHintsEnabled {
+                controlKeyMonitor.start()
+            }
+        }
+        .onChange(of: pane.selectedTabId) { _, newTabId in
+            tabItemGeometryRegistry.revealSelection(newTabId)
+        }
+        .onChange(of: trailingTabContentInset) { _, newWidth in
+            tabItemGeometryRegistry.setTrailingObscuredWidth(newWidth)
+        }
+        .onChange(of: splitViewController.tabShortcutHintsEnabled) { _, enabled in
+            if enabled {
+                controlKeyMonitor.start()
+            } else {
+                controlKeyMonitor.stop()
+            }
+        }
+        .onPreferenceChange(SplitButtonLaneWidthPreferenceKey.self) { width in
+            measuredSplitButtonLaneWidth = width
+        }
+        .onDisappear {
+            controlKeyMonitor.stop()
+        }
+    }
+
+    private func updateWrappedContainerWidth(_ width: CGFloat) {
+        guard width.isFinite, width > 0, abs(containerWidth - width) > 0.5 else { return }
+        containerWidth = width
     }
 
     // MARK: - Tab Item

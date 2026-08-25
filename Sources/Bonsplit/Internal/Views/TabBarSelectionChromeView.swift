@@ -16,6 +16,23 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
     let indicatorColor: NSColor
     let separatorColor: NSColor
     let mask: TabBarSelectionChromeMask
+    let wrapsRows: Bool
+
+    init(
+        selectedTabId: UUID?,
+        geometryRegistry: TabBarItemGeometryRegistry,
+        indicatorColor: NSColor,
+        separatorColor: NSColor,
+        mask: TabBarSelectionChromeMask,
+        wrapsRows: Bool = false
+    ) {
+        self.selectedTabId = selectedTabId
+        self.geometryRegistry = geometryRegistry
+        self.indicatorColor = indicatorColor
+        self.separatorColor = separatorColor
+        self.mask = mask
+        self.wrapsRows = wrapsRows
+    }
 
     func makeNSView(context: Context) -> ChromeNSView {
         let view = ChromeNSView()
@@ -39,6 +56,7 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
         view.indicatorColor = indicatorColor
         view.separatorColor = separatorColor
         view.mask = mask
+        view.wrapsRows = wrapsRows
         view.needsDisplay = true
     }
 
@@ -55,6 +73,7 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
             actionLaneSeparatorSolidWidth: 0,
             actionLaneSeparatorFadeRampStartFraction: 0
         )
+        var wrapsRows = false
 
         override var isFlipped: Bool { true }
         override var isOpaque: Bool { false }
@@ -80,6 +99,12 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
         private func drawBottomSeparator(around selectedFrame: CGRect?) {
             separatorColor.setFill()
             let separatorY = max(bounds.minY, bounds.maxY - 1)
+            if wrapsRows {
+                NSBezierPath(
+                    rect: NSRect(x: bounds.minX, y: separatorY, width: bounds.width, height: 1)
+                ).fill()
+                return
+            }
             guard let selectedFrame else {
                 NSBezierPath(
                     rect: NSRect(x: bounds.minX, y: separatorY, width: bounds.width, height: 1)
@@ -153,7 +178,9 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
 
         private func drawSelectedIndicator(in selectedFrame: CGRect?) {
             guard var frame = selectedFrame else { return }
-            frame.origin.y = bounds.minY
+            if !wrapsRows {
+                frame.origin.y = bounds.minY
+            }
             frame.size.width = max(0, frame.width - TabBarMetrics.activeIndicatorTrailingInset)
             frame.size.height = TabBarMetrics.activeIndicatorHeight
 
