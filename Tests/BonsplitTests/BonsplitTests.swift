@@ -1397,7 +1397,7 @@ final class BonsplitTests: XCTestCase {
         XCTAssertLessThan(hoverAlpha, 0.12)
     }
 
-    func testSharedBackdropActiveTabBackgroundIsClear() {
+    func testSharedBackdropActiveTabBackgroundUsesSemanticOverlay() {
         let appearance = BonsplitConfiguration.Appearance(
             chromeColors: .init(
                 backgroundHex: "#272822",
@@ -1409,14 +1409,16 @@ final class BonsplitTests: XCTestCase {
         )
         let active = NSColor(TabBarColors.activeTabBackground(for: appearance)).usingColorSpace(.sRGB)!
 
-        var alpha: CGFloat = 1
-        active.getRed(nil, green: nil, blue: nil, alpha: &alpha)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        active.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
 
-        XCTAssertLessThan(
-            alpha,
-            0.01,
-            "Shared-backdrop selected tabs should rely on the active indicator instead of a hover-like fill"
-        )
+        XCTAssertEqual(alpha, 0.16, accuracy: 0.001)
+        XCTAssertGreaterThan(red, 0.99)
+        XCTAssertGreaterThan(green, 0.99)
+        XCTAssertGreaterThan(blue, 0.99)
     }
 
     func testSplitActionPressedStateUsesHigherContrast() {
