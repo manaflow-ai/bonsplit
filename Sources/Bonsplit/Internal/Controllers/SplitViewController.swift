@@ -203,6 +203,13 @@ final class SplitViewController {
         return .pane(pane)
     }
 
+    /// The node the split area actually renders: the zoomed pane alone when a
+    /// zoom is active, otherwise the whole split tree. Rendering and geometry
+    /// reporting both read this so they cannot disagree about pane frames.
+    var renderedRootNode: SplitNode {
+        zoomedNode ?? rootNode
+    }
+
     @discardableResult
     func clearPaneZoom() -> Bool {
         guard zoomedPaneId != nil else { return false }

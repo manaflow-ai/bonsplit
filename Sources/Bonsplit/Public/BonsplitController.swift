@@ -782,7 +782,9 @@ public final class BonsplitController {
 
     @discardableResult
     public func clearPaneZoom() -> Bool {
-        internalController.clearPaneZoom()
+        guard internalController.clearPaneZoom() else { return false }
+        notifyGeometryChange()
+        return true
     }
 
     /// Toggle zoom for a pane. When zoomed, only that pane is rendered in the split area.
@@ -791,7 +793,9 @@ public final class BonsplitController {
     public func togglePaneZoom(inPane paneId: PaneID? = nil) -> Bool {
         let targetPaneId = paneId ?? focusedPaneId
         guard let targetPaneId else { return false }
-        return internalController.togglePaneZoom(targetPaneId)
+        guard internalController.togglePaneZoom(targetPaneId) else { return false }
+        notifyGeometryChange()
+        return true
     }
 
     /// Request a tab-chrome zoom toggle for a specific tab.
@@ -920,10 +924,12 @@ public final class BonsplitController {
 
     // MARK: - Geometry Query API
 
-    /// Get current layout snapshot with pixel coordinates
+    /// Get the rendered layout with pixel coordinates. While a pane is zoomed
+    /// only that pane is rendered, so only it is reported (filling the
+    /// container); the other panes have no on-screen geometry.
     public func layoutSnapshot() -> LayoutSnapshot {
         let containerFrame = internalController.containerFrame
-        let paneBounds = internalController.rootNode.computePaneBounds()
+        let paneBounds = internalController.renderedRootNode.computePaneBounds()
 
         let paneGeometries = paneBounds.map { bounds -> PaneGeometry in
             let pane = internalController.paneState(for: bounds.paneId)
