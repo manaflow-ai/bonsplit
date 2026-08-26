@@ -1573,6 +1573,47 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testLayoutSnapshotReportsZoomedPaneFillingContainer() {
+        let controller = BonsplitController()
+        controller.setContainerFrame(CGRect(x: 10, y: 20, width: 800, height: 600))
+        guard let leftPane = controller.focusedPaneId,
+              let rightPane = controller.splitPane(leftPane, orientation: .horizontal) else {
+            return XCTFail("Expected a two-pane layout")
+        }
+
+        XCTAssertTrue(controller.togglePaneZoom(inPane: rightPane))
+
+        // Zoom renders only the zoomed pane, so the snapshot (what hosts draw
+        // pane overlays against) must report that pane at the full container.
+        let zoomed = controller.layoutSnapshot()
+        XCTAssertEqual(zoomed.panes.map(\.paneId), [rightPane.id.uuidString])
+        XCTAssertEqual(zoomed.panes.first?.frame, PixelRect(x: 10, y: 20, width: 800, height: 600))
+
+        XCTAssertTrue(controller.togglePaneZoom(inPane: rightPane))
+        let unzoomed = controller.layoutSnapshot()
+        XCTAssertEqual(Set(unzoomed.panes.map(\.paneId)), [leftPane.id.uuidString, rightPane.id.uuidString])
+        XCTAssertEqual(unzoomed.panes.first(where: { $0.paneId == rightPane.id.uuidString })?.frame.width, 400)
+    }
+
+    @MainActor
+    func testTogglePaneZoomReportsGeometryChange() {
+        let controller = BonsplitController()
+        let recorder = DividerDragEventRecorder()
+        controller.delegate = recorder
+        guard let leftPane = controller.focusedPaneId,
+              controller.splitPane(leftPane, orientation: .horizontal) != nil else {
+            return XCTFail("Expected a two-pane layout")
+        }
+        recorder.events.removeAll()
+
+        XCTAssertTrue(controller.togglePaneZoom(inPane: leftPane))
+        XCTAssertEqual(recorder.events, [.geometryChanged])
+
+        XCTAssertTrue(controller.clearPaneZoom())
+        XCTAssertEqual(recorder.events, [.geometryChanged, .geometryChanged])
+    }
+
+    @MainActor
     func testRequestTabZoomToggleUsesHostHandler() {
         let controller = BonsplitController()
         let pane = controller.focusedPaneId!
