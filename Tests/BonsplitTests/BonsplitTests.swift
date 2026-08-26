@@ -2855,10 +2855,7 @@ final class BonsplitTests: XCTestCase {
                 TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol,
                 "⌃"
             )
-            XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
-                "⌃"
-            )
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults))
             XCTAssertEqual(
                 TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(defaults: defaults),
                 "⌃"
@@ -2888,10 +2885,48 @@ final class BonsplitTests: XCTestCase {
                 TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
                 "⌥⌘"
             )
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults))
+        }
+    }
+
+    func testTabControlShortcutHintPolicyFollowsConfiguredCommandOrControlModifier() {
+        withShortcutHintDefaultsSuite { defaults in
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
+
+            defaults.set(
+                shortcutData(
+                    key: "1",
+                    command: true,
+                    shift: false,
+                    option: true,
+                    control: false
+                ),
+                forKey: "shortcut.selectSurfaceByNumber"
+            )
+
             XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol,
+                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
                 "⌥⌘"
             )
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults))
+
+            defaults.set(
+                shortcutData(
+                    key: "1",
+                    command: false,
+                    shift: true,
+                    option: false,
+                    control: true
+                ),
+                forKey: "shortcut.selectSurfaceByNumber"
+            )
+
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol,
+                "⌃⇧"
+            )
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults))
         }
     }
 
@@ -2909,10 +2944,18 @@ final class BonsplitTests: XCTestCase {
             defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
             defaults.set(false, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
 
-            XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
-                "⌃"
+            defaults.set(
+                shortcutData(
+                    key: "1",
+                    command: true,
+                    shift: false,
+                    option: false,
+                    control: false
+                ),
+                forKey: "shortcut.selectSurfaceByNumber"
             )
+
+            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol, "⌘")
             XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults))
         }
     }
@@ -2923,7 +2966,7 @@ final class BonsplitTests: XCTestCase {
             defaults.removeObject(forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
 
             XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol, "⌃")
-            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol, "⌃")
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults))
         }
     }
 
