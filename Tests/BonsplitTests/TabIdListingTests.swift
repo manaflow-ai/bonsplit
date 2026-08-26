@@ -52,6 +52,40 @@ final class TabIdListingTests: XCTestCase {
         XCTAssertEqual(controller.tab(tabId)?.title, "After")
     }
 
+    /// The point of the accessor. Timed rather than counted so the assertion
+    /// still means something if the implementation changes later. The bound is
+    /// loose on purpose: the measured gap is several times, not a few percent.
+    @MainActor
+    func testListingIdsIsSubstantiallyCheaperThanListingTabs() {
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(newTabPosition: .end)
+        )
+        let paneId = try! XCTUnwrap(controller.focusedPaneId)
+        for index in 0..<12 {
+            _ = controller.createTab(title: "Tab \(index)")
+        }
+        let iterations = 2_000
+
+        // Warm both paths so neither pays first-call costs in its window.
+        _ = controller.tabs(inPane: paneId)
+        _ = controller.tabIds(inPane: paneId)
+
+        let tabsStart = ContinuousClock.now
+        for _ in 0..<iterations {
+            _ = controller.tabs(inPane: paneId).map(\.id)
+        }
+        let tabsElapsed = ContinuousClock.now - tabsStart
+
+        let idsStart = ContinuousClock.now
+        for _ in 0..<iterations {
+            _ = controller.tabIds(inPane: paneId)
+        }
+        let idsElapsed = ContinuousClock.now - idsStart
+
+        print("[tab-ids] \(iterations) listings of 13 tabs: tabs \(tabsElapsed), ids \(idsElapsed)")
+        XCTAssertLessThan(idsElapsed, tabsElapsed / 2)
+    }
+
     @MainActor
     func testEmptyAndUnknownPanesListNoTabs() {
         let controller = BonsplitController()
