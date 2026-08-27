@@ -83,6 +83,54 @@ struct TabDragTransferRegistryTests {
         #expect(!handler.performDrop(from: pasteboard, at: 0))
     }
 
+    @Test("Cached capability resolution avoids repeated token decoding")
+    func cachedResolutionAvoidsRepeatedTokenDecoding() throws {
+        var tokenDecodeCount = 0
+        let registry = TabDragTransferRegistry(tokenResolver: { pasteboard in
+            tokenDecodeCount += 1
+            guard let rawValue = pasteboard.string(
+                forType: TabDragTransferRegistry.pasteboardType
+            ),
+            let data = rawValue.data(using: .utf8),
+            let payload = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            let tokenValue = payload["token"] as? String else {
+                return nil
+            }
+            return UUID(uuidString: tokenValue)
+        })
+        let transfer = TabDragTransfer(
+            tab: Tab(title: "cached", kind: "terminal"),
+            sourcePaneId: PaneID()
+        )
+        let pasteboard: NSPasteboard
+        do {
+            let registration = try #require(registry.register(transfer))
+            pasteboard = makePasteboard(item: registration.pasteboardItem)
+            #expect(registry.resolve(from: pasteboard) == transfer)
+            #expect(registry.resolve(from: pasteboard) == transfer)
+            #expect(
+                registry.resolve(from: NSPasteboard(name: pasteboard.name)) == transfer
+            )
+            #expect(tokenDecodeCount == 1)
+        }
+
+        // Registry mutation invalidates the cached positive value even when
+        // AppKit leaves the same capability value and change count in place.
+        // The ended registration is no longer eligible for a live resolution.
+        let endedRegistration = try #require(registry.register(transfer))
+        let endedPasteboard = makePasteboard(item: endedRegistration.pasteboardItem)
+        #expect(registry.resolve(from: endedPasteboard) == transfer)
+        registry.end(endedRegistration)
+        #expect(registry.resolve(from: endedPasteboard) == nil)
+        #expect(tokenDecodeCount == 3)
+
+        // Weak lease expiry remains authoritative even when AppKit leaves the
+        // same capability value and change count on the pasteboard.
+        #expect(registry.resolve(from: pasteboard) == nil)
+        #expect(registry.resolve(from: pasteboard) == nil)
+        #expect(tokenDecodeCount == 4)
+    }
+
     @Test("Native source completion revokes its capability")
     func sourceCompletionRevokesCapability() throws {
         let registry = TabDragTransferRegistry()

@@ -21,10 +21,44 @@ public final class TabDragTransferRegistry {
         }
     }
 
+    private final class ResolutionCache {
+        let pasteboardName: NSPasteboard.Name
+        let changeCount: Int
+        let mutationGeneration: UInt64
+        weak var lifetime: TabDragTransferLifetime?
+        let transfer: TabDragTransfer?
+
+        init(
+            pasteboardName: NSPasteboard.Name,
+            changeCount: Int,
+            mutationGeneration: UInt64,
+            lifetime: TabDragTransferLifetime?,
+            transfer: TabDragTransfer?
+        ) {
+            self.pasteboardName = pasteboardName
+            self.changeCount = changeCount
+            self.mutationGeneration = mutationGeneration
+            self.lifetime = lifetime
+            self.transfer = transfer
+        }
+    }
+
+    private typealias TokenResolver = @MainActor (NSPasteboard) -> UUID?
+
     private var transfers: [UUID: Entry] = [:]
+    private var mutationGeneration: UInt64 = 0
+    private var resolutionCache: ResolutionCache?
+    private let tokenResolver: TokenResolver
 
     /// Creates an empty capability registry.
-    public init() {}
+    public init() {
+        tokenResolver = Self.decodeToken
+    }
+
+    /// Creates a registry with an injected token decoder for package-level tests.
+    init(tokenResolver: @escaping @MainActor (NSPasteboard) -> UUID?) {
+        self.tokenResolver = tokenResolver
+    }
 
     /// Registers metadata and creates an opaque capability lease for a drag source.
     ///
@@ -51,6 +85,7 @@ public final class TabDragTransferRegistry {
             lifetime: registration.lifetime,
             transfer: transfer
         )
+        mutationGeneration &+= 1
         return registration
     }
 
@@ -58,34 +93,68 @@ public final class TabDragTransferRegistry {
     ///
     /// Residual pasteboard data is rejected after its registration is ended or
     /// released, even if the pasteboard continues advertising the transfer type.
+    /// Unchanged pasteboard generations use a bounded token/liveness cache; the
+    /// payload is decoded again only after a pasteboard or registry mutation,
+    /// or when a weak registration lease has expired.
     ///
     /// - Parameter pasteboard: The pasteboard presented by a drag destination.
     /// - Returns: The registered transfer while its source lease remains live.
     public func resolve(from pasteboard: NSPasteboard) -> TabDragTransfer? {
-        guard let token = token(from: pasteboard),
-              let entry = transfers[token] else {
-            return nil
+        let pasteboardName = pasteboard.name
+        let changeCount = pasteboard.changeCount
+        if let resolutionCache,
+           resolutionCache.pasteboardName == pasteboardName,
+           resolutionCache.changeCount == changeCount,
+           resolutionCache.mutationGeneration == mutationGeneration {
+            // Positive entries retain only a weak lease, so a released source
+            // is still rejected without trusting stale pasteboard identity.
+            if resolutionCache.transfer == nil || resolutionCache.lifetime != nil {
+                return resolutionCache.transfer
+            }
+            self.resolutionCache = nil
         }
-        guard entry.lifetime != nil else {
-            transfers[token] = nil
-            return nil
-        }
-        return entry.transfer
+
+        var resolvedLifetime: TabDragTransferLifetime?
+        let transfer: TabDragTransfer? = {
+            guard let token = tokenResolver(pasteboard),
+                  let entry = transfers[token] else {
+                return nil
+            }
+            guard let lifetime = entry.lifetime else {
+                transfers[token] = nil
+                mutationGeneration &+= 1
+                return nil
+            }
+            resolvedLifetime = lifetime
+            return entry.transfer
+        }()
+        resolutionCache = ResolutionCache(
+            pasteboardName: pasteboardName,
+            changeCount: changeCount,
+            mutationGeneration: mutationGeneration,
+            lifetime: resolvedLifetime,
+            transfer: transfer
+        )
+        return transfer
     }
 
     /// Revokes a capability when its retained native drag source completes.
     ///
     /// - Parameter registration: The exact registration returned at drag start.
     public func end(_ registration: TabDragTransferRegistration) {
-        transfers[registration.token] = nil
+        guard transfers.removeValue(forKey: registration.token) != nil else { return }
+        mutationGeneration &+= 1
     }
 
     /// Revokes the capability currently written to a completed drag pasteboard.
     ///
     /// - Parameter pasteboard: The pasteboard owned by the completed dragging session.
     public func end(from pasteboard: NSPasteboard) {
-        guard let token = token(from: pasteboard) else { return }
-        transfers[token] = nil
+        guard let token = tokenResolver(pasteboard),
+              transfers.removeValue(forKey: token) != nil else {
+            return
+        }
+        mutationGeneration &+= 1
     }
 
     /// Finishes the live drag source represented by an accepted drop.
@@ -96,11 +165,12 @@ public final class TabDragTransferRegistry {
     ///
     /// - Parameter pasteboard: The pasteboard presented by the accepted drop.
     public func finish(from pasteboard: NSPasteboard) {
-        guard let token = token(from: pasteboard),
-              let entry = transfers.removeValue(forKey: token),
-              entry.lifetime != nil else {
+        guard let token = tokenResolver(pasteboard),
+              let entry = transfers.removeValue(forKey: token) else {
             return
         }
+        mutationGeneration &+= 1
+        guard entry.lifetime != nil else { return }
         entry.finishSource?()
     }
 
@@ -116,7 +186,7 @@ public final class TabDragTransferRegistry {
         entry.finishSource = completion
     }
 
-    private func token(from pasteboard: NSPasteboard) -> UUID? {
+    private static func decodeToken(from pasteboard: NSPasteboard) -> UUID? {
         guard let value = pasteboard.string(forType: Self.pasteboardType) else {
             return nil
         }
@@ -167,6 +237,9 @@ public final class TabDragTransferRegistry {
     }
 
     private func compactReleasedRegistrations() {
-        transfers = transfers.filter { $0.value.lifetime != nil }
+        let compacted = transfers.filter { $0.value.lifetime != nil }
+        guard compacted.count != transfers.count else { return }
+        transfers = compacted
+        mutationGeneration &+= 1
     }
 }
