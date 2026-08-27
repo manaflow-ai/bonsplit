@@ -102,32 +102,30 @@ struct TabDragTransferRegistryTests {
             tab: Tab(title: "cached", kind: "terminal"),
             sourcePaneId: PaneID()
         )
-        let pasteboard: NSPasteboard
-        do {
-            let registration = try #require(registry.register(transfer))
-            pasteboard = makePasteboard(item: registration.pasteboardItem)
-            #expect(registry.resolve(from: pasteboard) == transfer)
-            #expect(registry.resolve(from: pasteboard) == transfer)
-            #expect(
-                registry.resolve(from: NSPasteboard(name: pasteboard.name)) == transfer
-            )
-            #expect(tokenDecodeCount == 1)
-        }
+        let registration = try #require(registry.register(transfer))
+        let pasteboard = makePasteboard(item: registration.pasteboardItem)
+        #expect(registry.resolve(from: pasteboard) == transfer)
+        #expect(registry.resolve(from: pasteboard) == transfer)
+        #expect(
+            registry.resolve(from: NSPasteboard(name: pasteboard.name)) == transfer
+        )
+        #expect(tokenDecodeCount == 1)
 
         // Registry mutation invalidates the cached positive value even when
         // AppKit leaves the same capability value and change count in place.
-        // The ended registration is no longer eligible for a live resolution.
-        let endedRegistration = try #require(registry.register(transfer))
-        let endedPasteboard = makePasteboard(item: endedRegistration.pasteboardItem)
-        #expect(registry.resolve(from: endedPasteboard) == transfer)
-        registry.end(endedRegistration)
-        #expect(registry.resolve(from: endedPasteboard) == nil)
-        #expect(tokenDecodeCount == 3)
+        registry.end(registration)
+        #expect(registry.resolve(from: pasteboard) == nil)
+        #expect(registry.resolve(from: pasteboard) == nil)
+        #expect(tokenDecodeCount == 2)
 
-        // Weak lease expiry remains authoritative even when AppKit leaves the
-        // same capability value and change count on the pasteboard.
+        // A replacement registration re-opens the lookup after the registry
+        // revision changes, even before its new value is written to the board.
+        let replacement = try #require(registry.register(transfer))
         #expect(registry.resolve(from: pasteboard) == nil)
-        #expect(registry.resolve(from: pasteboard) == nil)
+        #expect(tokenDecodeCount == 3)
+        pasteboard.clearContents()
+        #expect(replacement.write(to: pasteboard))
+        #expect(registry.resolve(from: pasteboard) == transfer)
         #expect(tokenDecodeCount == 4)
     }
 
