@@ -114,8 +114,8 @@ struct TabDragTransferRegistryTests {
         #expect(handler.operation(for: pasteboard).isEmpty)
     }
 
-    @Test("An accepted cross-controller drop finishes its native source")
-    func acceptedCrossControllerDropFinishesNativeSource() throws {
+    @Test("An accepted drop leaves native source completion to AppKit")
+    func acceptedCrossControllerDropWaitsForNativeSourceCompletion() throws {
         let registry = TabDragTransferRegistry()
         let sourceController = makeController(registry: registry)
         let targetController = makeController(registry: registry)
@@ -139,8 +139,14 @@ struct TabDragTransferRegistryTests {
         targetController.onExternalTabDrop = { _ in true }
 
         #expect(handler.performDrop(from: pasteboard, at: 0))
-        #expect(sourceController.internalController.tabDragSession == nil)
+        // Accepting a destination only revokes routing. The native source must
+        // remain retained and its `endedAt` callback is the sole terminal
+        // transition, otherwise AppKit can be left in an active drag state.
+        #expect(sourceController.internalController.tabDragSession != nil)
         #expect(handler.operation(for: pasteboard).isEmpty)
+
+        source.finishDrag()
+        #expect(sourceController.internalController.tabDragSession == nil)
         withExtendedLifetime(source) {}
     }
 
