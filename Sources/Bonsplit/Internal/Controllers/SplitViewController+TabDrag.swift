@@ -58,6 +58,7 @@ extension SplitViewController {
             event: event,
             source: source
         )
+        source.bind(nativeSession: session, sourceView: sourceView)
         // A tab drag is owned by the source lifecycle. Avoid AppKit's return
         // animation delaying (or suppressing) `endedAt` when the pointer is
         // released without a valid destination, so transfer state is revoked

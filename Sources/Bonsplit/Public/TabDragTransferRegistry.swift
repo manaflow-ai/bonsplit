@@ -13,7 +13,6 @@ public final class TabDragTransferRegistry {
     private final class Entry {
         weak var lifetime: TabDragTransferLifetime?
         let transfer: TabDragTransfer
-        var finishSource: (() -> Void)?
 
         init(lifetime: TabDragTransferLifetime, transfer: TabDragTransfer) {
             self.lifetime = lifetime
@@ -88,10 +87,15 @@ public final class TabDragTransferRegistry {
         transfers[token] = nil
     }
 
-    /// Finishes the live drag source represented by an accepted drop.
+    /// Revokes routing for the capability represented by an accepted drop.
     ///
-    /// The capability is revoked before the source callback runs, making this
-    /// safe when AppKit later delivers its native drag-ended callback too.
+    /// This method deliberately does not finish or release the native source.
+    /// AppKit owns the native drag session until it delivers the source's
+    /// `draggingSession(_:endedAt:operation:)` callback; that callback must
+    /// remain the sole terminal transition. Releasing a source here can leave
+    /// CoreDrag/WindowManager in an active drag state when the accepted drop
+    /// callback arrives before AppKit's source completion.
+    ///
     /// Rejected drops must not call this method.
     ///
     /// - Parameter pasteboard: The pasteboard presented by the accepted drop.
@@ -101,19 +105,6 @@ public final class TabDragTransferRegistry {
               entry.lifetime != nil else {
             return
         }
-        entry.finishSource?()
-    }
-
-    /// Attaches the native source lifecycle to a registered capability.
-    func attachSourceCompletion(
-        to registration: TabDragTransferRegistration,
-        _ completion: @escaping () -> Void
-    ) {
-        guard let entry = transfers[registration.token],
-              entry.lifetime === registration.lifetime else {
-            return
-        }
-        entry.finishSource = completion
     }
 
     private func token(from pasteboard: NSPasteboard) -> UUID? {
