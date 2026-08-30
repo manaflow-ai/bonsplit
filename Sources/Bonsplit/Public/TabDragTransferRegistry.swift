@@ -101,10 +101,13 @@ public final class TabDragTransferRegistry {
     /// - Parameter pasteboard: The pasteboard presented by the accepted drop.
     public func finish(from pasteboard: NSPasteboard) {
         guard let token = token(from: pasteboard),
-              let entry = transfers.removeValue(forKey: token),
+              let entry = transfers[token],
               entry.lifetime != nil else {
             return
         }
+        // Accepted routing is revoked immediately, but the source object and
+        // native AppKit session remain owned by their source until `endedAt`.
+        transfers[token] = nil
     }
 
     private func token(from pasteboard: NSPasteboard) -> UUID? {

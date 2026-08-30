@@ -8,11 +8,11 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
     private let transferRegistry: TabDragTransferRegistry
     private weak var controller: SplitViewController?
     private var didFinish = false
-    // Keep the exact AppKit session and source view owned until `endedAt`.
+    // Keep the source view owned until `endedAt`; AppKit owns the session and
+    // retains this source while its native drag is active.
     // AppKit's drag manager may outlive the SwiftUI tab view that initiated the
     // drag; releasing either object during an accepted drop can strand the
     // WindowManager drag connection.
-    private var nativeSession: NSDraggingSession?
     private var sourceView: NSView?
 
     init(
@@ -28,9 +28,9 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
         super.init()
     }
 
-    func bind(nativeSession: NSDraggingSession, sourceView: NSView) {
+    /// Retains the source view until AppKit delivers this source's `endedAt` callback.
+    func bind(sourceView: NSView) {
         guard !didFinish else { return }
-        self.nativeSession = nativeSession
         self.sourceView = sourceView
     }
 
@@ -58,7 +58,6 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
         didFinish = true
         transferRegistry.end(transferRegistration)
         controller?.nativeTabDragSessionDidEnd(generation: generation)
-        nativeSession = nil
         sourceView = nil
     }
 }
