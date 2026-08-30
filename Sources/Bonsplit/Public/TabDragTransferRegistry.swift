@@ -101,8 +101,7 @@ public final class TabDragTransferRegistry {
     /// - Parameter pasteboard: The pasteboard presented by the accepted drop.
     public func finish(from pasteboard: NSPasteboard) {
         guard let token = token(from: pasteboard),
-              let entry = transfers[token],
-              entry.lifetime != nil else {
+              let entry = transfers[token] else {
             return
         }
         // Accepted routing is revoked immediately, but the source object and
@@ -110,6 +109,7 @@ public final class TabDragTransferRegistry {
         // Keep this mutation explicit: a later destination must not resolve the
         // accepted capability a second time while AppKit finishes the source.
         transfers[token] = nil
+        guard entry.lifetime != nil else { return }
     }
 
     private func token(from pasteboard: NSPasteboard) -> UUID? {
