@@ -107,6 +107,8 @@ public final class TabDragTransferRegistry {
         }
         // Accepted routing is revoked immediately, but the source object and
         // native AppKit session remain owned by their source until `endedAt`.
+        // Keep this mutation explicit: a later destination must not resolve the
+        // accepted capability a second time while AppKit finishes the source.
         transfers[token] = nil
     }
 
