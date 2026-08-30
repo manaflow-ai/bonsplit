@@ -53,7 +53,7 @@ extension SplitViewController {
 
         let draggingItem = NSDraggingItem(pasteboardWriter: registration.pasteboardItem)
         draggingItem.setDraggingFrame(draggingFrame, contents: dragImage)
-        sourceView.beginDraggingSession(
+        let session = sourceView.beginDraggingSession(
             with: [draggingItem],
             event: event,
             source: source
