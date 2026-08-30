@@ -34,6 +34,12 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
         self.sourceView = sourceView
     }
 
+    /// Completes a superseded source after a later native pointer boundary
+    /// proves that AppKit has left this source's drag loop.
+    func finishAfterNativeBoundary() {
+        finishDrag()
+    }
+
     func draggingSession(
         _ session: NSDraggingSession,
         sourceOperationMaskFor context: NSDraggingContext
