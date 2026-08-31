@@ -6,26 +6,32 @@ on:
     branches: [main]
     types: [opened, closed, edited, reopened, synchronize]
 
-# A pull-request edit is admitted only when the base branch changed to main.
-# Title and body edits do not consume a signer run; live preflight still
-# verifies the complete target and head identity before any write.
+# Re-run full CLA validation for every non-closed edit. Title and body edits
+# must refresh the required-check context, and the live preflight below fails
+# closed if the target or head changed while the run was starting.
 
 # Jobs declare only the API access they need.
 permissions: {}
 
+# Bump this value when the CLA workflow policy or maintained action pin
+# changes. Do not derive the marker from github.workflow_sha, which changes
+# for every unrelated commit on main.
+env:
+  CLA_GENERATION: 'v2.2-action-09d64fa8ba8b77ae253f354be6e1564d49317fa3'
+
 jobs:
-  CLAAssistant:
-    name: "CLA Assistant v2"
+  CLACommentGate:
+    name: "Validate CLA trigger"
+    # This job is unprivileged. The expression is only coarse admission; the
+    # shell step performs the exact, case-sensitive comment comparison.
     if: >-
       (
         github.event_name == 'pull_request_target' &&
-        github.event.action != 'closed' &&
         (
-          github.event.action != 'edited' ||
-          (
-            github.event.changes.base &&
-            github.event.pull_request.base.ref == 'main'
-          )
+          github.event.action == 'opened' ||
+          github.event.action == 'edited' ||
+          github.event.action == 'reopened' ||
+          github.event.action == 'synchronize'
         )
       ) ||
       (
@@ -35,6 +41,68 @@ jobs:
         (
           github.event.comment.body == 'recheck' ||
           github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Serialize accepted events for one repository and PR, while keeping
+    # independent PRs independent. Never include comment text in this key.
+    concurrency:
+      group: >-
+        cla-admission-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions: {}
+    steps:
+      - name: "Validate exact CLA trigger"
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          sign_phrase='I have read the CLA Document and I hereby sign the CLA'
+          if [[ "${EVENT_NAME}" == "issue_comment" ]]; then
+            if [[ "${COMMENT_BODY}" != "recheck" &&
+                  "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
+              echo "::error::The comment is not an exact CLA declaration or recheck command"
+              exit 1
+            fi
+          elif [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
+            case "${EVENT_ACTION}" in
+              opened|edited|reopened|synchronize) ;;
+              *)
+                echo "::error::The pull request event is not an accepted CLA trigger"
+                exit 1
+                ;;
+            esac
+          else
+            echo "::error::The event is not an accepted CLA trigger"
+            exit 1
+          fi
+
+  CLAAssistant:
+    name: "CLA Assistant v2"
+    needs: CLACommentGate
+    if: >-
+      needs.CLACommentGate.result == 'success' &&
+      (
+        (
+          github.event_name == 'pull_request_target' &&
+          (
+            github.event.action == 'opened' ||
+            github.event.action == 'edited' ||
+            github.event.action == 'reopened' ||
+            github.event.action == 'synchronize'
+          )
+        ) ||
+        (
+          github.event_name == 'issue_comment' &&
+          github.event.issue.pull_request &&
+          github.event.issue.state == 'open' &&
+          (
+            github.event.comment.body == 'recheck' ||
+            github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+          )
         )
       )
     runs-on: ubuntu-latest
@@ -55,6 +123,9 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: "CLA generation ${{ env.CLA_GENERATION }}"
+        run: echo "CLA generation ${CLA_GENERATION}"
+
       - name: "Validate pull request target"
         # issue_comment events do not include the pull request target branch.
         # Fetch live target and head identity data, then fail closed unless the
@@ -62,13 +133,11 @@ jobs:
         if: >-
           (
             github.event_name == 'pull_request_target' &&
-            github.event.action != 'closed' &&
             (
-              github.event.action != 'edited' ||
-              (
-                github.event.changes.base &&
-                github.event.pull_request.base.ref == 'main'
-              )
+              github.event.action == 'opened' ||
+              github.event.action == 'edited' ||
+              github.event.action == 'reopened' ||
+              github.event.action == 'synchronize'
             )
           ) ||
           (
@@ -165,13 +234,11 @@ jobs:
         if: >-
           (
             github.event_name == 'pull_request_target' &&
-            github.event.action != 'closed' &&
             (
-              github.event.action != 'edited' ||
-              (
-                github.event.changes.base &&
-                github.event.pull_request.base.ref == 'main'
-              )
+              github.event.action == 'opened' ||
+              github.event.action == 'edited' ||
+              github.event.action == 'reopened' ||
+              github.event.action == 'synchronize'
             )
           ) ||
           (
@@ -233,13 +300,11 @@ jobs:
         if: >-
           (
             github.event_name == 'pull_request_target' &&
-            github.event.action != 'closed' &&
             (
-              github.event.action != 'edited' ||
-              (
-                github.event.changes.base &&
-                github.event.pull_request.base.ref == 'main'
-              )
+              github.event.action == 'opened' ||
+              github.event.action == 'edited' ||
+              github.event.action == 'reopened' ||
+              github.event.action == 'synchronize'
             )
           ) ||
           (
@@ -387,13 +452,11 @@ jobs:
         if: >-
           (
             github.event_name == 'pull_request_target' &&
-            github.event.action != 'closed' &&
             (
-              github.event.action != 'edited' ||
-              (
-                github.event.changes.base &&
-                github.event.pull_request.base.ref == 'main'
-              )
+              github.event.action == 'opened' ||
+              github.event.action == 'edited' ||
+              github.event.action == 'reopened' ||
+              github.event.action == 'synchronize'
             )
           ) ||
           (
@@ -407,7 +470,7 @@ jobs:
           )
         # Use the reviewed Manaflow-maintained implementation. Pin the full
         # commit so a branch move cannot change the code executed here.
-        uses: manaflow-ai/cla-github-action@a34b7274a1f68a0d7bcb11e62a5f1454ea15515c
+        uses: manaflow-ai/cla-github-action@09d64fa8ba8b77ae253f354be6e1564d49317fa3 # v0.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -431,6 +494,39 @@ jobs:
           # explicitly after review.
           require-opener-as-author: 'true'
 
+  # Keep the legacy required context fail-closed while repository rulesets
+  # migrate to the versioned "CLA Assistant v2" check. A skipped compatibility
+  # job would be reported as successful by GitHub, so always inspect both jobs.
+  CLACompatibility:
+    name: "CLA Assistant"
+    needs:
+      - CLACommentGate
+      - CLAAssistant
+    if: >-
+      always() &&
+      github.event_name == 'pull_request_target' &&
+      (
+        github.event.action == 'opened' ||
+        github.event.action == 'edited' ||
+        github.event.action == 'reopened' ||
+        github.event.action == 'synchronize'
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: "Require CLA Assistant v2 success"
+        env:
+          GATE_RESULT: ${{ needs.CLACommentGate.result }}
+          V2_RESULT: ${{ needs.CLAAssistant.result }}
+        run: |
+          set -euo pipefail
+          if [[ "${GATE_RESULT}" != "success" ||
+                "${V2_RESULT}" != "success" ]]; then
+            echo "::error::CLA Assistant v2 did not pass (gate: ${GATE_RESULT}, action: ${V2_RESULT})"
+            exit 1
+          fi
+
   LockMergedPullRequest:
     name: "Lock merged pull request"
     if: >-
@@ -446,38 +542,146 @@ jobs:
       # Keep GitHub's default single pending slot for this merged PR.
     permissions:
       issues: write
+      pull-requests: read
     steps:
       - name: "Lock merged pull request"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          EVENT_STATE: ${{ github.event.pull_request.state }}
+          EVENT_MERGED: ${{ github.event.pull_request.merged }}
+          EVENT_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+          EVENT_BASE_REPO_ID: ${{ github.event.pull_request.base.repo.id }}
+          EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          # GitHub can redact a deleted fork from a merged pull-request
+          # payload. Validate event shape, but do not treat source-head fields
+          # as immutable. A source branch can advance or be deleted after merge.
+          EVENT_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name || '' }}
+          EVENT_HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id || '' }}
+          EVENT_OPENER_ID: ${{ github.event.pull_request.user.id }}
+          EVENT_OPENER_LOGIN: ${{ github.event.pull_request.user.login }}
         run: |
           set -euo pipefail
+
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+
+          [[ "${EVENT_NAME}" == "pull_request_target" &&
+             "${EVENT_ACTION}" == "closed" &&
+             "${EVENT_STATE}" == "closed" &&
+             "${EVENT_MERGED}" == "true" ]] ||
+            fail "The event is not a closed merged pull_request_target event"
+          [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]] ||
+            fail "Invalid pull request number"
+          [[ "${EVENT_BASE_REF}" == "main" ]] ||
+            fail "The merge event targets an unexpected base branch"
+          [[ "${EVENT_BASE_REPO}" == "${GH_REPO}" ]] ||
+            fail "The merge event targets an unexpected base repository"
+          [[ "${EVENT_BASE_REPO_ID}" =~ ^[1-9][0-9]*$ ]] ||
+            fail "The merge event has no valid base repository ID"
+          [[ "${EVENT_HEAD_SHA}" =~ ^[0-9a-f]{40}$ ]] ||
+            fail "The merge event has no valid head SHA"
+          [[ -n "${EVENT_HEAD_REF}" &&
+             "${EVENT_HEAD_REF}" != *$'\n'* &&
+             "${EVENT_HEAD_REF}" != *$'\r'* ]] ||
+            fail "The merge event has no valid head ref"
+          if [[ -z "${EVENT_HEAD_REPO}" || -z "${EVENT_HEAD_REPO_ID}" ]]; then
+            [[ -z "${EVENT_HEAD_REPO}" && -z "${EVENT_HEAD_REPO_ID}" ]] ||
+              fail "The merge event has incomplete head repository metadata"
+          else
+            [[ "${EVENT_HEAD_REPO}" == */* &&
+               "${EVENT_HEAD_REPO}" != */*/* ]] ||
+              fail "The merge event has no valid head repository"
+            [[ "${EVENT_HEAD_REPO_ID}" =~ ^[1-9][0-9]*$ ]] ||
+              fail "The merge event has no valid head repository ID"
+          fi
+          [[ "${EVENT_OPENER_ID}" =~ ^[1-9][0-9]*$ &&
+             -n "${EVENT_OPENER_LOGIN}" &&
+             "${EVENT_OPENER_LOGIN}" != *$'\n'* &&
+             "${EVENT_OPENER_LOGIN}" != *$'\r'* ]] ||
+            fail "The merge event has no valid pull request opener"
+
+          validate_live_merged_pr() {
+            local live_pr_json="$1"
+            jq -e \
+              --arg repo "${GH_REPO}" \
+              --argjson number "${PR_NUMBER}" \
+              --arg base_ref "${EVENT_BASE_REF}" \
+              --arg base_repo "${EVENT_BASE_REPO}" \
+              --argjson base_repo_id "${EVENT_BASE_REPO_ID}" \
+              --argjson opener_id "${EVENT_OPENER_ID}" \
+              --arg opener_login "${EVENT_OPENER_LOGIN}" '
+                .number == $number and
+                .state == "closed" and
+                .merged == true and
+                .base.ref == $base_ref and
+                .base.repo.full_name == $base_repo and
+                .base.repo.full_name == $repo and
+                .base.repo.id == $base_repo_id and
+                (.head.sha | type == "string") and
+                (.head.sha | length > 0) and
+                (.head.ref | type == "string") and
+                (.head.ref | length > 0) and
+                (
+                  if .head.repo == null then
+                    true
+                  else
+                    (.head.repo.full_name | type == "string") and
+                    (.head.repo.full_name | length > 0) and
+                    (.head.repo.id | type == "number") and
+                    (.head.repo.id > 0) and
+                    (.head.repo.id <= 9007199254740991) and
+                    (.head.repo.id == (.head.repo.id | floor))
+                  end
+                ) and
+                .user.id == $opener_id and
+                (.user.login | type == "string") and
+                (.user.login | length > 0) and
+                ((.user.login | ascii_downcase) == ($opener_login | ascii_downcase))
+              ' <<<"${live_pr_json}" >/dev/null || return 1
+          }
+
+          live_pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
+            fail "Could not query the merged pull request"
+          validate_live_merged_pr "${live_pr_json}" ||
+            fail "The live pull request no longer matches the merged event"
+
           issue_endpoint="repos/${GH_REPO}/issues/${PR_NUMBER}"
           lock_endpoint="${issue_endpoint}/lock"
           if ! locked="$(gh api "${issue_endpoint}" --jq '.locked' 2>/dev/null)"; then
-            echo "::error::Could not inspect pull request lock state"
-            exit 1
+            fail "Could not query the pull request lock state"
           fi
           if [[ "${locked}" == "true" ]]; then
             echo "Pull request ${PR_NUMBER} is already locked"
             exit 0
           fi
+
+          # Re-fetch immediately before the state-changing call. A queued lock
+          # job must not lock a pull request that was reopened or retargeted
+          # after the closed event was delivered.
+          live_pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
+            fail "Could not recheck the merged pull request before locking"
+          validate_live_merged_pr "${live_pr_json}" ||
+            fail "The pull request changed before locking"
+
           if ! gh api --method PUT \
             --header 'Accept: application/vnd.github+json' \
             --header 'X-GitHub-Api-Version: 2022-11-28' \
             "${lock_endpoint}" \
             --field lock_reason=resolved \
-            2>/dev/null; then
-            echo "::error::Could not lock the merged pull request"
-            exit 1
+            >/dev/null 2>&1; then
+            fail "Could not lock the merged pull request"
           fi
           if ! locked="$(gh api "${issue_endpoint}" --jq '.locked' 2>/dev/null)"; then
-            echo "::error::Could not verify pull request lock state"
-            exit 1
+            fail "Could not verify pull request lock state"
           fi
           if [[ "${locked}" != "true" ]]; then
-            echo "::error::Pull request lock was not confirmed"
-            exit 1
+            fail "The merged pull request is not locked"
           fi
