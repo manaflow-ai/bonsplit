@@ -390,7 +390,7 @@ jobs:
                   (.user.login | type) == "string" and
                   (.user.type | type) == "string" and
                   (.user.id | type) == "number" and
-                  (.user.id > 0))
+                  (.user.id | (floor == . and . > 0 and . <= 9007199254740991)))
               then {body: .body, login: .user.login, type: .user.type, id: (.user.id | tostring)} | @base64
               else error("invalid issue comment")
               end
