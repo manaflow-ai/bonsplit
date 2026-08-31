@@ -55,6 +55,11 @@ final class TabIdListingTests: XCTestCase {
     /// The point of the accessor. Timed rather than counted so the assertion
     /// still means something if the implementation changes later. The bound is
     /// loose on purpose: the measured gap is several times, not a few percent.
+    ///
+    /// Sampled alternately and compared on medians. One sample each would let a
+    /// scheduler hiccup landing in the wrong window fail a correct build, and
+    /// alternating keeps a slow stretch of machine from landing entirely on one
+    /// of the two paths.
     @MainActor
     func testListingIdsIsSubstantiallyCheaperThanListingTabs() {
         let controller = BonsplitController(
@@ -65,25 +70,33 @@ final class TabIdListingTests: XCTestCase {
             _ = controller.createTab(title: "Tab \(index)")
         }
         let iterations = 2_000
+        let samples = 7
 
         // Warm both paths so neither pays first-call costs in its window.
         _ = controller.tabs(inPane: paneId)
         _ = controller.tabIds(inPane: paneId)
 
-        let tabsStart = ContinuousClock.now
-        for _ in 0..<iterations {
-            _ = controller.tabs(inPane: paneId).map(\.id)
+        func time(_ body: () -> Void) -> Duration {
+            let start = ContinuousClock.now
+            for _ in 0..<iterations { body() }
+            return ContinuousClock.now - start
         }
-        let tabsElapsed = ContinuousClock.now - tabsStart
 
-        let idsStart = ContinuousClock.now
-        for _ in 0..<iterations {
-            _ = controller.tabIds(inPane: paneId)
+        var tabsSamples: [Duration] = []
+        var idsSamples: [Duration] = []
+        for _ in 0..<samples {
+            tabsSamples.append(time { _ = controller.tabs(inPane: paneId).map(\.id) })
+            idsSamples.append(time { _ = controller.tabIds(inPane: paneId) })
         }
-        let idsElapsed = ContinuousClock.now - idsStart
 
-        print("[tab-ids] \(iterations) listings of 13 tabs: tabs \(tabsElapsed), ids \(idsElapsed)")
-        XCTAssertLessThan(idsElapsed, tabsElapsed / 2)
+        let tabsMedian = tabsSamples.sorted()[samples / 2]
+        let idsMedian = idsSamples.sorted()[samples / 2]
+
+        print("""
+        [tab-ids] \(samples) samples of \(iterations) listings of 13 tabs: \
+        tabs median \(tabsMedian), ids median \(idsMedian)
+        """)
+        XCTAssertLessThan(idsMedian, tabsMedian / 2)
     }
 
     @MainActor
