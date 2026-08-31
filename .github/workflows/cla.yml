@@ -1,0 +1,483 @@
+name: "CLA Assistant v2"
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    branches: [main]
+    types: [opened, closed, edited, reopened, synchronize]
+
+# A pull-request edit is admitted only when the base branch changed to main.
+# Title and body edits do not consume a signer run; live preflight still
+# verifies the complete target and head identity before any write.
+
+# Jobs declare only the API access they need.
+permissions: {}
+
+jobs:
+  CLAAssistant:
+    name: "CLA Assistant v2"
+    if: >-
+      (
+        github.event_name == 'pull_request_target' &&
+        github.event.action != 'closed' &&
+        (
+          github.event.action != 'edited' ||
+          (
+            github.event.changes.base &&
+            github.event.pull_request.base.ref == 'main'
+          )
+        )
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        github.event.issue.state == 'open' &&
+        (
+          github.event.comment.body == 'recheck' ||
+          github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # The maintained action uses optimistic locking for the shared ledger.
+    # Serialize events for one repository and PR without blocking other PRs.
+    concurrency:
+      group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
+      # Keep GitHub's default single pending slot for this PR.
+    # Required-check recovery remains advisory. The signer has read-only
+    # Actions access until a separately reviewed exact-head rerun worker exists.
+    permissions:
+      # Read-only access permits workflow metadata inspection without allowing
+      # this signer to replay an arbitrary Actions run.
+      actions: read
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - name: "Validate pull request target"
+        # issue_comment events do not include the pull request target branch.
+        # Fetch live target and head identity data, then fail closed unless the
+        # PR is open and targets main, matching the pull_request_target filter.
+        if: >-
+          (
+            github.event_name == 'pull_request_target' &&
+            github.event.action != 'closed' &&
+            (
+              github.event.action != 'edited' ||
+              (
+                github.event.changes.base &&
+                github.event.pull_request.base.ref == 'main'
+              )
+            )
+          ) ||
+          (
+            github.event_name == 'issue_comment' &&
+            github.event.issue.pull_request &&
+            github.event.issue.state == 'open' &&
+            (
+              github.event.comment.body == 'recheck' ||
+              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+            )
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+          EVENT_NAME: ${{ github.event_name }}
+          PAYLOAD_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PAYLOAD_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          PAYLOAD_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          PAYLOAD_HEAD_REPO_ID: ${{ github.event.pull_request.head.repo.id }}
+          PAYLOAD_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PAYLOAD_BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+          PAYLOAD_BASE_REPO_ID: ${{ github.event.pull_request.base.repo.id }}
+        run: |
+          set -euo pipefail
+          if ! [[ "${PR_NUMBER}" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not determine the pull request number"
+            exit 1
+          fi
+          if ! pr_metadata="$(gh api \
+            "repos/${GH_REPO}/pulls/${PR_NUMBER}" \
+            --jq '[.number, .state, .base.ref, .base.repo.full_name, (.base.repo.id | tostring), .head.sha, .head.ref, .head.repo.full_name, (.head.repo.id | tostring)] | @tsv' \
+            2>/dev/null
+          )"; then
+            echo "::error::Could not determine the pull request target"
+            exit 1
+          fi
+          if ! IFS=$'\t' read -r \
+            returned_number state base_ref base_repo base_repo_id \
+            head_sha head_ref head_repo head_repo_id <<<"${pr_metadata}"; then
+            echo "::error::Could not determine live pull request identity"
+            exit 1
+          fi
+          if [[ "${returned_number}" != "${PR_NUMBER}" ||
+                -z "${base_ref}" ||
+                -z "${state}" ||
+                -z "${base_repo}" ||
+                -z "${base_repo_id}" ||
+                -z "${head_sha}" ||
+                -z "${head_ref}" ||
+                -z "${head_repo}" ||
+                -z "${head_repo_id}" ]]; then
+            echo "::error::Could not determine live pull request identity"
+            exit 1
+          fi
+          if ! [[ "${base_repo_id}" =~ ^[1-9][0-9]*$ &&
+                  "${head_repo_id}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Pull request repository identity is invalid"
+            exit 1
+          fi
+          if [[ "${base_repo}" != "${GH_REPO}" ]]; then
+            echo "::error::Pull request base repository identity mismatch"
+            exit 1
+          fi
+          if [[ "${base_ref}" != "main" ]]; then
+            echo "::error::CLA checks only support pull requests targeting main"
+            exit 1
+          fi
+          if [[ "${state}" != "open" ]]; then
+            echo "::error::CLA checks only run for open pull requests"
+            exit 1
+          fi
+          if [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
+            if ! [[ "${PAYLOAD_BASE_REPO_ID}" =~ ^[1-9][0-9]*$ &&
+                    "${PAYLOAD_HEAD_REPO_ID}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Pull request event repository identity is invalid"
+              exit 1
+            fi
+            if [[ "${PAYLOAD_HEAD_SHA}" != "${head_sha}" ||
+                  "${PAYLOAD_HEAD_REF}" != "${head_ref}" ||
+                  "${PAYLOAD_HEAD_REPO}" != "${head_repo}" ||
+                  "${PAYLOAD_HEAD_REPO_ID}" != "${head_repo_id}" ||
+                  "${PAYLOAD_BASE_REF}" != "${base_ref}" ||
+                  "${PAYLOAD_BASE_REPO}" != "${base_repo}" ||
+                  "${PAYLOAD_BASE_REPO_ID}" != "${base_repo_id}" ]]; then
+              echo "::error::Pull request event metadata does not match live metadata"
+              exit 1
+            fi
+          fi
+
+      - name: "Check CLA commit limit"
+        # The maintained action traverses at most 1,000 commits. Fail closed
+        # before it runs so an unsigned commit cannot fall outside that bound.
+        if: >-
+          (
+            github.event_name == 'pull_request_target' &&
+            github.event.action != 'closed' &&
+            (
+              github.event.action != 'edited' ||
+              (
+                github.event.changes.base &&
+                github.event.pull_request.base.ref == 'main'
+              )
+            )
+          ) ||
+          (
+            github.event_name == 'issue_comment' &&
+            github.event.issue.pull_request &&
+            github.event.issue.state == 'open' &&
+            (
+              github.event.comment.body == 'recheck' ||
+              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+            )
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          if ! commit_count="$(gh api \
+            "repos/${GH_REPO}/pulls/${PR_NUMBER}" \
+            --jq '.commits' \
+            2>/dev/null
+          )"; then
+            echo "::error::Could not determine the pull request commit count"
+            exit 1
+          fi
+          if ! [[ "${commit_count}" =~ ^(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Could not determine the pull request commit count"
+            exit 1
+          fi
+          max_commits=1000
+          # Compare canonical decimal strings, not shell arithmetic. This
+          # keeps an unexpectedly large API value fail-closed without overflow.
+          if (( ${#commit_count} > ${#max_commits} )) ||
+             { (( ${#commit_count} == ${#max_commits} )) && (( 10#${commit_count} > 10#${max_commits} )); }; then
+            echo "::error title=CLA Assistant v2 commit limit::This pull request has ${commit_count} commits. Split it into 1,000 or fewer commits before requesting a CLA check."
+            exit 1
+          fi
+
+      - name: "Validate exact issue comment"
+        # GitHub expression equality is case-insensitive. Recheck the body in
+        # Bash so the action cannot accept a case variant or broader comment
+        # as a signing event.
+        if: github.event_name == 'issue_comment'
+        env:
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          sign_phrase='I have read the CLA Document and I hereby sign the CLA'
+          if [[ "${COMMENT_BODY}" != 'recheck' &&
+                "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
+            echo "::error::Issue comment must exactly match recheck or the CLA signing phrase"
+            exit 1
+          fi
+
+      - name: "Validate historical CLA comments"
+        # Inspect every bounded comment page before invoking the action. The
+        # legacy matcher is retained here to reject broad or spoofed evidence
+        # left by an older action version.
+        if: >-
+          (
+            github.event_name == 'pull_request_target' &&
+            github.event.action != 'closed' &&
+            (
+              github.event.action != 'edited' ||
+              (
+                github.event.changes.base &&
+                github.event.pull_request.base.ref == 'main'
+              )
+            )
+          ) ||
+          (
+            github.event_name == 'issue_comment' &&
+            github.event.issue.pull_request &&
+            github.event.issue.state == 'open' &&
+            (
+              github.event.comment.body == 'recheck' ||
+              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+            )
+          )
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          shopt -s extglob
+          sign_phrase='I have read the CLA Document and I hereby sign the CLA'
+          canonical_bot='github-actions[bot]'
+          canonical_bot_type='Bot'
+          canonical_bot_id='41898282'
+          canonical_marker='cla assistant lite bot'
+          # This mirrors /^.*i \s*have \s*read ... \s*cla.*$/ after the
+          # action's trim/lowercase pass. [[:space:]]+ is fail-closed for tabs.
+          broad_cla_pattern='^.*i[[:space:]]+have[[:space:]]+read[[:space:]]+the[[:space:]]+cla[[:space:]]+document[[:space:]]+and[[:space:]]+i[[:space:]]+hereby[[:space:]]+sign[[:space:]]+the[[:space:]]+cla.*$'
+
+          normalize() {
+            local value="$1"
+            value="${value,,}"
+            value="${value##+([[:space:]])}"
+            value="${value%%+([[:space:]])}"
+            printf '%s' "${value}"
+          }
+
+          matches_archived_cla_pattern() {
+            local body="$1"
+            local line
+            while IFS= read -r line || [[ -n "${line}" ]]; do
+              if [[ "${line}" =~ ${broad_cla_pattern} ]]; then
+                return 0
+              fi
+            done <<<"${body}"
+            return 1
+          }
+
+          exact_phrase="$(normalize "${sign_phrase}")"
+          per_page=100
+          max_comments=1000
+          page=1
+          seen_comments=0
+          while (( page <= 11 )); do
+            if ! page_json="$(gh api \
+              "repos/${GH_REPO}/issues/${PR_NUMBER}/comments?per_page=${per_page}&page=${page}" \
+              --jq '.' \
+              2>/dev/null
+            )"; then
+              echo "::error::Could not inspect historical pull request comments"
+              exit 1
+            fi
+            if ! jq -e 'type == "array"' >/dev/null <<<"${page_json}" 2>/dev/null; then
+              echo "::error::Historical pull request comments response was invalid"
+              exit 1
+            fi
+            if ! page_count="$(jq -r 'length' <<<"${page_json}" 2>/dev/null)"; then
+              echo "::error::Could not count historical pull request comments"
+              exit 1
+            fi
+            if ! [[ "${page_count}" =~ ^[0-9]+$ ]]; then
+              echo "::error::Historical pull request comment count was invalid"
+              exit 1
+            fi
+            if (( page_count == 0 )); then
+              break
+            fi
+            seen_comments=$((seen_comments + page_count))
+            if (( seen_comments > max_comments )); then
+              echo "::error::Pull request has more than 1000 historical comments; refusing CLA evaluation"
+              exit 1
+            fi
+            if ! encoded_comments="$(jq -r '
+              .[] |
+              if ((.body | type) == "string" and
+                  (.user.login | type) == "string" and
+                  (.user.type | type) == "string" and
+                  (.user.id | type) == "number" and
+                  (.user.id > 0))
+              then {body: .body, login: .user.login, type: .user.type, id: (.user.id | tostring)} | @base64
+              else error("invalid issue comment")
+              end
+            ' <<<"${page_json}" 2>/dev/null)"; then
+              echo "::error::Historical pull request comment metadata was invalid"
+              exit 1
+            fi
+            while IFS= read -r encoded_comment; do
+              [[ -n "${encoded_comment}" ]] || continue
+              if ! comment_json="$(printf '%s' "${encoded_comment}" | base64 --decode 2>/dev/null)"; then
+                echo "::error::Historical pull request comment encoding was invalid"
+                exit 1
+              fi
+              if ! body="$(jq -r '.body' <<<"${comment_json}" 2>/dev/null)" ||
+                 ! author_login="$(jq -r '.login' <<<"${comment_json}" 2>/dev/null)" ||
+                 ! author_type="$(jq -r '.type' <<<"${comment_json}" 2>/dev/null)" ||
+                 ! author_id="$(jq -r '.id' <<<"${comment_json}" 2>/dev/null)"; then
+                echo "::error::Historical pull request comment metadata was invalid"
+                exit 1
+              fi
+              normalized_body="$(normalize "${body}")"
+              if [[ "${normalized_body}" == *"${canonical_marker}"* ]]; then
+                if [[ "${author_login}" == "${canonical_bot}" &&
+                      "${author_type}" == "${canonical_bot_type}" &&
+                      "${author_id}" == "${canonical_bot_id}" ]]; then
+                  continue
+                fi
+                echo "::error::Historical CLA bot marker is not canonical"
+                exit 1
+              fi
+              if ! matches_archived_cla_pattern "${normalized_body}"; then
+                continue
+              fi
+              if [[ "${normalized_body}" != "${exact_phrase}" ]]; then
+                echo "::error::Historical CLA-like comment is not the exact configured signing phrase"
+                exit 1
+              fi
+              author_login_lower="${author_login,,}"
+              if [[ "${author_type}" != "User" ||
+                    "${author_login_lower}" == *'[bot]' ]]; then
+                echo "::error::Historical CLA signing comment is not from a human contributor"
+                exit 1
+              fi
+            done <<<"${encoded_comments}"
+            if (( page_count < per_page )); then
+              break
+            fi
+            if (( page == 11 )); then
+              echo "::error::Could not safely inspect historical pull request comments"
+              exit 1
+            fi
+            page=$((page + 1))
+          done
+
+      - name: "CLA Assistant v2"
+        # The action handles signing and status updates. Merged pull requests
+        # use the explicit lock step below with a verified lock reason.
+        if: >-
+          (
+            github.event_name == 'pull_request_target' &&
+            github.event.action != 'closed' &&
+            (
+              github.event.action != 'edited' ||
+              (
+                github.event.changes.base &&
+                github.event.pull_request.base.ref == 'main'
+              )
+            )
+          ) ||
+          (
+            github.event_name == 'issue_comment' &&
+            github.event.issue.pull_request &&
+            github.event.issue.state == 'open' &&
+            (
+              github.event.comment.body == 'recheck' ||
+              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+            )
+          )
+        # Use the reviewed Manaflow-maintained implementation. Pin the full
+        # commit so a branch move cannot change the code executed here.
+        uses: manaflow-ai/cla-github-action@a34b7274a1f68a0d7bcb11e62a5f1454ea15515c
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          path-to-signatures: 'signatures/version1/cla.json'
+          # Pin the document to the workflow revision so a later edit cannot
+          # change the terms shown for an existing signature request.
+          path-to-document: 'https://github.com/manaflow-ai/bonsplit/blob/${{ github.workflow_sha }}/CLA.md'
+          # Disable automatic locking and use the explicit step below, which
+          # supplies a valid reason and fails on API errors.
+          lock-pullrequest-aftermerge: 'false'
+          # signatures live on the unprotected cla-signatures branch so required checks on main don't block the bot's signature commits
+          branch: 'cla-signatures'
+          # Do not use the action's name-based allowlist. A commit name is not
+          # a verified GitHub identity, so every non-bot committer must sign.
+          custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
+          # Keep the target explicit. The maintained action revalidates the
+          # live base branch before every signature or lock write.
+          required-base-ref: 'main'
+          # Require the pull request opener to appear as an authenticated
+          # commit author or co-author. Patch-submission workflows must opt out
+          # explicitly after review.
+          require-opener-as-author: 'true'
+
+  LockMergedPullRequest:
+    name: "Lock merged pull request"
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.base.ref == 'main' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: cla-lock-${{ github.repository }}-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+      # Keep GitHub's default single pending slot for this merged PR.
+    permissions:
+      issues: write
+    steps:
+      - name: "Lock merged pull request"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          issue_endpoint="repos/${GH_REPO}/issues/${PR_NUMBER}"
+          lock_endpoint="${issue_endpoint}/lock"
+          if ! locked="$(gh api "${issue_endpoint}" --jq '.locked' 2>/dev/null)"; then
+            echo "::error::Could not inspect pull request lock state"
+            exit 1
+          fi
+          if [[ "${locked}" == "true" ]]; then
+            echo "Pull request ${PR_NUMBER} is already locked"
+            exit 0
+          fi
+          if ! gh api --method PUT \
+            --header 'Accept: application/vnd.github+json' \
+            --header 'X-GitHub-Api-Version: 2022-11-28' \
+            "${lock_endpoint}" \
+            --field lock_reason=resolved \
+            2>/dev/null; then
+            echo "::error::Could not lock the merged pull request"
+            exit 1
+          fi
+          if ! locked="$(gh api "${issue_endpoint}" --jq '.locked' 2>/dev/null)"; then
+            echo "::error::Could not verify pull request lock state"
+            exit 1
+          fi
+          if [[ "${locked}" != "true" ]]; then
+            echo "::error::Pull request lock was not confirmed"
+            exit 1
+          fi
