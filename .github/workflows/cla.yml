@@ -109,7 +109,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The maintained action uses optimistic locking for the shared ledger.
-    # Serialize events for one repository and PR without blocking other PRs.
+    # Serialize signing events for one repository and PR without blocking
+    # other PRs. The merge lock has a separate group so a later lifecycle
+    # event cannot replace a queued post-merge lock.
     concurrency:
       group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
@@ -382,7 +384,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number }}
+      # Keep merge locking independent from signer events. The live checks
+      # below revalidate the merged PR immediately before the lock write.
+      group: cla-lock-${{ github.repository }}-${{ github.event.pull_request.number }}
       cancel-in-progress: false
       # Keep GitHub's default single pending slot for this merged PR.
     permissions:
