@@ -47,7 +47,11 @@ jobs:
     timeout-minutes: 5
     # Serialize accepted events for one repository, event class, and PR,
     # while keeping independent PRs and lifecycle/comment classes independent.
-    # Never include comment text or actor data in this key.
+    # Never include comment text or actor data in this key. GitHub evaluates
+    # the coarse expression gate case-insensitively, so a same-class comment
+    # variant can replace the single pending run before the exact shell gate
+    # rejects it. Removing that residual loss would require an external
+    # webhook or GitHub App queue; an unbounded workflow fanout is unsafe.
     concurrency:
       group: >-
         cla-admission-${{ github.repository }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
@@ -116,8 +120,11 @@ jobs:
       group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
       # Keep GitHub's default single pending slot for this PR.
-    # The pinned action makes no Actions API calls. Required-check recovery is
-    # advisory until a separately reviewed exact-head rerun worker exists.
+    # The action writes the signature ledger and PR comments. The enclosing
+    # Actions job publishes the check result; the action does not call commit
+    # status or check-run endpoints, so statuses/checks write is intentionally
+    # absent. Required-check recovery is advisory until a separately reviewed
+    # exact-head rerun worker exists.
     permissions:
       contents: write
       issues: write
@@ -294,8 +301,9 @@ jobs:
           fi
 
       - name: "CLA Assistant v2"
-        # The action handles signing and status updates. Merged pull requests
-        # use the explicit lock step below with a verified lock reason.
+        # The action handles signing and PR comment updates. The enclosing job
+        # owns the check result. Merged pull requests use the explicit lock
+        # step below with a verified lock reason.
         if: >-
           (
             github.event_name == 'pull_request_target' &&
@@ -330,8 +338,10 @@ jobs:
           lock-pullrequest-aftermerge: 'false'
           # signatures live on the unprotected cla-signatures branch so required checks on main don't block the bot's signature commits
           branch: 'cla-signatures'
-          # Do not use the action's name-based allowlist. A commit name is not
-          # a verified GitHub identity, so every non-bot committer must sign.
+          # Do not use a name, email, or raw-ID allowlist. Commit metadata is
+          # not an authenticated identity, and automated authors are not
+          # silently exempted. Any automation exception needs a separately
+          # reviewed authenticated workflow path.
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           # Keep the target explicit. The maintained action revalidates the
           # live base branch before every signature or lock write.
