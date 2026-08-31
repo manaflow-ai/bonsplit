@@ -351,7 +351,6 @@ jobs:
             return 1
           }
 
-          exact_phrase="$(normalize "${sign_phrase}")"
           per_page=100
           max_comments=1000
           page=1
@@ -425,7 +424,10 @@ jobs:
               if ! matches_archived_cla_pattern "${normalized_body}"; then
                 continue
               fi
-              if [[ "${normalized_body}" != "${exact_phrase}" ]]; then
+              # The archived matcher trims and lowercases before matching,
+              # so compare the original body separately. Historical variants
+              # must not be treated as the exact electronic signature.
+              if [[ "${body}" != "${sign_phrase}" ]]; then
                 echo "::error::Historical CLA-like comment is not the exact configured signing phrase"
                 exit 1
               fi
