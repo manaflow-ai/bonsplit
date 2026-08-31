@@ -141,13 +141,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # The maintained action uses optimistic locking for the shared ledger.
-    # Serialize signing events for one repository and PR without blocking
-    # other PRs. The merge lock has a separate group so a later lifecycle
-    # event cannot replace a queued post-merge lock.
+    # Serialize signing events for one repository, event class, and PR
+    # without blocking other PRs. Separating lifecycle and comment events
+    # prevents a comment from replacing pending lifecycle validation. The
+    # merge lock has a separate group so it cannot race a signer write.
+    # Sign and recheck comments intentionally share the issue_comment class.
+    # Do not put untrusted comment text in a concurrency key.
     concurrency:
-      group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: cla-signatures-${{ github.repository }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
-      # Keep GitHub's default single pending slot for this PR.
+      # Keep GitHub's default single pending slot for this event class and PR.
     # The action writes the signature ledger and PR comments. The enclosing
     # Actions job publishes the check result; the action does not call commit
     # status or check-run endpoints, so statuses/checks write is intentionally
