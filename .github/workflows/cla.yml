@@ -17,7 +17,7 @@ permissions: {}
 # changes. Do not derive the marker from github.workflow_sha, which changes
 # for every unrelated commit on main.
 env:
-  CLA_GENERATION: 'v2.2-action-c327a6f4071730000bf03f9f85c87d30e1fe8084'
+  CLA_GENERATION: 'v2.2-action-056a0e9d7237954489ab474f24e66c2e742e78f9'
 
 jobs:
   CLACommentGate:
@@ -45,11 +45,12 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    # Serialize accepted events for one repository and PR, while keeping
-    # independent PRs independent. Never include comment text in this key.
+    # Serialize accepted events for one repository, event class, and PR,
+    # while keeping independent PRs and lifecycle/comment classes independent.
+    # Never include comment text or actor data in this key.
     concurrency:
       group: >-
-        cla-admission-${{ github.repository }}-${{ github.event.issue.number || github.event.pull_request.number }}
+        cla-admission-${{ github.repository }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
       cancel-in-progress: false
     permissions: {}
     steps:
@@ -314,7 +315,7 @@ jobs:
           )
         # Use the reviewed Manaflow-maintained implementation. Pin the full
         # commit so a branch move cannot change the code executed here.
-        uses: manaflow-ai/cla-github-action@c327a6f4071730000bf03f9f85c87d30e1fe8084 # v0.0.1
+        uses: manaflow-ai/cla-github-action@056a0e9d7237954489ab474f24e66c2e742e78f9 # v0.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
