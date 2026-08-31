@@ -351,39 +351,6 @@ jobs:
           # explicitly after review.
           require-opener-as-author: 'true'
 
-  # Keep the legacy required context fail-closed while repository rulesets
-  # migrate to the versioned "CLA Assistant v2" check. A skipped compatibility
-  # job would be reported as successful by GitHub, so always inspect both jobs.
-  CLACompatibility:
-    name: "CLA Assistant"
-    needs:
-      - CLACommentGate
-      - CLAAssistant
-    if: >-
-      always() &&
-      github.event_name == 'pull_request_target' &&
-      (
-        github.event.action == 'opened' ||
-        github.event.action == 'edited' ||
-        github.event.action == 'reopened' ||
-        github.event.action == 'synchronize'
-      )
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: "Require CLA Assistant v2 success"
-        env:
-          GATE_RESULT: ${{ needs.CLACommentGate.result }}
-          V2_RESULT: ${{ needs.CLAAssistant.result }}
-        run: |
-          set -euo pipefail
-          if [[ "${GATE_RESULT}" != "success" ||
-                "${V2_RESULT}" != "success" ]]; then
-            echo "::error::CLA Assistant v2 did not pass (gate: ${GATE_RESULT}, action: ${V2_RESULT})"
-            exit 1
-          fi
-
   LockMergedPullRequest:
     name: "Lock merged pull request"
     if: >-
