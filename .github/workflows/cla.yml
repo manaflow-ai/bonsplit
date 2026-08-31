@@ -38,6 +38,9 @@ jobs:
         github.event_name == 'issue_comment' &&
         github.event.issue.pull_request &&
         github.event.issue.state == 'open' &&
+        github.event.comment.user.type == 'User' &&
+        github.event.comment.user.id != null &&
+        github.event.comment.user.id > 0 &&
         (
           github.event.comment.body == 'recheck' ||
           github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
@@ -63,10 +66,17 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_USER_TYPE: ${{ github.event.comment.user.type }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
         run: |
           set -euo pipefail
           sign_phrase='I have read the CLA Document and I hereby sign the CLA'
           if [[ "${EVENT_NAME}" == "issue_comment" ]]; then
+            if [[ "${COMMENT_USER_TYPE}" != "User" ||
+                  ! "${COMMENT_USER_ID}" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::Only a human GitHub user with a positive numeric ID may trigger CLA comments"
+              exit 1
+            fi
             if [[ "${COMMENT_BODY}" != "recheck" &&
                   "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
               echo "::error::The comment is not an exact CLA declaration or recheck command"
@@ -104,6 +114,9 @@ jobs:
           github.event_name == 'issue_comment' &&
           github.event.issue.pull_request &&
           github.event.issue.state == 'open' &&
+          github.event.comment.user.type == 'User' &&
+          github.event.comment.user.id != null &&
+          github.event.comment.user.id > 0 &&
           (
             github.event.comment.body == 'recheck' ||
             github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
@@ -291,9 +304,16 @@ jobs:
         if: github.event_name == 'issue_comment'
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_USER_TYPE: ${{ github.event.comment.user.type }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
         run: |
           set -euo pipefail
           sign_phrase='I have read the CLA Document and I hereby sign the CLA'
+          if [[ "${COMMENT_USER_TYPE}" != "User" ||
+                ! "${COMMENT_USER_ID}" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::Only a human GitHub user with a positive numeric ID may trigger CLA comments"
+            exit 1
+          fi
           if [[ "${COMMENT_BODY}" != 'recheck' &&
                 "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
             echo "::error::Issue comment must exactly match recheck or the CLA signing phrase"
@@ -340,8 +360,9 @@ jobs:
           branch: 'cla-signatures'
           # Do not use a name, email, or raw-ID allowlist. Commit metadata is
           # not an authenticated identity, and automated authors are not
-          # silently exempted. Any automation exception needs a separately
-          # reviewed authenticated workflow path.
+          # silently exempted. The numeric allowlist-ids input is reserved
+          # for a separately reviewed path that binds IDs to authenticated
+          # automation identities.
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           # Keep the target explicit. The maintained action revalidates the
           # live base branch before every signature or lock write.
