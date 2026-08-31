@@ -17,7 +17,7 @@ permissions: {}
 # changes. Do not derive the marker from github.workflow_sha, which changes
 # for every unrelated commit on main.
 env:
-  CLA_GENERATION: 'v2.2-action-056a0e9d7237954489ab474f24e66c2e742e78f9'
+  CLA_GENERATION: 'v2.2-action-bc206ed9b52ad0b0cbe85244ce522e5e9b65c10e'
 
 jobs:
   CLACommentGate:
@@ -315,7 +315,7 @@ jobs:
           )
         # Use the reviewed Manaflow-maintained implementation. Pin the full
         # commit so a branch move cannot change the code executed here.
-        uses: manaflow-ai/cla-github-action@056a0e9d7237954489ab474f24e66c2e742e78f9 # v0.0.1
+        uses: manaflow-ai/cla-github-action@bc206ed9b52ad0b0cbe85244ce522e5e9b65c10e # v0.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
