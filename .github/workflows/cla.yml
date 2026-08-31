@@ -113,12 +113,9 @@ jobs:
       group: cla-signatures-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
       # Keep GitHub's default single pending slot for this PR.
-    # Required-check recovery remains advisory. The signer has read-only
-    # Actions access until a separately reviewed exact-head rerun worker exists.
+    # The pinned action makes no Actions API calls. Required-check recovery is
+    # advisory until a separately reviewed exact-head rerun worker exists.
     permissions:
-      # Read-only access permits workflow metadata inspection without allowing
-      # this signer to replay an arbitrary Actions run.
-      actions: read
       contents: write
       issues: write
       pull-requests: write
