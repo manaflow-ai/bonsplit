@@ -48,6 +48,8 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      admitted: ${{ steps.validate-trigger.outputs.admitted }}
     # Serialize accepted events for one repository, event class, and PR,
     # while keeping independent PRs and lifecycle/comment classes independent.
     # Never include comment text or actor data in this key. GitHub evaluates
@@ -62,6 +64,7 @@ jobs:
     permissions: {}
     steps:
       - name: "Validate exact CLA trigger"
+        id: validate-trigger
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
@@ -70,21 +73,29 @@ jobs:
           COMMENT_USER_ID: ${{ github.event.comment.user.id }}
         run: |
           set -euo pipefail
+          # GitHub's expression equality is case-insensitive. A coarse match
+          # can therefore start this job for a comment variant that is not an
+          # exact command. Treat that event as a successful no-op, not a
+          # failed required check, and keep the signer out of the write path.
+          echo 'admitted=false' >> "${GITHUB_OUTPUT}"
           sign_phrase='I have read the CLA Document and I hereby sign the CLA'
           if [[ "${EVENT_NAME}" == "issue_comment" ]]; then
             if [[ "${COMMENT_USER_TYPE}" != "User" ||
                   ! "${COMMENT_USER_ID}" =~ ^[1-9][0-9]*$ ]]; then
-              echo "::error::Only a human GitHub user with a positive numeric ID may trigger CLA comments"
-              exit 1
+              echo "::notice::Ignoring a CLA comment from a non-human or invalid commenter"
+              exit 0
             fi
             if [[ "${COMMENT_BODY}" != "recheck" &&
                   "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
-              echo "::error::The comment is not an exact CLA declaration or recheck command"
-              exit 1
+              echo "::notice::Ignoring a CLA comment that does not exactly match the configured command"
+              exit 0
             fi
+            echo 'admitted=true' >> "${GITHUB_OUTPUT}"
           elif [[ "${EVENT_NAME}" == "pull_request_target" ]]; then
             case "${EVENT_ACTION}" in
-              opened|edited|reopened|synchronize) ;;
+              opened|edited|reopened|synchronize)
+                echo 'admitted=true' >> "${GITHUB_OUTPUT}"
+                ;;
               *)
                 echo "::error::The pull request event is not an accepted CLA trigger"
                 exit 1
@@ -122,6 +133,10 @@ jobs:
             github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
           )
         )
+      ) &&
+      (
+        needs.CLACommentGate.result != 'success' ||
+        needs.CLACommentGate.outputs.admitted == 'true'
       )
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -148,14 +163,17 @@ jobs:
       - name: "Require CLA trigger gate"
         env:
           GATE_RESULT: ${{ needs.CLACommentGate.result }}
+          GATE_ADMITTED: ${{ needs.CLACommentGate.outputs.admitted }}
         run: |
           set -euo pipefail
-          if [[ "${GATE_RESULT}" != "success" ]]; then
-            echo "::error::CLA trigger gate did not pass (result: ${GATE_RESULT})"
+          if [[ "${GATE_RESULT}" != "success" ||
+                "${GATE_ADMITTED}" != "true" ]]; then
+            echo "::error::CLA trigger gate did not admit this event (result: ${GATE_RESULT}, admitted: ${GATE_ADMITTED})"
             exit 1
           fi
 
       - name: "CLA generation ${{ env.CLA_GENERATION }}"
+        if: success()
         run: echo "CLA generation ${CLA_GENERATION}"
 
       - name: "Validate pull request target"
@@ -163,22 +181,25 @@ jobs:
         # Fetch live target and head identity data, then fail closed unless the
         # PR is open and targets main, matching the pull_request_target filter.
         if: >-
+          success() &&
           (
-            github.event_name == 'pull_request_target' &&
             (
-              github.event.action == 'opened' ||
-              github.event.action == 'edited' ||
-              github.event.action == 'reopened' ||
-              github.event.action == 'synchronize'
-            )
-          ) ||
-          (
-            github.event_name == 'issue_comment' &&
-            github.event.issue.pull_request &&
-            github.event.issue.state == 'open' &&
+              github.event_name == 'pull_request_target' &&
+              (
+                github.event.action == 'opened' ||
+                github.event.action == 'edited' ||
+                github.event.action == 'reopened' ||
+                github.event.action == 'synchronize'
+              )
+            ) ||
             (
-              github.event.comment.body == 'recheck' ||
-              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              github.event_name == 'issue_comment' &&
+              github.event.issue.pull_request &&
+              github.event.issue.state == 'open' &&
+              (
+                github.event.comment.body == 'recheck' ||
+                github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              )
             )
           )
         env:
@@ -264,22 +285,25 @@ jobs:
         # The maintained action traverses at most 1,000 commits. Fail closed
         # before it runs so an unsigned commit cannot fall outside that bound.
         if: >-
+          success() &&
           (
-            github.event_name == 'pull_request_target' &&
             (
-              github.event.action == 'opened' ||
-              github.event.action == 'edited' ||
-              github.event.action == 'reopened' ||
-              github.event.action == 'synchronize'
-            )
-          ) ||
-          (
-            github.event_name == 'issue_comment' &&
-            github.event.issue.pull_request &&
-            github.event.issue.state == 'open' &&
+              github.event_name == 'pull_request_target' &&
+              (
+                github.event.action == 'opened' ||
+                github.event.action == 'edited' ||
+                github.event.action == 'reopened' ||
+                github.event.action == 'synchronize'
+              )
+            ) ||
             (
-              github.event.comment.body == 'recheck' ||
-              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              github.event_name == 'issue_comment' &&
+              github.event.issue.pull_request &&
+              github.event.issue.state == 'open' &&
+              (
+                github.event.comment.body == 'recheck' ||
+                github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              )
             )
           )
         env:
@@ -313,7 +337,7 @@ jobs:
         # GitHub expression equality is case-insensitive. Recheck the body in
         # Bash so the action cannot accept a case variant or broader comment
         # as a signing event.
-        if: github.event_name == 'issue_comment'
+        if: success() && github.event_name == 'issue_comment'
         env:
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_USER_TYPE: ${{ github.event.comment.user.type }}
@@ -337,22 +361,25 @@ jobs:
         # owns the check result. Merged pull requests use the explicit lock
         # step below with a verified lock reason.
         if: >-
+          success() &&
           (
-            github.event_name == 'pull_request_target' &&
             (
-              github.event.action == 'opened' ||
-              github.event.action == 'edited' ||
-              github.event.action == 'reopened' ||
-              github.event.action == 'synchronize'
-            )
-          ) ||
-          (
-            github.event_name == 'issue_comment' &&
-            github.event.issue.pull_request &&
-            github.event.issue.state == 'open' &&
+              github.event_name == 'pull_request_target' &&
+              (
+                github.event.action == 'opened' ||
+                github.event.action == 'edited' ||
+                github.event.action == 'reopened' ||
+                github.event.action == 'synchronize'
+              )
+            ) ||
             (
-              github.event.comment.body == 'recheck' ||
-              github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              github.event_name == 'issue_comment' &&
+              github.event.issue.pull_request &&
+              github.event.issue.state == 'open' &&
+              (
+                github.event.comment.body == 'recheck' ||
+                github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA'
+              )
             )
           )
         # Use the reviewed Manaflow-maintained implementation. Pin the full
