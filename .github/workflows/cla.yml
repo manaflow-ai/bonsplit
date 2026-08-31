@@ -99,7 +99,7 @@ jobs:
     name: "CLA Assistant v2"
     needs: CLACommentGate
     if: >-
-      needs.CLACommentGate.result == 'success' &&
+      always() &&
       (
         (
           github.event_name == 'pull_request_target' &&
@@ -143,6 +143,18 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      # Always materialize a signer result for an admitted event. A failed
+      # gate must fail this job, not turn a required check into a skipped job.
+      - name: "Require CLA trigger gate"
+        env:
+          GATE_RESULT: ${{ needs.CLACommentGate.result }}
+        run: |
+          set -euo pipefail
+          if [[ "${GATE_RESULT}" != "success" ]]; then
+            echo "::error::CLA trigger gate did not pass (result: ${GATE_RESULT})"
+            exit 1
+          fi
+
       - name: "CLA generation ${{ env.CLA_GENERATION }}"
         run: echo "CLA generation ${CLA_GENERATION}"
 
