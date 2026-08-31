@@ -400,11 +400,12 @@ jobs:
           lock-pullrequest-aftermerge: 'false'
           # signatures live on the unprotected cla-signatures branch so required checks on main don't block the bot's signature commits
           branch: 'cla-signatures'
-          # Do not use a name, email, or raw-ID allowlist. Commit metadata is
-          # not an authenticated identity, and automated authors are not
-          # silently exempted. The numeric allowlist-ids input is reserved
-          # for a separately reviewed path that binds IDs to authenticated
-          # automation identities.
+          # Exempt only these reviewed Manaflow org members when they are the
+          # authenticated live PR opener: Austin Wang (@austinywang, ID
+          # 38676809) and Abdulaziz Albahar (@azooz2003-bit, ID 67667005).
+          # These numeric IDs never exempt commit metadata, authors, or
+          # co-authors, and they apply only to the authenticated PR opener.
+          allowlist-ids: '38676809,67667005'
           custom-pr-sign-comment: 'I have read the CLA Document and I hereby sign the CLA'
           # Keep the target explicit. The maintained action revalidates the
           # live base branch before every signature or lock write.
