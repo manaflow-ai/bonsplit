@@ -454,6 +454,8 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             if handled {
                 dropLifecycle = .idle
                 activeDropZone = nil
+                // Revoke destination routing without releasing the native
+                // source; its `endedAt` callback owns terminal cleanup.
                 controller.tabDragTransferRegistry.finish(from: NSPasteboard(name: .drag))
             }
             return handled
@@ -520,6 +522,8 @@ struct UnifiedPaneDropDelegate: DropDelegate {
 
         guard handled else { return false }
         controller.clearTabDragState()
+        // The accepted drop only revokes routing. Native source ownership ends
+        // when AppKit calls the source's `endedAt` callback.
         controller.tabDragTransferRegistry.finish(from: pasteboard)
         return true
     }

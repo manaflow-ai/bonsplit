@@ -119,6 +119,45 @@ struct PublicTabDragTransferRegistryTests {
         #expect(registry.resolve(from: pasteboard) == nil)
     }
 
+    @Test("An ended drag clears its residual capability from the pasteboard")
+    func endedDragClearsResidualCapability() throws {
+        let registry = TabDragTransferRegistry()
+        let transfer = TabDragTransfer(
+            tab: Tab(title: "Residual", kind: "markdown"),
+            sourcePaneId: PaneID()
+        )
+        let registration = try #require(registry.register(transfer))
+        let pasteboard = makePasteboard()
+        #expect(registration.write(to: pasteboard))
+
+        registry.end(registration)
+        registration.clearResidualCapability(from: pasteboard)
+
+        #expect(pasteboard.string(forType: TabDragTransferRegistry.pasteboardType) == nil)
+        #expect((pasteboard.types ?? []).isEmpty)
+    }
+
+    @Test("An ended drag never clears a newer drag's pasteboard capability")
+    func endedDragLeavesNewerCapabilityIntact() throws {
+        let registry = TabDragTransferRegistry()
+        let transfer = TabDragTransfer(
+            tab: Tab(title: "Newer", kind: "markdown"),
+            sourcePaneId: PaneID()
+        )
+        let firstRegistration = try #require(registry.register(transfer))
+        let pasteboard = makePasteboard()
+        #expect(firstRegistration.write(to: pasteboard))
+
+        let secondRegistration = try #require(registry.register(transfer))
+        pasteboard.clearContents()
+        #expect(secondRegistration.write(to: pasteboard))
+
+        firstRegistration.clearResidualCapability(from: pasteboard)
+
+        #expect(registry.resolve(from: pasteboard) == transfer)
+        #expect(pasteboard.string(forType: TabDragTransferRegistry.pasteboardType) != nil)
+    }
+
     private func makePasteboard() -> NSPasteboard {
         let pasteboard = NSPasteboard(
             name: NSPasteboard.Name("PublicTabDragTransferRegistryTests.\(UUID().uuidString)")

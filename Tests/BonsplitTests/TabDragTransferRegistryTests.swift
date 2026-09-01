@@ -114,8 +114,8 @@ struct TabDragTransferRegistryTests {
         #expect(handler.operation(for: pasteboard).isEmpty)
     }
 
-    @Test("An accepted cross-controller drop finishes its native source")
-    func acceptedCrossControllerDropFinishesNativeSource() throws {
+    @Test("An accepted drop leaves native source completion to AppKit")
+    func acceptedCrossControllerDropWaitsForNativeSourceCompletion() throws {
         let registry = TabDragTransferRegistry()
         let sourceController = makeController(registry: registry)
         let targetController = makeController(registry: registry)
@@ -139,9 +139,50 @@ struct TabDragTransferRegistryTests {
         targetController.onExternalTabDrop = { _ in true }
 
         #expect(handler.performDrop(from: pasteboard, at: 0))
-        #expect(sourceController.internalController.tabDragSession == nil)
+        // Accepting a destination only revokes routing. The native source must
+        // remain retained and its `endedAt` callback is the sole terminal
+        // transition, otherwise AppKit can be left in an active drag state.
+        #expect(sourceController.internalController.tabDragSession != nil)
         #expect(handler.operation(for: pasteboard).isEmpty)
+
+        source.finishDrag()
+        #expect(sourceController.internalController.tabDragSession == nil)
         withExtendedLifetime(source) {}
+    }
+
+    @Test("A new tab drag reclaims a superseded native source")
+    func newTabDragReclaimsSupersededNativeSource() throws {
+        let registry = TabDragTransferRegistry()
+        let controller = makeController(registry: registry)
+        let split = controller.internalController
+        let pane = try #require(split.focusedPane)
+        let firstTab = try #require(pane.selectedTab)
+        let firstGeneration = split.beginTabDrag(firstTab, from: pane.id)
+        let firstRegistration = try #require(
+            registry.register(
+                TabDragTransfer(tab: Tab(from: firstTab), sourcePaneId: pane.id)
+            )
+        )
+        let firstSource = TabDragSessionSource(
+            generation: firstGeneration,
+            transferRegistration: firstRegistration,
+            transferRegistry: registry,
+            controller: split
+        )
+        split.nativeTabDragSources[firstGeneration] = firstSource
+        let firstPasteboard = makePasteboard(item: firstRegistration.pasteboardItem)
+        #expect(registry.resolve(from: firstPasteboard) != nil)
+
+        let secondTab = TabItem(title: "Second drag", icon: "star")
+        let secondGeneration = split.beginTabDrag(secondTab, from: pane.id)
+
+        // A new threshold-crossing native gesture is an authoritative boundary:
+        // AppKit cannot deliver it while the older native drag is still live.
+        #expect(secondGeneration > firstGeneration)
+        #expect(split.tabDragSession?.generation == secondGeneration)
+        #expect(registry.resolve(from: firstPasteboard) == nil)
+
+        firstSource.finishDrag()
     }
 
     @Test("A failed local pane move keeps its native source live")
