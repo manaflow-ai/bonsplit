@@ -122,19 +122,26 @@ is_id "${workflow_id}" || fail 'The trusted CLA workflow is not uniquely active'
 # are the authorization boundary.
 candidate=''
 max_attempts=12
+readonly MAX_RUN_PAGES=10
 for ((attempt = 1; attempt <= max_attempts; attempt++)); do
-  runs_page="$(gh api \
-    --method GET \
-    --raw-field event="${TARGET_EVENT}" \
-    --raw-field branch="${head_ref}" \
-    --raw-field per_page=100 \
-    "repos/${GH_REPO}/actions/workflows/${workflow_id}/runs" 2>/dev/null)" ||
-    fail 'Could not query CLA workflow runs'
-  jq -e '.workflow_runs | type == "array" and length <= 100' <<<"${runs_page}" >/dev/null ||
-    fail 'The CLA workflow run response is malformed or unbounded'
-  run_count="$(jq -r '.workflow_runs | length' <<<"${runs_page}")"
-  [[ "${run_count}" =~ ^[0-9]+$ ]] || fail 'Could not count CLA workflow runs'
-  (( run_count < 100 )) || fail 'The CLA workflow run page is full; create a fresh lifecycle run before requesting a refresh'
+  runs_json='[]'
+  run_page_count=100
+  for run_page_number in $(seq 1 "${MAX_RUN_PAGES}"); do
+    runs_page="$(gh api \
+      --method GET \
+      --raw-field event="${TARGET_EVENT}" \
+      --raw-field branch="${head_ref}" \
+      --raw-field per_page=100 \
+      --raw-field page="${run_page_number}" \
+      "repos/${GH_REPO}/actions/workflows/${workflow_id}/runs" 2>/dev/null)" ||
+      fail 'Could not query CLA workflow runs'
+    jq -e '. | type == "object" and (.workflow_runs | type == "array" and length <= 100)' \
+      <<<"${runs_page}" >/dev/null ||
+      fail 'The CLA workflow run response is malformed or oversized'
+    runs_json="$(jq -c --argjson page "${runs_page}" '. + [$page]' <<<"${runs_json}")"
+    run_page_count="$(jq -r '.workflow_runs | length' <<<"${runs_page}")"
+    (( run_page_count < 100 )) && break
+  done
   candidate="$(jq -c \
     --arg path "${WORKFLOW_PATH}" \
     --arg event "${TARGET_EVENT}" \
@@ -145,7 +152,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
     --arg head_repo "${head_repo}" \
     --argjson head_repo_id "${head_repo_id}" \
     --argjson number "${PR_NUMBER}" \
-    '[.workflow_runs[]?
+    '[.[] | .workflow_runs[]?
       | select(
           .path == $path and
           .event == $event and
@@ -166,7 +173,10 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
         )
       | {id, head_sha, head_branch, status, conclusion, created_at, pull_requests, head_repository}
     ] | sort_by([.created_at, .id]) | if length > 0 then .[-1] else empty end' \
-    <<<"${runs_page}")"
+    <<<"${runs_json}")"
+  if [[ -z "${candidate}" && "${run_page_count}" == 100 ]]; then
+    fail 'The CLA workflow run list is full after the bounded page window'
+  fi
   if [[ -n "${candidate}" ]]; then
     candidate_status="$(jq -r '.status' <<<"${candidate}")"
     candidate_conclusion="$(jq -r '.conclusion // ""' <<<"${candidate}")"
