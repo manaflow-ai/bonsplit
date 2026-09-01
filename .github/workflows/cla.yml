@@ -50,16 +50,14 @@ jobs:
     timeout-minutes: 5
     outputs:
       admitted: ${{ steps.validate-trigger.outputs.admitted }}
-    # Serialize accepted events for one repository, event class, and PR,
-    # while keeping independent PRs and lifecycle/comment classes independent.
-    # Never include comment text or actor data in this key. GitHub evaluates
-    # the coarse expression gate case-insensitively, so a same-class comment
-    # variant can replace the single pending run before the exact shell gate
-    # rejects it. Removing that residual loss would require an external
-    # webhook or GitHub App queue; an unbounded workflow fanout is unsafe.
+    # Give each event its own admission run. GitHub keeps only one pending run
+    # per concurrency group, so a shared PR key can discard a valid signing
+    # comment. The key contains only numeric event identity, never comment
+    # text or actor data. This unprivileged gate is cheap; the maintained action
+    # bounds contributor-controlled API reads before any write.
     concurrency:
       group: >-
-        cla-admission-${{ github.repository }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}
+        cla-admission-${{ github.repository }}-${{ github.event_name }}-${{ github.event.issue.number || github.event.pull_request.number }}-${{ github.event.comment.id || github.run_id }}
       cancel-in-progress: false
     permissions: {}
     steps:
@@ -215,17 +213,14 @@ jobs:
       )
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The maintained action uses optimistic locking for the shared ledger.
-    # Serialize signing events for one repository, event class, and PR
-    # without blocking other PRs. Separating lifecycle and comment events
-    # prevents a comment from replacing pending lifecycle validation. The
-    # merge lock has a separate group so it cannot race a signer write.
-    # Sign and recheck comments intentionally share the issue_comment class.
-    # Do not put untrusted comment text in a concurrency key.
+    # Give each admitted event its own writer run. The maintained action uses
+    # bounded optimistic compare-and-swap retries for the shared ledger and
+    # revalidates the live PR before each write, so concurrent PRs are safe.
+    # Numeric event identity prevents GitHub's one-pending-run replacement from
+    # silently dropping a valid signing comment.
     concurrency:
-      group: cla-signatures-${{ github.repository }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}
+      group: cla-signatures-${{ github.repository }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.issue.number }}-${{ github.event.comment.id || github.run_id }}
       cancel-in-progress: false
-      # Keep GitHub's default single pending slot for this event class and PR.
     # The action writes the signature ledger and PR comments. The enclosing
     # Actions job publishes the check result; the action does not call commit
     # status or check-run endpoints, so statuses/checks write is intentionally
