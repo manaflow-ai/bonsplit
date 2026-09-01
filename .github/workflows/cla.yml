@@ -71,6 +71,9 @@ jobs:
           COMMENT_BODY: ${{ github.event.comment.body }}
           COMMENT_USER_TYPE: ${{ github.event.comment.user.type }}
           COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          PR_AUTHOR_ID: ${{ github.event.issue.user.id }}
         run: |
           set -euo pipefail
           # GitHub's expression equality is case-insensitive. A coarse match
@@ -81,13 +84,30 @@ jobs:
           sign_phrase='I have read the CLA Document and I hereby sign the CLA'
           if [[ "${EVENT_NAME}" == "issue_comment" ]]; then
             if [[ "${COMMENT_USER_TYPE}" != "User" ||
-                  ! "${COMMENT_USER_ID}" =~ ^[1-9][0-9]*$ ]]; then
+                  ! "${COMMENT_USER_ID}" =~ ^[1-9][0-9]*$ ||
+                  -z "${COMMENT_USER_LOGIN}" ||
+                  "$(printf '%s' "${COMMENT_USER_LOGIN}" | tr '[:upper:]' '[:lower:]')" == *"[bot]" ]]; then
               echo "::notice::Ignoring a CLA comment from a non-human or invalid commenter"
               exit 0
             fi
             if [[ "${COMMENT_BODY}" != "recheck" &&
                   "${COMMENT_BODY}" != "${sign_phrase}" ]]; then
               echo "::notice::Ignoring a CLA comment that does not exactly match the configured command"
+              exit 0
+            fi
+            if [[ "${COMMENT_BODY}" == "recheck" ]]; then
+              if [[ "${COMMENT_USER_ID}" == "${PR_AUTHOR_ID}" ]]; then
+                echo 'admitted=true' >> "${GITHUB_OUTPUT}"
+                exit 0
+              fi
+              case "${COMMENT_ASSOCIATION}" in
+                OWNER|MEMBER|COLLABORATOR)
+                  echo 'admitted=true' >> "${GITHUB_OUTPUT}"
+                  ;;
+                *)
+                  echo "::notice::Ignoring an unauthorized CLA recheck"
+                  ;;
+              esac
               exit 0
             fi
             echo 'admitted=true' >> "${GITHUB_OUTPUT}"
@@ -484,6 +504,8 @@ jobs:
     # refreshes the PR check after a signature comment.
     if: >-
       always() &&
+      needs.CLACommentGate.result == 'success' &&
+      needs.CLACommentGate.outputs.admitted == 'true' &&
       (
         (
           github.event_name == 'pull_request_target' &&
@@ -517,6 +539,8 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           COMMENT_BODY: ${{ github.event.comment.body || '' }}
           COMMENT_ASSOCIATION: ${{ github.event.comment.author_association || '' }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id || '' }}
+          PR_AUTHOR_ID: ${{ github.event.issue.user.id || '' }}
           GATE_RESULT: ${{ needs.CLACommentGate.result }}
           GATE_ADMITTED: ${{ needs.CLACommentGate.outputs.admitted || '' }}
           PREFLIGHT_RESULT: ${{ needs.CLASignerPreflight.result }}
@@ -540,19 +564,106 @@ jobs:
           fi
           if [[ "${EVENT_NAME}" == "issue_comment" &&
                 "${COMMENT_BODY}" == "recheck" ]]; then
-            case "${COMMENT_ASSOCIATION}" in
-              OWNER|MEMBER|COLLABORATOR)
-                [[ "${WRITER_RESULT}" == "success" ]] ||
-                  fail "The trusted CLA recheck did not complete successfully."
-                ;;
-              *)
-                echo "::notice::Ignoring an untrusted CLA recheck; no privileged signer was started."
-                ;;
-            esac
+            if [[ "${COMMENT_USER_ID}" == "${PR_AUTHOR_ID}" ]]; then
+              :
+            else
+              case "${COMMENT_ASSOCIATION}" in
+                OWNER|MEMBER|COLLABORATOR) : ;;
+                *) fail "The CLA recheck commenter is not authorized." ;;
+              esac
+            fi
+            [[ "${WRITER_RESULT}" == "success" ]] ||
+              fail "The trusted CLA recheck did not complete successfully."
             exit 0
           fi
           [[ "${WRITER_RESULT}" == "success" ]] ||
             fail "The CLA signer did not complete successfully."
+
+  RerunFailedCLA:
+    name: "Refresh CLA check on PR head"
+    needs:
+      - CLACommentGate
+      - CLASignerPreflight
+      - CLAAssistant
+    # Issue-comment checks are attached to the default branch commit. After a
+    # valid sign or trusted recheck, rerun only the failed jobs from the latest
+    # failed pull_request_target run so GitHub recreates the check on the exact
+    # live PR head.
+    if: >-
+      always() &&
+      needs.CLACommentGate.result == 'success' &&
+      needs.CLACommentGate.outputs.admitted == 'true' &&
+      github.event_name == 'issue_comment' &&
+      github.event.action == 'created' &&
+      github.event.issue.state == 'open' &&
+      github.event.issue.pull_request &&
+      github.event.comment.user.type == 'User' &&
+      (
+        (
+          github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA' &&
+          needs.CLASignerPreflight.result == 'success' &&
+          needs.CLASignerPreflight.outputs.signer_authorized == 'true' &&
+          needs.CLAAssistant.result == 'success'
+        ) ||
+        (
+          github.event.comment.body == 'recheck' &&
+          needs.CLAAssistant.result == 'success' &&
+          (
+            github.event.comment.user.id == github.event.issue.user.id ||
+            github.event.comment.author_association == 'OWNER' ||
+            github.event.comment.author_association == 'MEMBER' ||
+            github.event.comment.author_association == 'COLLABORATOR'
+          )
+        )
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: cla-rerun-${{ github.repository }}-${{ github.event.issue.number }}
+      cancel-in-progress: false
+    permissions:
+      actions: write
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: "Checkout trusted CLA refresh script"
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          sparse-checkout: .github/scripts/rerun-failed-cla.sh
+          sparse-checkout-cone-mode: false
+      - name: "Verify trusted CLA refresh checkout"
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          [[ "${WORKFLOW_SHA}" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          [[ "$(git rev-parse HEAD)" == "${WORKFLOW_SHA}" ]] || exit 1
+          [[ -f .github/scripts/rerun-failed-cla.sh ]] || exit 1
+      - name: "Rerun the exact failed CLA jobs"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_ACTION: ${{ github.event.action }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          COMMENT_CREATED_AT: ${{ github.event.comment.created_at }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_USER_TYPE: ${{ github.event.comment.user.type }}
+          COMMENT_USER_ID: ${{ github.event.comment.user.id }}
+          COMMENT_USER_LOGIN: ${{ github.event.comment.user.login }}
+          COMMENT_ASSOCIATION: ${{ github.event.comment.author_association }}
+          GATE_RESULT: ${{ needs.CLACommentGate.result }}
+          GATE_ADMITTED: ${{ needs.CLACommentGate.outputs.admitted }}
+          PREFLIGHT_RESULT: ${{ needs.CLASignerPreflight.result }}
+          SIGNER_AUTHORIZED: ${{ needs.CLASignerPreflight.outputs.signer_authorized }}
+          WRITER_RESULT: ${{ needs.CLAAssistant.result }}
+        run: bash .github/scripts/rerun-failed-cla.sh
 
   LockMergedPullRequest:
     name: "Lock merged pull request"

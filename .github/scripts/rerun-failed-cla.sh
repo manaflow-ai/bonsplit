@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This script runs only from the trusted base workflow. It never checks out or
+# evaluates pull-request files. Its sole state-changing operation is a rerun
+# of failed jobs from one previously completed pull_request_target run whose
+# live source PR and head SHA have been checked immediately before the POST.
+
+fail() {
+  echo "::error::$1"
+  exit 1
+}
+
+is_id() { [[ "${1:-}" =~ ^[1-9][0-9]*$ ]]; }
+is_sha() { [[ "${1:-}" =~ ^[0-9a-f]{40}$ ]]; }
+
+readonly WORKFLOW_PATH='.github/workflows/cla.yml'
+readonly TARGET_EVENT='pull_request_target'
+readonly TARGET_BASE_REF='main'
+readonly SIGN_PHRASE='I have read the CLA Document and I hereby sign the CLA'
+
+[[ "${GH_REPO:-}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail 'Invalid repository identity'
+
+[[ "${EVENT_NAME:-}" == 'issue_comment' ]] || fail 'Unexpected event for CLA refresh'
+[[ "${EVENT_ACTION:-}" == 'created' ]] || fail 'Unexpected issue-comment action'
+[[ "${GATE_RESULT:-}" == 'success' && "${GATE_ADMITTED:-}" == 'true' ]] ||
+  fail 'The exact CLA gate did not admit this comment'
+is_id "${PR_NUMBER:-}" || fail 'Invalid pull request number'
+is_id "${COMMENT_ID:-}" || fail 'Invalid comment ID'
+[[ "${COMMENT_CREATED_AT:-}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$ ]] ||
+  fail 'Invalid comment timestamp'
+[[ "${COMMENT_USER_TYPE:-}" == 'User' ]] || fail 'Only human users may request a CLA refresh'
+is_id "${COMMENT_USER_ID:-}" || fail 'Invalid comment user ID'
+[[ -n "${COMMENT_USER_LOGIN:-}" ]] || fail 'Missing comment user login'
+comment_user_login_lower="$(printf '%s' "${COMMENT_USER_LOGIN}" | tr '[:upper:]' '[:lower:]')"
+case "${comment_user_login_lower}" in
+  *'[bot]') fail 'Bot comments cannot request a CLA refresh' ;;
+esac
+[[ "${COMMENT_BODY:-}" == "recheck" || "${COMMENT_BODY:-}" == "${SIGN_PHRASE}" ]] ||
+  fail 'Comment is not an accepted CLA command'
+[[ "${WRITER_RESULT:-}" == 'success' ]] || fail 'The current CLA signer did not succeed'
+if [[ "${COMMENT_BODY}" == "${SIGN_PHRASE}" ]]; then
+  [[ "${PREFLIGHT_RESULT:-}" == 'success' &&
+     "${SIGNER_AUTHORIZED:-}" == 'true' ]] ||
+    fail 'The signing comment did not pass authenticated preflight'
+fi
+
+pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
+  fail 'Could not query the live pull request'
+jq -e \
+  --arg repo "${GH_REPO}" \
+  --argjson number "${PR_NUMBER}" \
+  --arg base "${TARGET_BASE_REF}" \
+  '.number == $number and
+   .state == "open" and
+   .base.ref == $base and
+   .base.repo.full_name == $repo and
+   (.head.sha | type == "string") and
+   (.head.sha | test("^[0-9a-f]{40}$")) and
+   (.head.ref | type == "string" and length > 0 and (test("[\\r\\n]") | not)) and
+   (.head.repo | type == "object") and
+   (.head.repo.full_name | type == "string" and length > 0) and
+   (.head.repo.id | type == "number" and . > 0) and
+   (.user.id | type == "number" and . > 0)' \
+  <<<"${pr_json}" >/dev/null || fail 'The live pull request is not a valid open main pull request'
+
+head_sha="$(jq -r '.head.sha' <<<"${pr_json}")"
+head_ref="$(jq -r '.head.ref' <<<"${pr_json}")"
+head_repo="$(jq -r '.head.repo.full_name' <<<"${pr_json}")"
+head_repo_id="$(jq -r '.head.repo.id' <<<"${pr_json}")"
+opener_id="$(jq -r '.user.id' <<<"${pr_json}")"
+is_sha "${head_sha}" || fail 'The live pull request head SHA is invalid'
+is_id "${head_repo_id}" || fail 'The live pull request head repository ID is invalid'
+is_id "${opener_id}" || fail 'The live pull request opener ID is invalid'
+if [[ "${COMMENT_BODY}" == "${SIGN_PHRASE}" ]]; then
+  # The maintained preflight authenticates the signer against the live PR
+  # identities. It may authorize an authenticated co-author or committer, so
+  # do not impose a second opener-only rule here. The numeric opener allowlist
+  # remains enforced by the action itself.
+  :
+else
+  if [[ "${COMMENT_USER_ID}" != "${opener_id}" ]]; then
+    case "${COMMENT_ASSOCIATION:-}" in
+      OWNER|MEMBER|COLLABORATOR) ;;
+      *) fail 'Only the pull request author or a trusted repository participant may recheck the CLA' ;;
+    esac
+  fi
+fi
+
+# Resolve the workflow ID by exact path and active state. The run-list endpoint
+# is then scoped to that immutable workflow identity instead of a name search.
+workflow_page="$(gh api \
+  --method GET \
+  --raw-field per_page=100 \
+  "repos/${GH_REPO}/actions/workflows" 2>/dev/null)" ||
+  fail 'Could not query repository workflows'
+workflow_id="$(jq -r \
+  --arg path "${WORKFLOW_PATH}" \
+  '[.workflows[]? | select(.path == $path and .state == "active") | .id]
+   | if length == 1 and (.[0] | type == "number" and . > 0) then .[0] else empty end' \
+  <<<"${workflow_page}")"
+is_id "${workflow_id}" || fail 'The trusted CLA workflow is not uniquely active'
+
+runs_page="$(gh api \
+  --method GET \
+  --raw-field event="${TARGET_EVENT}" \
+  --raw-field branch="${head_ref}" \
+  --raw-field per_page=100 \
+  "repos/${GH_REPO}/actions/workflows/${workflow_id}/runs" 2>/dev/null)" ||
+  fail 'Could not query CLA workflow runs'
+jq -e '.workflow_runs | type == "array" and length <= 100' <<<"${runs_page}" >/dev/null ||
+  fail 'The CLA workflow run response is malformed or unbounded'
+run_count="$(jq -r '.workflow_runs | length' <<<"${runs_page}")"
+[[ "${run_count}" =~ ^[0-9]+$ ]] || fail 'Could not count CLA workflow runs'
+(( run_count < 100 )) || fail 'The CLA workflow run page is full; create a fresh lifecycle run before requesting a refresh'
+
+# A populated pull_requests array is the preferred PR binding. GitHub may omit
+# it for fork pull_request_target runs, so an empty array is accepted only with
+# an exact source SHA, branch, and source repository identity.
+candidate="$(jq -c \
+  --arg path "${WORKFLOW_PATH}" \
+  --arg event "${TARGET_EVENT}" \
+  --argjson workflow_id "${workflow_id}" \
+  --arg sha "${head_sha}" \
+  --arg ref "${head_ref}" \
+  --arg repo "${GH_REPO}" \
+  --arg head_repo "${head_repo}" \
+  --argjson head_repo_id "${head_repo_id}" \
+  --argjson number "${PR_NUMBER}" \
+  --arg before "${COMMENT_CREATED_AT}" \
+  '[.workflow_runs[]?
+    | select(
+        .path == $path and
+        .event == $event and
+        (.workflow_id | type == "number") and .workflow_id == $workflow_id and
+        (.head_sha | type == "string") and .head_sha == $sha and
+        .head_branch == $ref and
+        (.id | type == "number" and . > 0) and
+        .status == "completed" and .conclusion == "failure" and
+        (.created_at | type == "string") and .created_at <= $before and
+        ((.head_repository | type == "object" and
+          .full_name == $head_repo and .id == $head_repo_id) or
+         (.head_repository == null and $head_repo == $repo)) and
+        ((.pull_requests == null or (.pull_requests | type == "array")) and
+         (if ((.pull_requests // []) | length) == 0 then true else
+            any(.pull_requests[]?; (.number | type == "number") and .number == $number)
+          end))
+      )
+    | {id, head_sha, head_branch, created_at, pull_requests, head_repository}
+  ] | sort_by([.created_at, .id]) | if length > 0 then .[-1] else empty end' \
+  <<<"${runs_page}")"
+[[ -n "${candidate}" ]] || {
+  echo '::notice::No failed CLA lifecycle run exists for the current pull request head; no refresh is needed.'
+  exit 0
+}
+run_id="$(jq -r '.id' <<<"${candidate}")"
+is_id "${run_id}" || fail 'The selected CLA run ID is invalid'
+
+validate_run() {
+  local payload="$1"
+  jq -e \
+    --argjson id "${run_id}" \
+    --argjson workflow_id "${workflow_id}" \
+    --arg event "${TARGET_EVENT}" \
+    --arg path "${WORKFLOW_PATH}" \
+    --arg sha "${head_sha}" \
+    --arg ref "${head_ref}" \
+    --arg repo "${GH_REPO}" \
+    --arg head_repo "${head_repo}" \
+    --argjson head_repo_id "${head_repo_id}" \
+    --argjson number "${PR_NUMBER}" \
+    --arg before "${COMMENT_CREATED_AT}" \
+    '.id == $id and .workflow_id == $workflow_id and .path == $path and .event == $event and
+     .head_sha == $sha and .head_branch == $ref and
+     .status == "completed" and .conclusion == "failure" and
+     (.created_at | type == "string") and .created_at <= $before and
+     ((.head_repository | type == "object" and
+       .full_name == $head_repo and .id == $head_repo_id) or
+      (.head_repository == null and $head_repo == $repo)) and
+     ((.pull_requests == null or (.pull_requests | type == "array")) and
+      (if ((.pull_requests // []) | length) == 0 then true else
+         any(.pull_requests[]?; (.number | type == "number") and .number == $number)
+       end))' \
+    <<<"${payload}" >/dev/null
+}
+
+validate_unique_open_head() {
+  local head_owner head_name open_prs matches
+  head_owner="${head_repo%%/*}"
+  head_name="${head_repo#*/}"
+  [[ "${head_owner}" != "${head_repo}" && -n "${head_owner}" && -n "${head_name}" ]] ||
+    fail 'The pull request head repository name is invalid'
+  open_prs="$(gh api --method GET \
+    --raw-field state=open --raw-field base="${TARGET_BASE_REF}" \
+    --raw-field head="${head_owner}:${head_ref}" --raw-field per_page=100 \
+    "repos/${GH_REPO}/pulls" 2>/dev/null)" ||
+    fail 'Could not query open pull requests for the exact head'
+  matches="$(jq -r \
+    --arg repo "${GH_REPO}" --arg base "${TARGET_BASE_REF}" \
+    --arg ref "${head_ref}" --arg head_repo "${head_repo}" \
+    --argjson head_repo_id "${head_repo_id}" --argjson number "${PR_NUMBER}" \
+    --arg sha "${head_sha}" \
+    '[.[]? | select(.number == $number and .state == "open" and
+      .base.ref == $base and .base.repo.full_name == $repo and
+      .head.ref == $ref and .head.sha == $sha and
+      .head.repo.full_name == $head_repo and .head.repo.id == $head_repo_id)] | length' \
+    <<<"${open_prs}")" ||
+    fail 'The open pull request response is malformed'
+  [[ "${matches}" == 1 ]] || fail 'The exact head is not uniquely associated with this pull request'
+}
+
+run_json="$(gh api "repos/${GH_REPO}/actions/runs/${run_id}" 2>/dev/null)" ||
+  fail 'Could not recheck the selected CLA run'
+validate_run "${run_json}" || fail 'The selected CLA run no longer matches the exact failed PR head'
+run_has_association="$(jq -r 'if ((.pull_requests // []) | length) > 0 then "true" else "false" end' <<<"${run_json}")"
+if [[ "${run_has_association}" != 'true' ]]; then
+  validate_unique_open_head
+fi
+
+# Only the two signer/result jobs may be failed. This prevents this refresh
+# command from rerunning an unrelated future job added to the workflow.
+jobs_json="$(gh api \
+  --method GET \
+  --raw-field per_page=100 \
+  "repos/${GH_REPO}/actions/runs/${run_id}/jobs" 2>/dev/null)" ||
+  fail 'Could not query jobs for the selected CLA run'
+jq -e '.jobs | type == "array" and length > 0 and length <= 100 and
+       all(.[]; .status == "completed" and (.conclusion | type == "string"))' \
+  <<<"${jobs_json}" >/dev/null || fail 'The selected CLA run jobs are incomplete or malformed'
+failed_jobs="$(jq -c '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped")]' <<<"${jobs_json}")"
+jq -e 'length > 0 and all(.[]; .conclusion == "failure" and
+       (.name == "CLA Signer" or .name == "CLA Assistant v2"))' \
+  <<<"${failed_jobs}" >/dev/null || fail 'The selected run contains an unexpected failed job'
+
+# Recheck both live objects immediately before the only state-changing call.
+latest_pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
+  fail 'Could not recheck the pull request before refresh'
+jq -e \
+  --arg repo "${GH_REPO}" --arg base "${TARGET_BASE_REF}" \
+  --argjson number "${PR_NUMBER}" --arg sha "${head_sha}" \
+  --arg ref "${head_ref}" --arg head_repo "${head_repo}" \
+  --argjson head_repo_id "${head_repo_id}" \
+  '.number == $number and .state == "open" and .base.ref == $base and
+   .base.repo.full_name == $repo and .head.sha == $sha and
+   .head.ref == $ref and .head.repo.full_name == $head_repo and
+   .head.repo.id == $head_repo_id' <<<"${latest_pr_json}" >/dev/null ||
+  fail 'The pull request changed while preparing the refresh'
+final_run_json="$(gh api "repos/${GH_REPO}/actions/runs/${run_id}" 2>/dev/null)" ||
+  fail 'Could not recheck the CLA run before refresh'
+validate_run "${final_run_json}" || fail 'The CLA run changed while preparing the refresh'
+run_has_association="$(jq -r 'if ((.pull_requests // []) | length) > 0 then "true" else "false" end' <<<"${final_run_json}")"
+if [[ "${run_has_association}" != 'true' ]]; then
+  validate_unique_open_head
+fi
+
+gh api --method POST \
+  --header 'Accept: application/vnd.github+json' \
+  --header 'X-GitHub-Api-Version: 2022-11-28' \
+  "repos/${GH_REPO}/actions/runs/${run_id}/rerun-failed-jobs" >/dev/null 2>&1 ||
+  fail 'Could not rerun the exact failed CLA jobs'
+echo "Requested an exact-head CLA refresh for PR ${PR_NUMBER}, run ${run_id}, head ${head_sha}"
