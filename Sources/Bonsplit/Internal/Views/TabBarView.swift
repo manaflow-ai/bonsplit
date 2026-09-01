@@ -2763,12 +2763,33 @@ enum TabControlShortcutHintPolicy {
         TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
     }
 
+    /// The hold monitor recognizes an exact base Command/Control hold. Extra
+    /// Shift/Option modifiers in the configured completion are rendered in the
+    /// hint label, but do not change which hold family reveals the hints.
+    private static func configuredShortcutUsesHeldModifier(
+        _ shortcut: TabControlShortcutStoredShortcut,
+        heldFlags: NSEvent.ModifierFlags
+    ) -> Bool {
+        switch heldFlags {
+        case [.command]:
+            return shortcut.command
+        case [.control]:
+            return shortcut.control
+        default:
+            return false
+        }
+    }
+
     private static func triggerAllowsHintReveal(
         for modifierFlags: NSEvent.ModifierFlags,
         defaults: UserDefaults = .standard
     ) -> Bool {
         let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
             .subtracting([.numericPad, .function, .capsLock])
+        let shortcut = TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults)
+        guard configuredShortcutUsesHeldModifier(shortcut, heldFlags: flags) else {
+            return false
+        }
         switch flags {
         case [.command]:
             return showHintsOnCommandHoldEnabled(defaults: defaults)
