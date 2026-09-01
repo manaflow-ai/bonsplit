@@ -749,6 +749,37 @@ public final class BonsplitController {
         return newPaneId
     }
 
+    /// Moves a pane and all of its tabs to an outer edge of the complete split tree.
+    ///
+    /// The pane retains its identity, selected tab, and tab ownership. Its former
+    /// branch is collapsed, the remaining tree keeps its relative topology, and a
+    /// new root split is created with the configured default divider position.
+    /// Moving the only pane, moving an unknown pane, or moving a pane that already
+    /// spans the requested edge is a no-op.
+    ///
+    /// - Parameters:
+    ///   - paneId: The pane to move.
+    ///   - edge: The outer edge where the pane should become a direct root child.
+    /// - Returns: `true` when the tree changed; otherwise `false`.
+    @discardableResult
+    public func movePane(
+        _ paneId: PaneID,
+        toRootEdge edge: RootSplitEdge
+    ) -> Bool {
+        guard configuration.allowSplits,
+              internalController.movePane(
+                paneId,
+                toRootEdge: edge,
+                dividerPosition: normalizedInitialDividerPosition(nil)
+              ) else {
+            return false
+        }
+
+        delegate?.splitTabBar(self, didFocusPane: paneId)
+        notifyGeometryChange()
+        return true
+    }
+
     /// Close a specific pane
     /// - Parameter paneId: The pane to close
     /// - Returns: true if the pane was closed, false if vetoed by delegate
