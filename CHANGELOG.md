@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modifier-hold) with its width reserved so the tab never resizes. Pinned terminal (and
   other non-browser) tabs keep their titled layout.
 
+### Fixed
+- Split-button icons no longer re-resolve their SF Symbol on every tab bar body
+  evaluation. `TabBarStyling.splitActionSystemImage(for:)` tested whether a name
+  was a real symbol by allocating an `NSImage` and discarding it, which cost
+  ~27µs per call and ran once per button per evaluation. Results are now
+  memoized by name, which the symbol catalog makes safe: the answer cannot
+  change while the process runs.
+
 ## [1.1.1] - 2025-01-29
 
 ### Fixed

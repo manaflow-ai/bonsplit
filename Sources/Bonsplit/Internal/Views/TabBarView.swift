@@ -170,7 +170,23 @@ enum TabBarStyling {
         )
     }
 
+    /// Resolves a configured split-button icon name to the glyph the tab bar
+    /// should draw.
+    ///
+    /// Memoized, because `splitActionButtonIcon` calls this during every tab
+    /// bar body evaluation, once per split button, and resolving is far more
+    /// expensive than it looks. See ``resolveSplitActionSystemImage(for:)``.
     static func splitActionSystemImage(for name: String) -> SplitActionSystemImage {
+        SplitActionSystemImageCache.shared.image(for: name)
+    }
+
+    /// The uncached resolution.
+    ///
+    /// The only way to ask AppKit whether a name is a real SF Symbol is to load
+    /// the symbol image and throw it away, which walks the symbol catalog and
+    /// builds a representation. The answer cannot change while the process
+    /// runs, so it is worth remembering.
+    static func resolveSplitActionSystemImage(for name: String) -> SplitActionSystemImage {
         if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
             return SplitActionSystemImage(name: name, rotationDegrees: 0, pointSize: 12)
         }
@@ -1754,6 +1770,53 @@ private struct TabBarLayerBackedColor: NSViewRepresentable {
             layer?.isOpaque = color.alphaComponent >= 1
             CATransaction.commit()
         }
+    }
+}
+
+/// Remembers ``TabBarStyling/splitActionSystemImage(for:)`` results by name.
+///
+/// Names come from host configuration, so the live set is a handful of entries
+/// and never turns over. The bound exists so a pathological host cannot grow
+/// this without limit.
+final class SplitActionSystemImageCache {
+    /// The instance the tab bar uses. Tests build their own so they never race
+    /// each other through shared state.
+    static let shared = SplitActionSystemImageCache()
+
+    private static let capacity = 256
+
+    private let lock = NSLock()
+    private var resolved: [String: TabBarStyling.SplitActionSystemImage] = [:]
+    private var resolutions = 0
+
+    init() {}
+
+    func image(for name: String) -> TabBarStyling.SplitActionSystemImage {
+        lock.lock()
+        if let hit = resolved[name] {
+            lock.unlock()
+            return hit
+        }
+        lock.unlock()
+
+        // Resolved outside the lock so a symbol lookup never blocks another
+        // caller. Two threads racing on the same name both resolve and agree.
+        let image = TabBarStyling.resolveSplitActionSystemImage(for: name)
+
+        lock.lock()
+        resolutions += 1
+        if resolved.count < Self.capacity {
+            resolved[name] = image
+        }
+        lock.unlock()
+        return image
+    }
+
+    /// How many times the uncached resolution has run. Tests only.
+    var resolutionCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return resolutions
     }
 }
 
