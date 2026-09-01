@@ -236,16 +236,27 @@ validate_run() {
 }
 
 validate_unique_open_head() {
-  local head_owner head_name open_prs matches
+  local head_owner head_name matches
   head_owner="${head_repo%%/*}"
   head_name="${head_repo#*/}"
   [[ "${head_owner}" != "${head_repo}" && -n "${head_owner}" && -n "${head_name}" ]] ||
     fail 'The pull request head repository name is invalid'
-  open_prs="$(gh api --method GET \
-    --raw-field state=open --raw-field base="${TARGET_BASE_REF}" \
-    --raw-field head="${head_owner}:${head_ref}" --raw-field per_page=100 \
-    "repos/${GH_REPO}/pulls" 2>/dev/null)" ||
-    fail 'Could not query open pull requests for the exact head'
+  local open_pr_pages='[]' open_pr_page_count=100
+  for open_pr_page_number in $(seq 1 10); do
+    open_pr_page="$(gh api --method GET \
+      --raw-field state=open --raw-field base="${TARGET_BASE_REF}" \
+      --raw-field head="${head_owner}:${head_ref}" --raw-field per_page=100 \
+      --raw-field page="${open_pr_page_number}" \
+      "repos/${GH_REPO}/pulls" 2>/dev/null)" ||
+      fail 'Could not query open pull requests for the exact head'
+    jq -e '. | type == "array" and length <= 100' <<<"${open_pr_page}" >/dev/null ||
+      fail 'The open pull request response is malformed or oversized'
+    open_pr_pages="$(jq -c --argjson page "${open_pr_page}" '. + [$page]' <<<"${open_pr_pages}")"
+    open_pr_page_count="$(jq -r 'length' <<<"${open_pr_page}")"
+    (( open_pr_page_count < 100 )) && break
+  done
+  (( open_pr_page_count < 100 )) ||
+    fail 'The open pull request list is full after the bounded page window'
   matches="$(jq -r \
     --arg repo "${GH_REPO}" --arg base "${TARGET_BASE_REF}" \
     --arg ref "${head_ref}" --arg head_repo "${head_repo}" \
@@ -255,7 +266,7 @@ validate_unique_open_head() {
       .base.ref == $base and .base.repo.full_name == $repo and
       .head.ref == $ref and .head.sha == $sha and
       .head.repo.full_name == $head_repo and .head.repo.id == $head_repo_id)] | length' \
-    <<<"${open_prs}")" ||
+    <<<"${open_pr_pages}")" ||
     fail 'The open pull request response is malformed'
   [[ "${matches}" == 1 ]] || fail 'The exact head is not uniquely associated with this pull request'
 }
