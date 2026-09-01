@@ -542,7 +542,7 @@ jobs:
           require-opener-as-author: 'true'
 
   CLAResult:
-    name: "CLA Assistant v3"
+    name: "CLA Assistant v3 gate result"
     needs:
       - CLACommentGate
       - CLASignerPreflight
