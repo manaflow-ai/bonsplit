@@ -3,7 +3,10 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
+/// Internal rather than private so the test target can drive `layout()` directly and
+/// prove the initial divider position waits for a layout pass. See
+/// SplitEntryLayoutEdgeTests.
+class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor?
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
@@ -45,6 +48,22 @@ private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
 
     override var dividerThickness: CGFloat {
         customDividerThickness ?? super.dividerThickness
+    }
+
+    /// Ran once after AppKit's next layout pass, then cleared.
+    ///
+    /// Work that needs a real `bounds` has to wait for a layout, and hopping the
+    /// runloop is not waiting for one: a `DispatchQueue.main.async` chain can run
+    /// to exhaustion inside the same layout, seeing the same empty bounds every
+    /// time. This is the edge that actually changes the answer. Cleared before the
+    /// hook runs, so the hook may re-arm it for the following pass.
+    var afterNextLayout: (() -> Void)?
+
+    override func layout() {
+        super.layout()
+        guard let hook = afterNextLayout else { return }
+        afterNextLayout = nil
+        hook()
     }
 
     /// When the host injects divider cursors, replace AppKit's built-in
@@ -339,7 +358,19 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 
         // Apply the initial divider position once after initial layout scheduling.
-        func applyInitialDividerPosition() {
+        //
+        // Takes the split view rather than capturing it: the retry below parks this
+        // on the view itself, and a closure that captured it would keep the view
+        // alive through its own property — a leak for any split torn down before a
+        // layout pass arrives.
+        func applyInitialDividerPosition(_ splitView: ThemedSplitView) {
+            // Every entry point here captured THIS split's state: the initial
+            // main-queue probe and each retry parked on afterNextLayout. The
+            // coordinator-reuse reset clears the parked hook, but it cannot
+            // cancel an async probe already in flight — and that probe would
+            // apply the dead split's position AND mark the reused coordinator's
+            // NEW lifecycle applied. Identity, not the applied flag, decides.
+            guard context.coordinator.splitState.id == splitState.id else { return }
             if context.coordinator.didApplyInitialDividerPosition {
                 return
             }
@@ -350,8 +381,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
             guard availableSize > 0 else {
-                // makeNSView can run before NSSplitView has a real frame; retry on the
-                // next runloop so we still get the intended entry animation.
+                // makeNSView can run before NSSplitView has a real frame, and only a
+                // layout pass gives it one. Waiting on the runloop instead spent this
+                // whole budget inside a single layout — twelve async hops in 13ms, each
+                // reading the same empty bounds — so no attempt could ever have
+                // succeeded, and the fallback then recorded the position as applied
+                // when it never was. A pane kept its entry default for the rest of the
+                // session: nothing re-derives a position this coordinator believes it
+                // already set, and no divider imposition can move a pane whose sibling
+                // has since closed. Wait for layout, and count layouts.
                 context.coordinator.initialDividerApplyAttempts += 1
 #if DEBUG
                 let attempt = context.coordinator.initialDividerApplyAttempts
@@ -359,29 +397,44 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     dlog(
                         "split.entry.wait split=\(splitDebugToken) orientation=\(orientationToken) " +
                         "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) " +
-                        "attempt=\(attempt) total=\(Int(totalSize.rounded())) available=\(Int(availableSize.rounded()))"
+                        "layout=\(attempt) total=\(Int(totalSize.rounded())) available=\(Int(availableSize.rounded()))"
                     )
                 }
 #endif
-                if context.coordinator.initialDividerApplyAttempts < 12 {
-                    DispatchQueue.main.async {
-                        applyInitialDividerPosition()
+                // Twelve attempts with no width — the initial probe plus eleven
+                // parked on real layouts — is a split view that cannot size, not a
+                // race. On EXACTLY the twelfth, show the pane rather than lose it
+                // and abandon the entry animation; past twelve, this guard is
+                // entered again on every zero-sized layout, and the fallback work
+                // must not repeat — only the observation re-arms.
+                //
+                // Observation is not the old budget by another name: the old retry
+                // span twelve runloop turns and then stopped forever, whereas
+                // layouts only happen when something changes, so a view nobody
+                // lays out costs nothing and a view that gains a size gets its
+                // position. `didApplyInitialDividerPosition` ends the observation
+                // on the first success — and it is deliberately NOT set here:
+                // recording a position as applied when it never was is what made a
+                // wrong extent permanent.
+                if context.coordinator.initialDividerApplyAttempts == 12 {
+                    if shouldAnimate {
+                        splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                        context.coordinator.isAnimating = false
                     }
-                    return
-                }
-
-                // Safety fallback: don't leave the new pane hidden forever.
-                context.coordinator.didApplyInitialDividerPosition = true
-                if animationOrigin != nil, shouldAnimate {
-                    splitView.arrangedSubviews[newPaneIndex].isHidden = false
-                    context.coordinator.isAnimating = false
-                }
+                    context.coordinator.entryAnimationAbandoned = true
 #if DEBUG
-                dlog(
-                    "split.entry.fallback split=\(splitDebugToken) orientation=\(orientationToken) " +
-                    "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) attempts=\(context.coordinator.initialDividerApplyAttempts)"
-                )
+                    dlog(
+                        "split.entry.fallback split=\(splitDebugToken) orientation=\(orientationToken) " +
+                        "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) " +
+                        "attempts=\(context.coordinator.initialDividerApplyAttempts) " +
+                        "shown=\(shouldAnimate ? 1 : 0) animationAbandoned=1 stillObserving=1"
+                    )
 #endif
+                }
+                splitView.afterNextLayout = { [weak splitView] in
+                    guard let splitView else { return }
+                    applyInitialDividerPosition(splitView)
+                }
                 return
             }
 
@@ -414,7 +467,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 let targetPosition = availableSize * targetDividerPosition
                 splitState.dividerPosition = targetDividerPosition
 
-                if shouldAnimate {
+                // `entryAnimationAbandoned` overrides the captured `shouldAnimate`: the
+                // fallback already showed this pane, so sliding it in from an edge now
+                // would be a snap on screen, and the animation path withholds the
+                // delegate updates the model needs. Place it and be done.
+                if shouldAnimate, !context.coordinator.entryAnimationAbandoned {
                     // Position at edge while new pane is hidden
                     let startPosition: CGFloat = animationOrigin == .fromFirst ? 0 : availableSize
 #if DEBUG
@@ -461,11 +518,24 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     // No animation - just set the position immediately
                     context.coordinator.setPositionSafely(targetPosition, in: splitView, layout: false)
                     context.coordinator.lastAppliedPosition = targetDividerPosition
+                    // An entry that PLANNED to animate hid its pane in makeNSView
+                    // and set isAnimating; reaching this branch means the animation
+                    // will never run (abandoned — by this entry's fallback, or by a
+                    // stale flag), so the only unhide lives in the animated path.
+                    // Show the pane and release the delegate suppression here, or
+                    // it stays hidden with isAnimating stuck true.
+                    if shouldAnimate {
+                        splitView.arrangedSubviews.indices.forEach {
+                            splitView.arrangedSubviews[$0].isHidden = false
+                        }
+                        context.coordinator.isAnimating = false
+                    }
 #if DEBUG
                     dlog(
                         "split.entry.noAnimation split=\(splitDebugToken) orientation=\(orientationToken) " +
                         "origin=\(animationOriginToken) targetPx=\(Int(targetPosition.rounded())) " +
-                        "enableAnimations=\(enableAnimations ? 1 : 0)"
+                        "enableAnimations=\(enableAnimations ? 1 : 0) " +
+                        "abandoned=\(context.coordinator.entryAnimationAbandoned ? 1 : 0)"
                     )
 #endif
                 }
@@ -476,8 +546,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
-        DispatchQueue.main.async {
-            applyInitialDividerPosition()
+        DispatchQueue.main.async { [weak splitView] in
+            guard let splitView else { return }
+            applyInitialDividerPosition(splitView)
         }
 
         return splitView
@@ -705,8 +776,21 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var isAnimating = false
         var didApplyInitialDividerPosition = false
         /// Initial divider placement can run before NSSplitView has a real size.
-        /// Retry a few turns so entry animations are not dropped on first layout.
+        /// Counts zero-sized ATTEMPTS: the initial async probe from `makeNSView`,
+        /// then one per layout pass the retry parked on. Layouts are the clock for
+        /// every attempt after the first — only a layout can hand the view a size,
+        /// so runloop turns are the wrong thing to count.
         var initialDividerApplyAttempts = 0
+        /// Set once the entry animation has been abandoned because the pane had to
+        /// be shown before a size ever arrived.
+        ///
+        /// After that the pane is on screen, so a late apply must place the divider
+        /// outright. Rewinding it to an edge to slide it in would be a visible snap,
+        /// and the animation path suppresses the delegate updates the model needs.
+        /// The animation's own inputs cannot answer this: `animationOrigin` is read
+        /// into a local and cleared on the first pass, so by the time a late apply
+        /// runs the local still says "animate" while the pane is already visible.
+        var entryAnimationAbandoned = false
         var onGeometryChange: ((_ isDragging: Bool) -> Void)?
         /// Answers whether a divider drag session is live anywhere in this
         /// tree. Consulted before every imposed apply: mid-drag the user owns
@@ -780,6 +864,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 initialDividerApplyAttempts = 0
                 isAnimating = false
                 isDragging = false
+                // The abandonment belongs to the OLD split's entry. Left set, a
+                // later entry through this reused coordinator hides its pane for
+                // the animation, takes the plain path because of the stale flag,
+                // and nothing ever unhides it.
+                entryAnimationAbandoned = false
+                // A parked entry attempt captured the old split's state; letting a
+                // later layout run it would apply the dead split's position to the
+                // reused view and mark the NEW lifecycle applied.
+                (splitView as? ThemedSplitView)?.afterNextLayout = nil
                 firstNodeType = newState.first.nodeType
                 secondNodeType = newState.second.nodeType
                 return
