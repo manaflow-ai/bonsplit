@@ -171,13 +171,7 @@ enum TabBarStyling {
     }
 
     static func splitActionSystemImage(for name: String) -> SplitActionSystemImage {
-        if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
-            return SplitActionSystemImage(name: name, rotationDegrees: 0, pointSize: 12)
-        }
-        if name == "ellipsis.vertical" {
-            return SplitActionSystemImage(name: "ellipsis", rotationDegrees: 90, pointSize: 10.5)
-        }
-        return SplitActionSystemImage(name: "questionmark.circle", rotationDegrees: 0, pointSize: 12)
+        SplitActionSystemImageCache.shared.image(for: name)
     }
 
     static func splitButtonBackdropSolidSurfaceWidth(
@@ -1754,6 +1748,38 @@ private struct TabBarLayerBackedColor: NSViewRepresentable {
             layer?.isOpaque = color.alphaComponent >= 1
             CATransaction.commit()
         }
+    }
+}
+
+private final class SplitActionSystemImageCache {
+    static let shared = SplitActionSystemImageCache()
+
+    private let lock = NSLock()
+    private var imagesByName: [String: TabBarStyling.SplitActionSystemImage] = [:]
+
+    private init() {}
+
+    func image(for name: String) -> TabBarStyling.SplitActionSystemImage {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let cached = imagesByName[name] {
+            return cached
+        }
+
+#if DEBUG
+        BonsplitDebugCounters.recordSplitActionSystemImageLookup()
+#endif
+        let image: TabBarStyling.SplitActionSystemImage
+        if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
+            image = .init(name: name, rotationDegrees: 0, pointSize: 12)
+        } else if name == "ellipsis.vertical" {
+            image = .init(name: "ellipsis", rotationDegrees: 90, pointSize: 10.5)
+        } else {
+            image = .init(name: "questionmark.circle", rotationDegrees: 0, pointSize: 12)
+        }
+        imagesByName[name] = image
+        return image
     }
 }
 
