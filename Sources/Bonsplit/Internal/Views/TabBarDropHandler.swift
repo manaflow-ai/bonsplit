@@ -71,6 +71,8 @@ struct TabBarDropHandler {
         if hasLiveTabDrag || hasTabTransfer {
             let handled = performTabDrop(from: pasteboard, at: targetIndex)
             if handled {
+                // Acceptance revokes routing only. The native source remains
+                // retained until AppKit sends its terminal `endedAt` callback.
                 splitViewController.tabDragTransferRegistry.finish(from: pasteboard)
             }
             return handled
