@@ -302,8 +302,14 @@ validate_failed_jobs() {
     <<<"${payload}" >/dev/null || fail 'The selected CLA run jobs are incomplete or malformed'
   failed_jobs="$(jq -c '[.[] | select(.conclusion != "success" and .conclusion != "skipped")]' <<<"${payload}")"
   jq -e \
+    --argjson expected_run_id "${run_id}" \
+    --arg expected_head_sha "${head_sha}" \
     --arg generation "${CLA_GENERATION}" \
-    'length > 0 and all(.[]; .conclusion == "failure" and
+    'length > 0 and all(.[];
+      (.id | type == "number" and . > 0) and
+      (.run_id | type == "number" and . == $expected_run_id) and
+      (.head_sha | type == "string" and . == $expected_head_sha) and
+      .conclusion == "failure" and
       (.name == "CLA Signer" or .name == "CLA Assistant v2") and
       any(.steps[]?;
         .name == ("CLA generation " + $generation) and
