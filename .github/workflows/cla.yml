@@ -463,8 +463,10 @@ jobs:
         with:
           path-to-signatures: 'signatures/version2/cla.json'
           # Bind this privileged write to the exact head and base authenticated by the read-only preflight.
-          expected-head-sha: ${{ needs.CLASignerPreflight.outputs.head_sha }}
-          expected-base-sha: ${{ needs.CLASignerPreflight.outputs.base_sha }}
+          # Lifecycle events carry an authenticated head/base snapshot. Comment
+          # events use the read-only signer preflight outputs instead.
+          expected-head-sha: ${{ github.event.pull_request.head.sha || needs.CLASignerPreflight.outputs.head_sha }}
+          expected-base-sha: ${{ github.event.pull_request.base.sha || needs.CLASignerPreflight.outputs.base_sha }}
           # Pin the document to the workflow revision so a later edit cannot
           # change the terms shown for an existing signature request.
           path-to-document: 'https://github.com/manaflow-ai/bonsplit/blob/${{ github.workflow_sha }}/CLA.md'
@@ -529,6 +531,9 @@ jobs:
     timeout-minutes: 5
     permissions: {}
     steps:
+      - name: "CLA generation ${{ env.CLA_GENERATION }}"
+        if: success()
+        run: echo "CLA generation ${CLA_GENERATION}"
       - name: "Publish CLA result"
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -643,6 +648,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          CLA_GENERATION: ${{ env.CLA_GENERATION }}
           EVENT_NAME: ${{ github.event_name }}
           EVENT_ACTION: ${{ github.event.action }}
           PR_NUMBER: ${{ github.event.issue.number }}

@@ -20,6 +20,8 @@ readonly TARGET_BASE_REF='main'
 readonly SIGN_PHRASE='I have read the CLA Document and I hereby sign the CLA'
 
 [[ "${GH_REPO:-}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || fail 'Invalid repository identity'
+[[ "${CLA_GENERATION:-}" =~ ^v[0-9]+\.[0-9]+-action-[0-9a-f]{7,40}$ ]] ||
+  fail 'Invalid CLA generation marker'
 
 [[ "${EVENT_NAME:-}" == 'issue_comment' ]] || fail 'Unexpected event for CLA refresh'
 [[ "${EVENT_ACTION:-}" == 'created' ]] || fail 'Unexpected issue-comment action'
@@ -266,20 +268,53 @@ if [[ "${run_has_association}" != 'true' ]]; then
   validate_unique_open_head
 fi
 
-# Only the two signer/result jobs may be failed. This prevents this refresh
-# command from rerunning an unrelated future job added to the workflow.
-jobs_json="$(gh api \
-  --method GET \
-  --raw-field per_page=100 \
-  "repos/${GH_REPO}/actions/runs/${run_id}/jobs" 2>/dev/null)" ||
-  fail 'Could not query jobs for the selected CLA run'
-jq -e '.jobs | type == "array" and length > 0 and length <= 100 and
-       all(.[]; .status == "completed" and (.conclusion | type == "string"))' \
-  <<<"${jobs_json}" >/dev/null || fail 'The selected CLA run jobs are incomplete or malformed'
-failed_jobs="$(jq -c '[.jobs[] | select(.conclusion != "success" and .conclusion != "skipped")]' <<<"${jobs_json}")"
-jq -e 'length > 0 and all(.[]; .conclusion == "failure" and
-       (.name == "CLA Signer" or .name == "CLA Assistant v2"))' \
-  <<<"${failed_jobs}" >/dev/null || fail 'The selected run contains an unexpected failed job'
+# The jobs endpoint is paginated. Inspect every page before authorizing a
+# rerun, because rerun-failed-jobs executes every failed job in the run.
+fetch_jobs_for_run() {
+  local target_run_id="$1"
+  local pages='[]'
+  local page_count=100
+  local page_number page_json
+  for page_number in $(seq 1 10); do
+    page_json="$(gh api \
+      --method GET \
+      --raw-field per_page=100 \
+      --raw-field page="${page_number}" \
+      "repos/${GH_REPO}/actions/runs/${target_run_id}/jobs" 2>/dev/null)" ||
+      fail 'Could not query jobs for the selected CLA run'
+    jq -e '. | type == "object" and (.jobs | type == "array" and length <= 100)' \
+      <<<"${page_json}" >/dev/null || fail 'The selected CLA run jobs response is malformed or oversized'
+    pages="$(jq -c --argjson page "${page_json}" '. + [$page]' <<<"${pages}")"
+    page_count="$(jq -r '.jobs | length' <<<"${page_json}")"
+    if (( page_count < 100 )); then
+      break
+    fi
+  done
+  (( page_count < 100 )) || fail 'The selected CLA run jobs list is full after the bounded page window'
+  jq -c '[.[] | .jobs[]?]' <<<"${pages}"
+}
+
+validate_failed_jobs() {
+  local payload="$1"
+  local failed_jobs
+  jq -e 'type == "array" and length > 0 and
+         all(.[]; .status == "completed" and (.conclusion | type == "string"))' \
+    <<<"${payload}" >/dev/null || fail 'The selected CLA run jobs are incomplete or malformed'
+  failed_jobs="$(jq -c '[.[] | select(.conclusion != "success" and .conclusion != "skipped")]' <<<"${payload}")"
+  jq -e \
+    --arg generation "${CLA_GENERATION}" \
+    'length > 0 and all(.[]; .conclusion == "failure" and
+      (.name == "CLA Signer" or .name == "CLA Assistant v2") and
+      any(.steps[]?;
+        .name == ("CLA generation " + $generation) and
+        .status == "completed" and .conclusion == "success"
+      ))' \
+    <<<"${failed_jobs}" >/dev/null ||
+    fail 'The selected run contains an unexpected failed job or stale CLA generation'
+}
+
+jobs_json="$(fetch_jobs_for_run "${run_id}")" || fail 'Could not query jobs for the selected CLA run'
+validate_failed_jobs "${jobs_json}"
 
 # Recheck both live objects immediately before the only state-changing call.
 latest_pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
@@ -301,6 +336,8 @@ run_has_association="$(jq -r 'if ((.pull_requests // []) | length) > 0 then "tru
 if [[ "${run_has_association}" != 'true' ]]; then
   validate_unique_open_head
 fi
+final_jobs_json="$(fetch_jobs_for_run "${run_id}")" || fail 'Could not recheck jobs for the selected CLA run'
+validate_failed_jobs "${final_jobs_json}"
 
 gh api --method POST \
   --header 'Accept: application/vnd.github+json' \
