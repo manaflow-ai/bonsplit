@@ -3353,6 +3353,21 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testActiveTabIndicatorRemainsVisibleDuringContainerResize() {
+        guard let saturations = renderedTabBarIndicatorSaturationsAcrossResize() else {
+            XCTFail("Expected rendered tab bar indicator before and during resize")
+            return
+        }
+
+        XCTAssertGreaterThan(saturations.before, 0.4)
+        XCTAssertGreaterThan(
+            saturations.during,
+            0.4,
+            "Focused-tab chrome must remain visible while the tab bar is being laid out at a new width"
+        )
+    }
+
+    @MainActor
     func testSelectedTabLeftSeparatorDoesNotOverlapBottomSeparator() {
         guard let alphas = renderedSelectedTabLeftSeparatorAlphas() else {
             XCTFail("Expected rendered selected tab separator alphas")
@@ -4905,6 +4920,19 @@ final class BonsplitTests: XCTestCase {
         renderedTabBarValue(isFocused: isFocused) { hostingView in
             let sampleRect = NSRect(x: 0, y: 0, width: 80, height: 4)
             return highSaturationWidth(in: hostingView, sampleRect: sampleRect)
+        }
+    }
+
+    @MainActor
+    private func renderedTabBarIndicatorSaturationsAcrossResize() -> (before: CGFloat, during: CGFloat)? {
+        renderedTabBarValue(isFocused: true) { hostingView in
+            let sampleRect = NSRect(x: 4, y: 0, width: 80, height: 4)
+            guard let before = maximumSaturation(in: hostingView, sampleRect: sampleRect) else { return nil }
+
+            hostingView.frame.size.width = 112
+            hostingView.layoutSubtreeIfNeeded()
+            guard let during = maximumSaturation(in: hostingView, sampleRect: sampleRect) else { return nil }
+            return (before, during)
         }
     }
 
