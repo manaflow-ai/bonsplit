@@ -489,18 +489,40 @@ extension BonsplitConfiguration {
             /// When unset, Bonsplit derives separators from the chrome background.
             public var borderHex: String?
 
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for SF Symbol tab icons.
+            /// Raster favicons and asset icons retain their original colors.
+            public var iconHex: String?
+
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for active selection chrome and focus rings.
+            public var accentHex: String?
+
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for drag insertion indicators and pane drop targets.
+            /// When unset, Bonsplit falls back to `accentHex`, then the system accent color.
+            public var dropTargetHex: String?
+
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for notification badges.
+            public var notificationHex: String?
+
             public init(
                 backgroundHex: String? = nil,
                 tabBarBackgroundHex: String? = nil,
                 splitButtonBackdropHex: String? = nil,
                 paneBackgroundHex: String? = nil,
-                borderHex: String? = nil
+                borderHex: String? = nil,
+                iconHex: String? = nil,
+                accentHex: String? = nil,
+                dropTargetHex: String? = nil,
+                notificationHex: String? = nil
             ) {
                 self.backgroundHex = backgroundHex
                 self.tabBarBackgroundHex = tabBarBackgroundHex
                 self.splitButtonBackdropHex = splitButtonBackdropHex
                 self.paneBackgroundHex = paneBackgroundHex
                 self.borderHex = borderHex
+                self.iconHex = iconHex
+                self.accentHex = accentHex
+                self.dropTargetHex = dropTargetHex
+                self.notificationHex = notificationHex
             }
         }
 

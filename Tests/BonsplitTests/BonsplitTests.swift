@@ -1435,6 +1435,43 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(pressedAlpha, idleAlpha)
     }
 
+    func testTabIconColorUsesConfiguredTintAndDimsInactiveIcons() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(iconHex: "#8844CC")
+        )
+        let active = TabBarColors.nsColorTabIcon(for: appearance, isSelected: true).usingColorSpace(.sRGB)!
+        let inactive = TabBarColors.nsColorTabIcon(for: appearance, isSelected: false).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(active.redComponent, 0x88 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.greenComponent, 0x44 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.blueComponent, 0xCC / 255.0, accuracy: 0.001)
+        XCTAssertEqual(inactive.alphaComponent, active.alphaComponent * 0.72, accuracy: 0.001)
+    }
+
+    func testInteractionColorsUseConfiguredSemanticRoles() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(
+                accentHex: "#7C3AED",
+                dropTargetHex: "#F59E0B",
+                notificationHex: "#22D3EE"
+            )
+        )
+        let active = TabBarColors.nsColorActiveIndicator(for: appearance, saturation: 1)
+            .usingColorSpace(.sRGB)!
+        let drop = NSColor(TabBarColors.dropIndicator(for: appearance)).usingColorSpace(.sRGB)!
+        let notification = NSColor(TabBarColors.notificationBadge(for: appearance)).usingColorSpace(.sRGB)!
+
+        XCTAssertEqual(active.redComponent, 0x7C / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.greenComponent, 0x3A / 255.0, accuracy: 0.001)
+        XCTAssertEqual(active.blueComponent, 0xED / 255.0, accuracy: 0.001)
+        XCTAssertEqual(drop.redComponent, 0xF5 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(drop.greenComponent, 0x9E / 255.0, accuracy: 0.001)
+        XCTAssertEqual(drop.blueComponent, 0x0B / 255.0, accuracy: 0.001)
+        XCTAssertEqual(notification.redComponent, 0x22 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(notification.greenComponent, 0xD3 / 255.0, accuracy: 0.001)
+        XCTAssertEqual(notification.blueComponent, 0xEE / 255.0, accuracy: 0.001)
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")

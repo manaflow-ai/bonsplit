@@ -51,19 +51,18 @@ enum PaneDropLifecycle {
 private struct PaneDropPlaceholderOverlay: View {
     let zone: DropZone?
     let size: CGSize
+    let dropTargetColor: Color
 
-    private let placeholderColor = Color.accentColor.opacity(0.25)
-    private let borderColor = Color.accentColor
     private let padding: CGFloat = 4
 
     var body: some View {
         let frame = overlayFrame(for: zone, in: size)
 
         RoundedRectangle(cornerRadius: 8)
-            .fill(placeholderColor)
+            .fill(dropTargetColor.opacity(0.25))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(borderColor, lineWidth: 2)
+                    .stroke(dropTargetColor, lineWidth: 2)
             )
             .frame(width: frame.width, height: frame.height)
             .offset(x: frame.minX, y: frame.minY)
@@ -114,15 +113,18 @@ private struct PaneDropPlaceholderOverlay: View {
 
 struct PaneDropInteractionContainer<Content: View, DropLayer: View>: View {
     let activeDropZone: DropZone?
+    let dropTargetColor: Color
     let content: Content
     let dropLayer: (CGSize) -> DropLayer
 
     init(
         activeDropZone: DropZone?,
+        dropTargetColor: Color = .accentColor,
         @ViewBuilder content: () -> Content,
         @ViewBuilder dropLayer: @escaping (CGSize) -> DropLayer
     ) {
         self.activeDropZone = activeDropZone
+        self.dropTargetColor = dropTargetColor
         self.content = content()
         self.dropLayer = dropLayer
     }
@@ -137,7 +139,11 @@ struct PaneDropInteractionContainer<Content: View, DropLayer: View>: View {
                     dropLayer(size)
                 }
                 .overlay(alignment: .topLeading) {
-                    PaneDropPlaceholderOverlay(zone: activeDropZone, size: size)
+                    PaneDropPlaceholderOverlay(
+                        zone: activeDropZone,
+                        size: size,
+                        dropTargetColor: dropTargetColor
+                    )
                         .allowsHitTesting(false)
                 }
         }
@@ -214,7 +220,10 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
 
     @ViewBuilder
     private var contentAreaWithDropZones: some View {
-        PaneDropInteractionContainer(activeDropZone: activeDropZone) {
+        PaneDropInteractionContainer(
+            activeDropZone: activeDropZone,
+            dropTargetColor: TabBarColors.dropIndicator(for: bonsplitController.configuration.appearance)
+        ) {
             contentArea
         } dropLayer: { size in
             // Drop zones layer (above content, receives drops and taps)
