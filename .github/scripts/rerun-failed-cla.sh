@@ -87,18 +87,32 @@ else
   fi
 fi
 
-# Resolve the workflow ID by exact path and active state. The run-list endpoint
-# is then scoped to that immutable workflow identity instead of a name search.
-workflow_page="$(gh api \
-  --method GET \
-  --raw-field per_page=100 \
-  "repos/${GH_REPO}/actions/workflows" 2>/dev/null)" ||
-  fail 'Could not query repository workflows'
+# Resolve the workflow ID by exact path and active state. The API paginates
+# workflow definitions, so inspect a bounded window instead of assuming the
+# CLA workflow is in the first 100 entries.
+workflow_pages='[]'
+workflow_page_count=0
+for workflow_page_number in $(seq 1 10); do
+  workflow_page="$(gh api \
+    --method GET \
+    --raw-field per_page=100 \
+    --raw-field page="${workflow_page_number}" \
+    "repos/${GH_REPO}/actions/workflows" 2>/dev/null)" ||
+    fail 'Could not query repository workflows'
+  jq -e '. | type == "object" and (.workflows | type == "array" and length <= 100)' \
+    <<<"${workflow_page}" >/dev/null ||
+    fail 'The repository workflow response is malformed or oversized'
+  workflow_pages="$(jq -c --argjson page "${workflow_page}" '. + [$page]' <<<"${workflow_pages}")"
+  workflow_page_count="$(jq -r '.workflows | length' <<<"${workflow_page}")"
+  (( workflow_page_count < 100 )) && break
+done
+(( workflow_page_count < 100 )) ||
+  fail 'The repository workflow list is full after the bounded page window'
 workflow_id="$(jq -r \
   --arg path "${WORKFLOW_PATH}" \
-  '[.workflows[]? | select(.path == $path and .state == "active") | .id]
+  '[.[] | .workflows[]? | select(.path == $path and .state == "active") | .id]
    | if length == 1 and (.[0] | type == "number" and . > 0) then .[0] else empty end' \
-  <<<"${workflow_page}")"
+  <<<"${workflow_pages}")"
 is_id "${workflow_id}" || fail 'The trusted CLA workflow is not uniquely active'
 
 # A lifecycle run can still be queued when the contributor posts the signing
