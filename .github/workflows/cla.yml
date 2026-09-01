@@ -429,6 +429,43 @@ jobs:
             exit 1
           fi
 
+      - name: "Bind live pull request revision"
+        id: cla-revision
+        if: success()
+        # Recheck the live revision in the write job itself. This covers
+        # recheck comments, whose signer preflight is intentionally skipped.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          fail() {
+            echo "::error::$1"
+            exit 1
+          }
+          [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]] || fail "Invalid pull request number"
+          pr_json="$(gh api "repos/${GH_REPO}/pulls/${PR_NUMBER}" 2>/dev/null)" ||
+            fail "Could not query the live pull request"
+          jq -e \
+            --arg repo "${GH_REPO}" \
+            --argjson number "${PR_NUMBER}" \
+            '.number == $number and
+             .state == "open" and
+             .base.ref == "main" and
+             .base.repo.full_name == $repo and
+             (.base.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+             (.head.sha | type == "string" and test("^[0-9a-f]{40}$")) and
+             (.head.ref | type == "string" and length > 0 and (test("[\\r\\n]") | not)) and
+             (.base.repo.id | type == "number" and . > 0) and
+             (.head.repo | type == "object") and
+             (.head.repo.full_name | type == "string" and length > 0 and (test("[\\r\\n]") | not)) and
+             (.head.repo.id | type == "number" and . > 0)' \
+            <<<"${pr_json}" >/dev/null ||
+            fail "The live pull request revision is incomplete or does not target main"
+          printf 'head_sha=%s\n' "$(jq -r '.head.sha' <<<"${pr_json}")" >> "${GITHUB_OUTPUT}"
+          printf 'base_sha=%s\n' "$(jq -r '.base.sha' <<<"${pr_json}")" >> "${GITHUB_OUTPUT}"
+
       - name: "CLA Assistant v2"
         # The action handles signing and PR comment updates. The enclosing job
         # owns the check result. Merged pull requests use the explicit lock
@@ -465,8 +502,8 @@ jobs:
           # Bind this privileged write to the exact head and base authenticated by the read-only preflight.
           # Lifecycle events carry an authenticated head/base snapshot. Comment
           # events use the read-only signer preflight outputs instead.
-          expected-head-sha: ${{ github.event.pull_request.head.sha || needs.CLASignerPreflight.outputs.head_sha }}
-          expected-base-sha: ${{ github.event.pull_request.base.sha || needs.CLASignerPreflight.outputs.base_sha }}
+          expected-head-sha: ${{ github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA' && needs.CLASignerPreflight.outputs.head_sha || steps.cla-revision.outputs.head_sha }}
+          expected-base-sha: ${{ github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA' && needs.CLASignerPreflight.outputs.base_sha || steps.cla-revision.outputs.base_sha }}
           # Pin the document to the workflow revision so a later edit cannot
           # change the terms shown for an existing signature request.
           path-to-document: 'https://github.com/manaflow-ai/bonsplit/blob/${{ github.workflow_sha }}/CLA.md'

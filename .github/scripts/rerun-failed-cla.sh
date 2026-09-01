@@ -176,7 +176,7 @@ for ((attempt = 1; attempt <= max_attempts; attempt++)); do
       | {id, head_sha, head_branch, status, conclusion, created_at, pull_requests, head_repository}
     ] | sort_by([.created_at, .id]) | if length > 0 then .[-1] else empty end' \
     <<<"${runs_json}")"
-  if [[ -z "${candidate}" && "${run_page_count}" == 100 ]]; then
+  if [[ "${run_page_count}" == 100 ]]; then
     fail 'The CLA workflow run list is full after the bounded page window'
   fi
   if [[ -n "${candidate}" ]]; then
