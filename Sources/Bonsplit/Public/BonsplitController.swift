@@ -362,43 +362,43 @@ public final class BonsplitController {
         guard didChange else { return }
 
         if let title = title {
-            pane.tabs[tabIndex].title = title
+            currentTab.title = title
         }
         if let icon = icon {
-            pane.tabs[tabIndex].icon = icon
+            currentTab.icon = icon
         }
         if let iconImageData = iconImageData {
-            pane.tabs[tabIndex].iconImageData = iconImageData
+            currentTab.iconImageData = iconImageData
         }
         if let iconAsset = iconAsset {
-            pane.tabs[tabIndex].iconAsset = iconAsset
+            currentTab.iconAsset = iconAsset
         }
         if let kind = kind {
-            pane.tabs[tabIndex].kind = kind
+            currentTab.kind = kind
         }
         if let hasCustomTitle = hasCustomTitle {
-            pane.tabs[tabIndex].hasCustomTitle = hasCustomTitle
+            currentTab.hasCustomTitle = hasCustomTitle
         }
         if let isDirty = isDirty {
-            pane.tabs[tabIndex].isDirty = isDirty
+            currentTab.isDirty = isDirty
         }
         if let showsNotificationBadge = showsNotificationBadge {
-            pane.tabs[tabIndex].showsNotificationBadge = showsNotificationBadge
+            currentTab.showsNotificationBadge = showsNotificationBadge
         }
         if let isLoading = isLoading {
-            pane.tabs[tabIndex].isLoading = isLoading
+            currentTab.isLoading = isLoading
         }
         if let isAudioMuted = isAudioMuted {
-            pane.tabs[tabIndex].isAudioMuted = isAudioMuted
+            currentTab.isAudioMuted = isAudioMuted
         }
         if let isAudioPlaying = isAudioPlaying {
-            pane.tabs[tabIndex].isAudioPlaying = isAudioPlaying
+            currentTab.isAudioPlaying = isAudioPlaying
         }
         if let isPinned = isPinned {
-            pane.tabs[tabIndex].isPinned = isPinned
+            currentTab.isPinned = isPinned
         }
         if let showsRemoteIndicator = showsRemoteIndicator {
-            pane.tabs[tabIndex].showsRemoteIndicator = showsRemoteIndicator
+            currentTab.showsRemoteIndicator = showsRemoteIndicator
         }
     }
 
