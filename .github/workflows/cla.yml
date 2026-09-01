@@ -128,6 +128,7 @@ jobs:
     outputs:
       signer_authorized: ${{ steps.preflight.outputs.signer_authorized }}
       opener_not_in_commits: ${{ steps.preflight.outputs.opener_not_in_commits }}
+      head_sha: ${{ steps.preflight.outputs.head_sha }}
     steps:
       - name: "Authenticate current CLA signer"
         id: preflight
@@ -184,6 +185,7 @@ jobs:
             (
               github.event.comment.body == 'I have read the CLA Document and I hereby sign the CLA' &&
               needs.CLASignerPreflight.result == 'success' &&
+              needs.CLASignerPreflight.outputs.head_sha != '' &&
               needs.CLASignerPreflight.outputs.signer_authorized == 'true'
             )
           )
@@ -443,6 +445,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           path-to-signatures: 'signatures/version2/cla.json'
+          # Bind this privileged write to the exact head authenticated by the read-only preflight.
+          expected-head-sha: ${{ needs.CLASignerPreflight.outputs.head_sha }}
           # Pin the document to the workflow revision so a later edit cannot
           # change the terms shown for an existing signature request.
           path-to-document: 'https://github.com/manaflow-ai/bonsplit/blob/${{ github.workflow_sha }}/CLA.md'
