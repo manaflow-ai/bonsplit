@@ -262,7 +262,7 @@ validate_unique_open_head() {
     --arg ref "${head_ref}" --arg head_repo "${head_repo}" \
     --argjson head_repo_id "${head_repo_id}" --argjson number "${PR_NUMBER}" \
     --arg sha "${head_sha}" \
-    '[.[]? | select(.number == $number and .state == "open" and
+    '[.[]?[]? | select(.number == $number and .state == "open" and
       .base.ref == $base and .base.repo.full_name == $repo and
       .head.ref == $ref and .head.sha == $sha and
       .head.repo.full_name == $head_repo and .head.repo.id == $head_repo_id)] | length' \
