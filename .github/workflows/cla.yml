@@ -229,8 +229,8 @@ jobs:
     # The action writes the signature ledger and PR comments. The enclosing
     # Actions job publishes the check result; the action does not call commit
     # status or check-run endpoints, so statuses/checks write is intentionally
-    # absent. Required-check recovery is advisory until a separately reviewed
-    # exact-head rerun worker exists.
+    # absent. The trusted rerun worker refreshes the exact PR-head check after
+    # a valid signing or recheck comment.
     permissions:
       contents: write
       issues: write
@@ -500,8 +500,8 @@ jobs:
       - CLASignerPreflight
       - CLAAssistant
     # Issue-comment workflows run on the default branch SHA, not the PR head.
-    # This result remains advisory until a trusted exact-head rerun worker
-    # refreshes the PR check after a signature comment.
+    # RerunFailedCLA validates the live head and refreshes the failed
+    # pull_request_target check after a valid signing or recheck comment.
     if: >-
       always() &&
       needs.CLACommentGate.result == 'success' &&
