@@ -3,6 +3,54 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
+enum SplitDividerMouseState {
+    private static let maximumFallbackEventAge: TimeInterval = 0.1
+
+    static func matchesWindow(eventWindow: NSWindow?, splitWindow: NSWindow?) -> Bool {
+        guard let eventWindow, let splitWindow else { return false }
+        return eventWindow === splitWindow
+    }
+
+    static func isRecent(eventTimestamp: TimeInterval?, now: TimeInterval) -> Bool {
+        guard let eventTimestamp else { return false }
+        let age = now - eventTimestamp
+        return age >= 0 && age < maximumFallbackEventAge
+    }
+
+    static func isActive(
+        pressedMouseButtons: Int,
+        eventType: NSEvent.EventType?,
+        eventMatchesWindow: Bool,
+        eventIsRecent: Bool,
+        sessionIsActive: Bool
+    ) -> Bool {
+        if pressedMouseButtons & 1 != 0 {
+            return true
+        }
+
+        guard sessionIsActive, eventMatchesWindow, eventIsRecent else { return false }
+        return eventType == .leftMouseDown || eventType == .leftMouseDragged
+    }
+}
+
+struct SplitDividerDragState {
+    private(set) var sessionIsActive = false
+    private(set) var resizeIsActive = false
+
+    mutating func sessionChanged(_ active: Bool) {
+        sessionIsActive = active
+        resizeIsActive = active
+    }
+
+    mutating func acceptCurrentResize() {
+        resizeIsActive = true
+    }
+
+    mutating func rejectCurrentResize() {
+        resizeIsActive = false
+    }
+}
+
 private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor?
 
@@ -286,7 +334,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             (internalController?.activeDividerDragSessions ?? 0) > 0
         }
         splitView.onDividerDragSession = { [weak coordinator = context.coordinator, weak internalController] active in
-            // The coordinator arms isDragging at begin, before any delegate
+            // The coordinator arms its drag state at begin, before any delegate
             // reacts to the session. At end the counter's zero crossing
             // delivers the final geometry notification — forced past the
             // external-update suppression window — before the delegate hears
@@ -727,8 +775,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         weak var imposedRetrySplitView: NSSplitView?
         // Guard programmatic `setPosition` re-entrancy from resize callbacks.
         var isSyncingProgrammatically = false
-        /// Track if user is actively dragging the divider
-        var isDragging = false
+        /// Keep the mouse-down-bracketed session separate from whether the
+        /// current resize callback is accepted as part of that session.
+        var dividerDragState = SplitDividerDragState()
         /// Track child node types to detect structural changes
         var firstNodeType: SplitNode.NodeType
         var secondNodeType: SplitNode.NodeType
@@ -779,7 +828,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 didApplyInitialDividerPosition = false
                 initialDividerApplyAttempts = 0
                 isAnimating = false
-                isDragging = false
+                dividerDragState = SplitDividerDragState()
                 firstNodeType = newState.first.nodeType
                 secondNodeType = newState.second.nodeType
                 return
@@ -802,7 +851,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #if DEBUG
             dlog("divider.session split=\(String(splitState.id.uuidString.prefix(5))) \(active ? "begin" : "end")")
 #endif
-            isDragging = active
+            dividerDragState.sessionChanged(active)
         }
 
         private func splitTotalSize(in splitView: NSSplitView) -> CGFloat {
@@ -1195,25 +1244,51 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 
         func splitViewWillResizeSubviews(_ notification: Notification) {
             guard let splitView = notification.object as? NSSplitView else { return }
+            let currentEvent = NSApp.currentEvent
+            let now = ProcessInfo.processInfo.systemUptime
+            let eventIsRecent = SplitDividerMouseState.isRecent(
+                eventTimestamp: currentEvent?.timestamp,
+                now: now
+            )
+            let leftDown = SplitDividerMouseState.isActive(
+                pressedMouseButtons: NSEvent.pressedMouseButtons,
+                eventType: currentEvent?.type,
+                eventMatchesWindow: SplitDividerMouseState.matchesWindow(
+                    eventWindow: currentEvent?.window,
+                    splitWindow: splitView.window
+                ),
+                eventIsRecent: eventIsRecent,
+                sessionIsActive: dividerDragState.sessionIsActive
+            )
             // If the left mouse button isn't down, this can't be an interactive divider drag.
+            // The explicit split-view mouse session also counts while a synthetic
+            // drag event is current. Accessibility drivers can deliver a valid
+            // AppKit tracking loop without updating the process-wide button mask.
             // (`splitViewWillResizeSubviews` can fire for programmatic/layout-driven resizes too.)
-            guard (NSEvent.pressedMouseButtons & 1) != 0 else {
+            guard leftDown else {
 #if DEBUG
-                if let event = NSApp.currentEvent,
+                if let event = currentEvent,
                    event.type == .leftMouseDown || event.type == .leftMouseDragged {
                     debugLogDividerDragSkip("leftMouseNotPressed", splitView: splitView, event: event)
                 }
 #endif
-                isDragging = false
+                dividerDragState.rejectCurrentResize()
                 return
             }
 
-            // If we're already tracking an active drag, keep the flag until mouse-up.
-            if isDragging {
+            // A fresh same-window event can resume a synthetic drag after one
+            // stale callback was rejected without discarding the outer mouse session.
+            if dividerDragState.sessionIsActive {
+                dividerDragState.acceptCurrentResize()
                 return
             }
 
-            guard let event = NSApp.currentEvent else {
+            // If we're already tracking an inferred drag, keep it until mouse-up.
+            if dividerDragState.resizeIsActive {
+                return
+            }
+
+            guard let event = currentEvent else {
 #if DEBUG
                 debugLogDividerDragSkip("noCurrentEvent", splitView: splitView, event: nil)
 #endif
@@ -1223,10 +1298,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // Only treat this as a divider drag if the pointer is actually on the divider.
             // This delegate callback can also fire during window resizes or structural updates,
             // and persisting divider ratios in those cases can permanently collapse a pane.
-            let now = ProcessInfo.processInfo.systemUptime
             // `NSApp.currentEvent` can be stale when called from async UI work (e.g. socket commands).
             // Only trust very recent events.
-            guard (now - event.timestamp) < 0.1 else {
+            guard eventIsRecent else {
 #if DEBUG
                 debugLogDividerDragSkip("staleCurrentEvent", splitView: splitView, event: event)
 #endif
@@ -1238,7 +1312,10 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #endif
                 return
             }
-            guard event.window == splitView.window else {
+            guard SplitDividerMouseState.matchesWindow(
+                eventWindow: event.window,
+                splitWindow: splitView.window
+            ) else {
 #if DEBUG
                 debugLogDividerDragSkip("windowMismatch", splitView: splitView, event: event)
 #endif
@@ -1284,7 +1361,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let expansion = Self.dividerHitExpansion(for: splitView)
             let hitRect = dividerRect.insetBy(dx: -expansion, dy: -expansion)
             if dividerHitRectContains(location, rect: hitRect) {
-                isDragging = true
+                dividerDragState.acceptCurrentResize()
 #if DEBUG
                 dlog(
                     "divider.dragStart split=\(splitState.id.uuidString.prefix(5)) loc=\(debugPointString(location)) divider=\(debugRectString(dividerRect)) hit=\(debugRectString(hitRect))"
@@ -1318,14 +1395,28 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 return
             }
             // Prevent stale drag state from persisting through programmatic/async resizes.
-            let leftDown = (NSEvent.pressedMouseButtons & 1) != 0
+            let currentEvent = NSApp.currentEvent
+            let eventIsRecent = SplitDividerMouseState.isRecent(
+                eventTimestamp: currentEvent?.timestamp,
+                now: ProcessInfo.processInfo.systemUptime
+            )
+            let leftDown = SplitDividerMouseState.isActive(
+                pressedMouseButtons: NSEvent.pressedMouseButtons,
+                eventType: currentEvent?.type,
+                eventMatchesWindow: SplitDividerMouseState.matchesWindow(
+                    eventWindow: currentEvent?.window,
+                    splitWindow: splitView.window
+                ),
+                eventIsRecent: eventIsRecent,
+                sessionIsActive: dividerDragState.sessionIsActive
+            )
             if !leftDown {
 #if DEBUG
-                if isDragging {
+                if dividerDragState.resizeIsActive {
                     dlog("divider.dragStateReset split=\(splitState.id.uuidString.prefix(5)) reason=leftMouseReleased")
                 }
 #endif
-                isDragging = false
+                dividerDragState.rejectCurrentResize()
             }
             // During structural updates (pane↔split), arranged subviews can be temporarily removed.
             // Avoid persisting a dividerPosition derived from a transient 1-subview layout.
@@ -1361,12 +1452,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 }
 
                 // Check if drag ended (mouse up)
-                let wasDragging = isDragging && leftDown
-                if let event = NSApp.currentEvent, event.type == .leftMouseUp {
+                let wasDragging = dividerDragState.resizeIsActive && leftDown
+                if let event = currentEvent, event.type == .leftMouseUp {
 #if DEBUG
                     dlog("divider.dragEnd split=\(splitState.id.uuidString.prefix(5))")
 #endif
-                    isDragging = false
+                    dividerDragState.rejectCurrentResize()
                 }
 
                 // Only update the model when the user is actively dragging. For other resizes
@@ -1376,7 +1467,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #if DEBUG
                     let eventType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "none"
                     dlog(
-                        "divider.resizeIgnored split=\(splitState.id.uuidString.prefix(5)) eventType=\(eventType) leftDown=\(leftDown ? 1 : 0) isDragging=\(isDragging ? 1 : 0) normalized=\(String(format: "%.3f", normalizedPosition)) model=\(String(format: "%.3f", self.splitState.dividerPosition))"
+                        "divider.resizeIgnored split=\(splitState.id.uuidString.prefix(5)) eventType=\(eventType) leftDown=\(leftDown ? 1 : 0) isDragging=\(dividerDragState.resizeIsActive ? 1 : 0) normalized=\(String(format: "%.3f", normalizedPosition)) model=\(String(format: "%.3f", self.splitState.dividerPosition))"
                     )
 #endif
                     // A split the user positions by fraction puts its divider
