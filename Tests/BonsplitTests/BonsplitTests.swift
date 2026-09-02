@@ -2013,7 +2013,7 @@ final class BonsplitTests: XCTestCase {
     func testTabContextMenuMoveToNewWorkspaceUsesHostAvailabilityForSoleTab() throws {
         let controller = BonsplitController()
         let paneId = try XCTUnwrap(controller.focusedPaneId)
-        let tabId = try XCTUnwrap(controller.createTab(title: "Only tab", kind: "terminal"))
+        let tabId = try XCTUnwrap(controller.allTabIds.first)
         let pane = try XCTUnwrap(controller.internalController.paneState(for: paneId))
         let tab = try XCTUnwrap(pane.tabs.first(where: { $0.id == tabId.id }))
 
