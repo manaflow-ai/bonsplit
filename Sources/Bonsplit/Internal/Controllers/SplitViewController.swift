@@ -625,10 +625,14 @@ final class SplitViewController {
             return (c.paneId, overlap, distance)
         }
 
-        // Sort: prefer more overlap, then closer distance
+        // Sort: prefer closer distance, then more overlap as a tiebreak.
+        // A farther pane that happens to span more of the perpendicular axis must
+        // not beat an immediately adjacent neighbor — otherwise navigating past a
+        // sub-tree (e.g. a stacked split) skips its halves and lands on whatever
+        // pane is beyond it.
         let sorted = scored.sorted { a, b in
-            if abs(a.1 - b.1) > epsilon { return a.1 > b.1 }
-            return a.2 < b.2
+            if abs(a.2 - b.2) > epsilon { return a.2 < b.2 }
+            return a.1 > b.1
         }
 
         return sorted.first?.0
