@@ -2010,6 +2010,36 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuMoveToNewWorkspaceUsesHostAvailabilityForSoleTab() throws {
+        let controller = BonsplitController()
+        let paneId = try XCTUnwrap(controller.focusedPaneId)
+        let tabId = try XCTUnwrap(controller.createTab(title: "Only tab", kind: "terminal"))
+        let pane = try XCTUnwrap(controller.internalController.paneState(for: paneId))
+        let tab = try XCTUnwrap(pane.tabs.first(where: { $0.id == tabId.id }))
+
+        let defaultState = TabContextMenuState(
+            tab: tab,
+            index: 0,
+            pane: pane,
+            controller: controller,
+            splitViewController: controller.internalController
+        )
+        XCTAssertFalse(defaultState.canMoveToNewWorkspace)
+
+        controller.tabContextMoveToNewWorkspaceAvailabilityProvider = { requestedTab, requestedPane in
+            requestedTab == tabId && requestedPane == paneId
+        }
+        let hostEnabledState = TabContextMenuState(
+            tab: tab,
+            index: 0,
+            pane: pane,
+            controller: controller,
+            splitViewController: controller.internalController
+        )
+        XCTAssertTrue(hostEnabledState.canMoveToNewWorkspace)
+    }
+
+    @MainActor
     func testBrowserTabContextMenuCreatesAudioMuteToggle() throws {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?
