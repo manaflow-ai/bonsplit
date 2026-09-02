@@ -64,12 +64,24 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.showsRemoteIndicator = showsRemoteIndicator
     }
 
+    // Hash is intentionally id-only: equality includes display fields
+    // for SwiftUI diffing, but hash stability is preserved for
+    // identity-based collection semantics and cross-platform FFI.
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
 
     static func == (lhs: TabItem, rhs: TabItem) -> Bool {
         lhs.id == rhs.id
+            && lhs.title == rhs.title
+            && lhs.hasCustomTitle == rhs.hasCustomTitle
+            && lhs.icon == rhs.icon
+            && lhs.iconImageData == rhs.iconImageData
+            && lhs.kind == rhs.kind
+            && lhs.isDirty == rhs.isDirty
+            && lhs.showsNotificationBadge == rhs.showsNotificationBadge
+            && lhs.isLoading == rhs.isLoading
+            && lhs.isPinned == rhs.isPinned
     }
 
     private enum CodingKeys: String, CodingKey {
