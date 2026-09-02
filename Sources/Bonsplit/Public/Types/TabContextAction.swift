@@ -30,6 +30,10 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case toggleZoom
     case toggleFullWidthTab
     case disconnectRemote
+    /// Close the local tab while the host keeps the remote terminal running.
+    case detachCloudTerminal
+    /// End the remote terminal's process on its machine, then close the tab.
+    case killCloudTerminal
     case forkConversation
     case forkConversationRight
     case forkConversationLeft

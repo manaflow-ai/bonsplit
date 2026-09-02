@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `TabContextAction.detachCloudTerminal` / `.killCloudTerminal` and
+  `BonsplitController.tabContextCloudTerminalAvailabilityProvider`: hosts that project a
+  remote terminal into a tab can offer "Detach Terminal" and "Kill Process" in the tab
+  context menu, so closing the tab and ending the remote process are separate verbs.
 - `BonsplitConfiguration.Appearance.tabWidthMode` (`TabWidthMode`) to control tab sizing.
   - `.fixed` (default) keeps the historical fixed-width + horizontal-scroll layout unchanged.
   - `.fill` stretches tabs to fill the pane's available tab-bar width, distributing the

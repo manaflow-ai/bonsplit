@@ -40,4 +40,6 @@
 "tabContext.forkConversation.newTab" = "New Tab";
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
 "tabContext.disconnectRemote" = "Disconnect SSH";
+"tabContext.detachCloudTerminal" = "Detach Terminal";
+"tabContext.killCloudTerminal" = "Kill Process";
 "tabContext.remoteConnectedAccessibility" = "Connected over SSH";
