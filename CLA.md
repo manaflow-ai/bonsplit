@@ -4,7 +4,7 @@ Thank you for your interest in Bonsplit, an open-source project maintained by Ma
 
 This Agreement applies to Contributions submitted to the Manaflow-maintained Bonsplit repository. It does not replace any upstream project terms or change the MIT License that governs Bonsplit.
 
-For a GitHub contribution, you may sign this Agreement electronically by posting the exact comment `I have read the CLA Document and I hereby sign the CLA` on the related pull request when CLA Assistant asks. That comment is your electronic signature and has the same legal effect as a handwritten signature. If you prefer paper, complete and sign the form below and return a signed copy to Manaflow, Inc. Read this document carefully before signing and keep a copy for your records.
+For a GitHub contribution, you may sign this Agreement electronically by posting the exact comment `I have read the CLA Document v2.2 and I hereby sign the CLA` on the related pull request when CLA Assistant asks. That comment is your electronic signature and has the same legal effect as a handwritten signature. If you prefer paper, complete and sign the form below and return a signed copy to Manaflow, Inc. Read this document carefully before signing and keep a copy for your records.
 
 This Agreement is maintained in English and the English version controls. Any translation is provided for convenience only and does not change the terms of this Agreement.
 
