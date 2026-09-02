@@ -1509,6 +1509,24 @@ enum TabContextMenuBuilder {
             )
         }
 
+        if state.canDetachCloudTerminal {
+            menu.addItem(.separator())
+            addAction(
+                title: localized("tabContext.detachCloudTerminal", defaultValue: "Detach Terminal"),
+                action: .detachCloudTerminal,
+                state: state,
+                target: target,
+                to: menu
+            )
+            addAction(
+                title: localized("tabContext.killCloudTerminal", defaultValue: "Kill Process"),
+                action: .killCloudTerminal,
+                state: state,
+                target: target,
+                to: menu
+            )
+        }
+
         menu.addItem(.separator())
 
         if state.hasSplits {
@@ -1766,7 +1784,9 @@ enum TabContextMenuBuilder {
              .markAsUnread,
              .toggleZoom,
              .toggleFullWidthTab,
-             .disconnectRemote:
+             .disconnectRemote,
+             .detachCloudTerminal,
+             .killCloudTerminal:
             assertionFailure("Non-fork action cannot be the default fork destination: \(action)")
             return localized(
                 "tabContext.forkConversation.default.right",
