@@ -927,6 +927,20 @@ public final class BonsplitController {
         return pane.tabs.map { Tab(from: $0) }
     }
 
+    /// Get the tab IDs in a specific pane, in tab order.
+    ///
+    /// Prefer this over `tabs(inPane:)` when only identity or ordering is
+    /// wanted. `Tab.init(from:)` copies all fourteen `TabItem` properties, so
+    /// a caller that asks for tabs to read their ids pays for thirteen fields
+    /// it discards, per tab, on every call. This reads the id and nothing
+    /// else.
+    public func tabIds(inPane paneId: PaneID) -> [TabID] {
+        guard let pane = internalController.paneState(for: paneId) else {
+            return []
+        }
+        return pane.tabs.map { TabID(id: $0.id) }
+    }
+
     /// Get the pane that currently owns a tab.
     ///
     /// This lookup is constant time and does not walk the split tree.
