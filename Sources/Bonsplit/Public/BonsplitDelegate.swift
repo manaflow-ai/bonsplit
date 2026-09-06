@@ -71,7 +71,7 @@ public protocol BonsplitDelegate: AnyObject {
 
     // MARK: - Geometry
 
-    /// Called when any pane geometry changes (resize, split, close)
+    /// Called when any pane geometry changes (resize, split, close, zoom)
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot)
 
     /// Called to check if notifications should be sent during divider drag (opt-in for real-time sync)
