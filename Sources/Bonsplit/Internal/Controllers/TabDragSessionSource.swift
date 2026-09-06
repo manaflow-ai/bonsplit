@@ -62,7 +62,7 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
     func finishDrag() {
         guard !didFinish else { return }
         didFinish = true
-        transferRegistry.end(transferRegistration)
+        transferRegistry.endNativeDrag(transferRegistration)
         controller?.nativeTabDragSessionDidEnd(generation: generation)
         sourceView = nil
     }
