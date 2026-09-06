@@ -21,9 +21,22 @@ public final class TabDragTransferRegistry {
     }
 
     private var transfers: [UUID: Entry] = [:]
+    private var nativeDragEndObservers: [UUID: () -> Void] = [:]
 
     /// Creates an empty capability registry.
     public init() {}
+
+    /// Registers a callback for the terminal transition of a native drag.
+    @discardableResult
+    public func addNativeDragEndObserver(_ observer: @escaping () -> Void) -> UUID {
+        let observerID = UUID()
+        nativeDragEndObservers[observerID] = observer
+        return observerID
+    }
+
+    public func removeNativeDragEndObserver(_ observerID: UUID) {
+        nativeDragEndObservers[observerID] = nil
+    }
 
     /// Registers metadata and creates an opaque capability lease for a drag source.
     ///
@@ -79,12 +92,24 @@ public final class TabDragTransferRegistry {
         transfers[registration.token] = nil
     }
 
+    /// Ends a native drag and notifies observers after revoking its capability.
+    public func endNativeDrag(_ registration: TabDragTransferRegistration) {
+        end(registration)
+        notifyNativeDragEnded()
+    }
+
     /// Revokes the capability currently written to a completed drag pasteboard.
     ///
     /// - Parameter pasteboard: The pasteboard owned by the completed dragging session.
     public func end(from pasteboard: NSPasteboard) {
         guard let token = token(from: pasteboard) else { return }
         transfers[token] = nil
+    }
+
+    /// Ends a native drag represented by a pasteboard and notifies observers.
+    public func endNativeDrag(from pasteboard: NSPasteboard) {
+        end(from: pasteboard)
+        notifyNativeDragEnded()
     }
 
     /// Revokes routing for the capability represented by an accepted drop.
@@ -163,5 +188,11 @@ public final class TabDragTransferRegistry {
 
     private func compactReleasedRegistrations() {
         transfers = transfers.filter { $0.value.lifetime != nil }
+    }
+
+    private func notifyNativeDragEnded() {
+        for observer in Array(nativeDragEndObservers.values) {
+            observer()
+        }
     }
 }
