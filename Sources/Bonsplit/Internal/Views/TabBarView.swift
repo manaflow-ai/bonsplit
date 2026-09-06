@@ -777,7 +777,10 @@ struct TabContextMenuState {
             canCloseToLeft: canCloseToLeft,
             canCloseToRight: canCloseToRight,
             canCloseOthers: canCloseOthers,
-            canMoveToNewWorkspace: controller.allTabIds.count > 1,
+            canMoveToNewWorkspace: controller.tabContextMoveToNewWorkspaceAvailabilityProvider?(
+                TabID(id: tab.id),
+                pane.id
+            ) ?? (controller.allTabIds.count > 1),
             canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
             canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
             forkConversationDefaultAction: controller.tabContextForkConversationDefaultActionProvider?(TabID(id: tab.id), pane.id) ?? .defaultForkConversationDestination,
