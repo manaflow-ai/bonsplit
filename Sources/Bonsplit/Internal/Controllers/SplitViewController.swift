@@ -479,9 +479,17 @@ final class SplitViewController {
             case (let first?, nil):
                 return first
             case (let first?, let second?):
-                split.first = first
-                split.second = second
-                return .split(split)
+                let rebuilt = SplitState(
+                    id: split.id,
+                    orientation: split.orientation,
+                    first: first,
+                    second: second,
+                    dividerPosition: split.dividerPosition,
+                    animationOrigin: split.animationOrigin
+                )
+                rebuilt.imposedFirstExtent = split.imposedFirstExtent
+                rebuilt.imposedEpoch = split.imposedEpoch
+                return .split(rebuilt)
             }
         }
     }
