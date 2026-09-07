@@ -67,6 +67,21 @@ struct PaneRootEdgeMovementTests {
         #expect(delegate.geometryChangeCount == 1)
     }
 
+    @Test("A move publishes a rebuilt root without mutating the previous tree")
+    func moveDoesNotMutatePreviousTree() throws {
+        let fixture = try Fixture()
+        let previousRoot = try #require(fixture.controller.internalController.rootNode.splitState)
+        let previousFirstID = previousRoot.first.id
+        let previousSecondID = previousRoot.second.id
+        let previousDivider = previousRoot.dividerPosition
+
+        #expect(fixture.controller.movePane(fixture.targetPaneID, toRootEdge: .right))
+
+        #expect(previousRoot.first.id == previousFirstID)
+        #expect(previousRoot.second.id == previousSecondID)
+        #expect(previousRoot.dividerPosition == previousDivider)
+    }
+
     @Test("A pane already spanning the requested edge is a complete no-op")
     func alreadyAtRequestedEdgeIsNoOp() throws {
         let controller = BonsplitController()
@@ -235,6 +250,13 @@ private extension ExternalTreeNode {
         case .pane(let pane): [pane.id]
         case .split(let split): split.first.paneIDs + split.second.paneIDs
         }
+    }
+}
+
+private extension SplitNode {
+    var splitState: SplitState? {
+        guard case .split(let splitState) = self else { return nil }
+        return splitState
     }
 }
 
