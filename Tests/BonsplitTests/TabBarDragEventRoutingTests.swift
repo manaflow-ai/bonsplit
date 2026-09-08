@@ -25,7 +25,11 @@ import Testing
         sourceView.addSubview(tabView)
         geometryRegistry.register(tabView, for: tabId)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         sourceView.onBeginTabDrag = { tabId, _, event, _, _ in
             beganTabId = tabId
             beganEvent = event
@@ -73,7 +77,11 @@ import Testing
         sourceView.addSubview(tabView)
         geometryRegistry.register(tabView, for: tabId)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         sourceView.onBeginTabDrag = { tabId, _, _, _, _ in
             beganTabId = tabId
             return true
@@ -121,7 +129,11 @@ import Testing
         tabView.addSubview(title)
         geometryRegistry.register(tabView, for: tabId)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         sourceView.onBeginTabDrag = { _, _, _, _, _ in
             began = true
             return true
@@ -167,7 +179,11 @@ import Testing
         tabView.addSubview(button)
         geometryRegistry.register(tabView, for: tabId)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         sourceView.onBeginTabDrag = { _, _, _, _, _ in
             began = true
             return true
@@ -221,7 +237,11 @@ import Testing
         contentView.addSubview(sourceView)
         contentView.addSubview(regionView)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         sourceView.onBeginTabDrag = { tabId, _, _, _, _ in
             beganTabId = tabId
             return true
@@ -273,7 +293,11 @@ import Testing
         contentView.addSubview(sourceView)
         contentView.addSubview(regionView)
         sourceView.geometryRegistry = geometryRegistry
-        sourceView.tabIds = [tabId]
+        // The strip only holds its pane weakly, exactly like production where
+        // the split tree owns the model; keep it alive for the whole press.
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "Tab")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
         window.makeKeyAndOrderFront(nil)
         defer { regionView.removeFromSuperview() }
 

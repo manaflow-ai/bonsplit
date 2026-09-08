@@ -95,6 +95,32 @@ public enum BonsplitTabItemHitRegionRegistry {
         }
         return false
     }
+
+    /// Frames of the laid-out tab item views for `tabIds` in `strip`'s window,
+    /// in `strip`'s coordinates.
+    ///
+    /// SwiftUI mounts one hit-region view per tab and AppKit hit-tests that
+    /// hierarchy directly. Identity, window membership, hidden state and frame
+    /// are read from those views, so the answer matches what is on screen even
+    /// while a per-strip geometry snapshot is still catching up.
+    @MainActor
+    static func laidOutFrames(for tabIds: [UUID], in strip: NSView) -> [UUID: CGRect] {
+        guard !tabIds.isEmpty, let window = strip.window else { return [:] }
+        let wanted = Set(tabIds)
+        var frames: [UUID: CGRect] = [:]
+        for view in snapshot() {
+            guard let region = view as? TabItemHitRegionView.RegionNSView,
+                  let tabId = region.tabId,
+                  wanted.contains(tabId),
+                  frames[tabId] == nil,
+                  region.window === window,
+                  !region.isHiddenOrHasHiddenAncestor else { continue }
+            let frame = region.convert(region.bounds, to: strip)
+            guard !frame.isEmpty else { continue }
+            frames[tabId] = frame
+        }
+        return frames
+    }
 }
 
 enum BonsplitTabItemHitTesting {
@@ -1001,7 +1027,7 @@ struct TabBarView: View {
         TabBarDragAndHoverView(
             isMinimalMode: isMinimalMode,
             geometryRegistry: tabItemGeometryRegistry,
-            tabIds: tabIds,
+            pane: pane,
             onBeginTabDrag: { tabId, sourceView, event, draggingFrame, dragImage in
                 guard let tab = pane.tabs.first(where: { $0.id == tabId }) else {
                     return false
@@ -1964,7 +1990,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 
     let isMinimalMode: Bool
     let geometryRegistry: TabBarItemGeometryRegistry
-    let tabIds: [UUID]
+    let pane: PaneState
     let onBeginTabDrag: BeginTabDrag
     let onDoubleClick: () -> Bool
     let onHoverChanged: (Bool) -> Void
@@ -1973,7 +1999,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         let view = TabBarBackgroundNSView()
         view.isMinimalMode = isMinimalMode
         view.geometryRegistry = geometryRegistry
-        view.tabIds = tabIds
+        view.pane = pane
         view.onBeginTabDrag = onBeginTabDrag
         view.onDoubleClick = onDoubleClick
         view.onHoverChanged = onHoverChanged
@@ -1983,7 +2009,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
     func updateNSView(_ nsView: TabBarBackgroundNSView, context: Context) {
         nsView.isMinimalMode = isMinimalMode
         nsView.geometryRegistry = geometryRegistry
-        nsView.tabIds = tabIds
+        nsView.pane = pane
         nsView.onBeginTabDrag = onBeginTabDrag
         nsView.onDoubleClick = onDoubleClick
         nsView.onHoverChanged = onHoverChanged
@@ -1996,8 +2022,16 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             let frame: NSRect
         }
 
+        private enum TabItemFrameSource {
+            case registry
+            case laidOut
+        }
+
         var isMinimalMode = false
-        nonisolated(unsafe) var tabIds: [UUID] = []
+        /// The pane whose tabs this strip renders. Presses resolve tab
+        /// membership from this live model, never from an id list pushed
+        /// through SwiftUI, which can trail the model by a commit.
+        weak var pane: PaneState?
         weak var geometryRegistry: TabBarItemGeometryRegistry?
         var onBeginTabDrag: BeginTabDrag?
         var onDoubleClick: (() -> Bool)?
@@ -2048,13 +2082,59 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             MainActor.assumeIsolated {
-                let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
-                return BonsplitTabItemHitTesting.containsTabLaneHit(
+                BonsplitTabItemHitTesting.containsTabLaneHit(
                     localPoint: localPoint,
-                    tabFrames: frames,
+                    tabFrames: tabItemFrames(for: liveTabIds).values.map { $0 },
                     bounds: bounds
                 )
             }
+        }
+
+        private var liveTabIds: [UUID] {
+            pane?.tabs.map(\.id) ?? []
+        }
+
+        /// Frames for `tabIds` in local coordinates: the geometry registry
+        /// where it has caught up, otherwise the tab item views AppKit has
+        /// laid out in this window. Only tabs the pane owns are consulted, so
+        /// another strip's laid-out views never answer for this one.
+        private func tabItemFrames(for tabIds: [UUID]) -> [UUID: CGRect] {
+            var frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            guard frames.count < tabIds.count else { return frames }
+            let missing = tabIds.filter { frames[$0] == nil }
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(for: missing, in: self)
+            frames.merge(laidOut) { registered, _ in registered }
+            return frames
+        }
+
+        /// The tab under `point`, in the pane's tab order, with the source that
+        /// supplied its frame.
+        private func resolveTabItem(
+            at point: NSPoint
+        ) -> (tabId: UUID, frame: CGRect, source: TabItemFrameSource)? {
+            let tabIds = liveTabIds
+            guard !tabIds.isEmpty else { return nil }
+            let registered = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            if let tabId = tabIds.first(where: { registered[$0]?.contains(point) == true }),
+               let frame = registered[tabId] {
+                return (tabId, frame, .registry)
+            }
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(
+                for: tabIds.filter { registered[$0] == nil },
+                in: self
+            )
+            if let tabId = tabIds.first(where: { laidOut[$0]?.contains(point) == true }),
+               let frame = laidOut[tabId] {
+                return (tabId, frame, .laidOut)
+            }
+            return nil
+        }
+
+        private func tabItemFrame(for tabId: UUID) -> CGRect? {
+            if let frame = geometryRegistry?.frame(for: tabId, in: self) {
+                return frame
+            }
+            return BonsplitTabItemHitRegionRegistry.laidOutFrames(for: [tabId], in: self)[tabId]
         }
 
         override func updateTrackingAreas() {
@@ -2184,19 +2264,47 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
                 return
             }
             let point = convert(event.locationInWindow, from: nil)
-            let frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
-            guard bounds.contains(point),
-                  !Self.isNativeInteraction(at: event.locationInWindow, in: window),
-                  let tabId = tabIds.first(where: { frames[$0]?.contains(point) == true }),
-                  let frame = frames[tabId] else {
+            guard bounds.contains(point) else { return }
+            guard !Self.isNativeInteraction(at: event.locationInWindow, in: window) else {
+#if DEBUG
+                logArmMiss(reason: "nativeInteraction", point: point)
+#endif
                 return
             }
+            guard let tabItem = resolveTabItem(at: point) else {
+#if DEBUG
+                logArmMiss(reason: "noTabAtPoint", point: point)
+#endif
+                return
+            }
+#if DEBUG
+            if tabItem.source == .laidOut {
+                dlog(
+                    "tab.drag.arm registryLag tab=\(tabItem.tabId.uuidString.prefix(5)) " +
+                    "point=\(point.x.rounded()),\(point.y.rounded())"
+                )
+            }
+#endif
             pendingTabDrag = PendingTabDrag(
-                tabId: tabId,
+                tabId: tabItem.tabId,
                 startPoint: point,
-                frame: frame
+                frame: tabItem.frame
             )
         }
+
+#if DEBUG
+        /// Records why a press inside the strip did not arm a tab drag, with
+        /// the model and geometry counts needed to attribute the miss.
+        private func logArmMiss(reason: String, point: NSPoint) {
+            let tabIds = liveTabIds
+            let registered = geometryRegistry?.frames(for: tabIds, in: self).count ?? 0
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(for: tabIds, in: self).count
+            dlog(
+                "tab.drag.arm.miss reason=\(reason) tabs=\(tabIds.count) registered=\(registered) " +
+                "laidOut=\(laidOut) point=\(point.x.rounded()),\(point.y.rounded())"
+            )
+        }
+#endif
 
         private func handleTabMouseDragged(_ event: NSEvent) -> NSEvent? {
             guard let pendingTabDrag,
@@ -2217,19 +2325,28 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             // the press and the threshold event. Refresh the source frame so
             // AppKit's item and the destination's geometry snapshot agree at
             // the moment the session starts.
-            let draggingFrame = geometryRegistry?.frame(for: pendingTabDrag.tabId, in: self)
-                ?? pendingTabDrag.frame
+            let draggingFrame = tabItemFrame(for: pendingTabDrag.tabId) ?? pendingTabDrag.frame
             guard let dragImage = dragImage(for: draggingFrame),
                   let onBeginTabDrag else {
+#if DEBUG
+                dlog(
+                    "tab.drag.begin.miss reason=\(onBeginTabDrag == nil ? "noHandler" : "dragImage") " +
+                    "tab=\(pendingTabDrag.tabId.uuidString.prefix(5))"
+                )
+#endif
                 return event
             }
-            _ = onBeginTabDrag(
+            if !onBeginTabDrag(
                 pendingTabDrag.tabId,
                 self,
                 event,
                 draggingFrame,
                 dragImage
-            )
+            ) {
+#if DEBUG
+                dlog("tab.drag.begin.miss reason=controller tab=\(pendingTabDrag.tabId.uuidString.prefix(5))")
+#endif
+            }
             // SwiftUI already received the mouse-down. Forward the threshold-
             // crossing move so its pending tap/press fails before AppKit owns
             // the native drag session and terminal mouse-up.
