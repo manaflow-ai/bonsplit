@@ -414,7 +414,8 @@ struct TabItemHitRegionView: NSViewRepresentable {
 
     final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
         nonisolated(unsafe) private var hitBounds: NSRect = .zero
-        private var tabId: UUID?
+        /// The tab this laid-out region view belongs to.
+        private(set) var tabId: UUID?
         private weak var geometryRegistry: TabBarItemGeometryRegistry?
         private var containerFrameObserver: NSObjectProtocol?
         private var containerBoundsObserver: NSObjectProtocol?
