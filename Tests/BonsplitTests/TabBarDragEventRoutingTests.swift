@@ -307,6 +307,74 @@ import Testing
         #expect(!sourceView.containsBonsplitTabItemHit(localPoint: NSPoint(x: 200, y: 35)))
     }
 
+    /// Models a host whose window hit-test answers a view the pointer is not
+    /// inside: cmux's main window resolved the focused file editor for presses
+    /// on the pane tab strip (cmux issue 12152).
+    private final class EditorAnsweringContentView: NSView {
+        weak var editor: NSTextView?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            editor ?? super.hitTest(point)
+        }
+    }
+
+    @Test func editableTextViewOutsideTheStripNeverVetoesATabPress() throws {
+        // Regression (cmux issue 12152): the native-interaction veto exists so a
+        // control inside a tab (close button, rename field) keeps its press. A
+        // view the press is not inside, such as the focused file editor below
+        // the strip, owns nothing about that press and must not block the drag.
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = EditorAnsweringContentView(frame: NSRect(x: 0, y: 0, width: 240, height: 200))
+        window.contentView = contentView
+        let sourceView = TabBarDragAndHoverView.TabBarBackgroundNSView(
+            frame: NSRect(x: 0, y: 170, width: 240, height: 30)
+        )
+        let tabId = UUID()
+        let geometryRegistry = TabBarItemGeometryRegistry()
+        let tabView = NSView(frame: NSRect(x: 20, y: 0, width: 120, height: 30))
+        let editor = NSTextView(frame: NSRect(x: 0, y: 0, width: 240, height: 160))
+        editor.isEditable = true
+        var beganTabId: UUID?
+
+        contentView.addSubview(editor)
+        contentView.addSubview(sourceView)
+        sourceView.addSubview(tabView)
+        contentView.editor = editor
+        geometryRegistry.register(tabView, for: tabId)
+        sourceView.geometryRegistry = geometryRegistry
+        let pane = PaneState(tabs: [TabItem(id: tabId, title: "report.html", kind: "filePreview")])
+        defer { withExtendedLifetime(pane) {} }
+        sourceView.pane = pane
+        sourceView.onBeginTabDrag = { tabId, _, _, _, _ in
+            beganTabId = tabId
+            return true
+        }
+        window.makeKeyAndOrderFront(nil)
+        #expect(window.makeFirstResponder(editor))
+
+        let mouseDown = try mouseEvent(
+            type: .leftMouseDown,
+            in: sourceView,
+            at: NSPoint(x: 40, y: 15)
+        )
+        let mouseDragged = try mouseEvent(
+            type: .leftMouseDragged,
+            in: sourceView,
+            at: NSPoint(x: 52, y: 15)
+        )
+
+        _ = sourceView.handleTabDragEvent(mouseDown)
+        _ = sourceView.handleTabDragEvent(mouseDragged)
+
+        #expect(beganTabId == tabId)
+    }
+
     private func mouseEvent(
         type: NSEvent.EventType,
         in view: NSView,
