@@ -2300,7 +2300,6 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         /// attributed from the debug log alone.
         private func logNativeInteractionChain(at windowPoint: NSPoint, in window: NSWindow, event: NSEvent) {
             guard let contentView = window.contentView else { return }
-            let contentPoint = contentView.convert(windowPoint, from: nil)
             let currentType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "nil"
             let contentFrame = contentView.frame
             let contentBounds = contentView.bounds
@@ -2312,7 +2311,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
                 "contentBounds=\(contentBounds.origin.x.rounded()),\(contentBounds.origin.y.rounded()) " +
                 "contentFlipped=\(contentView.isFlipped) themeFlipped=\(themeFlipped)"
             )
-            var candidate = contentView.hitTest(contentPoint)
+            var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView)
             var depth = 0
             while let view = candidate, depth < 12 {
                 let frame = view.convert(view.bounds, to: nil)
@@ -2425,9 +2424,10 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             at windowPoint: NSPoint,
             in window: NSWindow
         ) -> Bool {
-            guard let contentView = window.contentView else { return false }
-            let contentPoint = contentView.convert(windowPoint, from: nil)
-            guard var candidate = contentView.hitTest(contentPoint) else { return false }
+            guard let contentView = window.contentView,
+                  var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView) else {
+                return false
+            }
             let stripFrame = convert(bounds, to: nil)
             while true {
                 if Self.canConsumePress(candidate) {
@@ -2437,6 +2437,17 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
                 guard let parent = candidate.superview else { return false }
                 candidate = parent
             }
+        }
+
+        /// `NSView.hitTest(_:)` takes a point in the receiver's superview
+        /// coordinate space. A host's content view can be flipped while its
+        /// window frame is not (cmux's main window hosts SwiftUI directly), so
+        /// a point converted into the content view itself is mirrored
+        /// vertically when handed to `hitTest`, and a press on the strip at
+        /// the top of the window is answered by whatever sits at the bottom.
+        private static func hitTest(windowPoint: NSPoint, in view: NSView) -> NSView? {
+            let reference = view.superview ?? view
+            return view.hitTest(reference.convert(windowPoint, from: nil))
         }
 
         private static func canConsumePress(_ view: NSView) -> Bool {
