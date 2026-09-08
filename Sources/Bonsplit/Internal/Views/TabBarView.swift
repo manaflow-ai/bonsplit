@@ -2268,6 +2268,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             guard !Self.isNativeInteraction(at: event.locationInWindow, in: window) else {
 #if DEBUG
                 logArmMiss(reason: "nativeInteraction", point: point)
+                logNativeInteractionChain(at: event.locationInWindow, in: window, event: event)
 #endif
                 return
             }
@@ -2293,6 +2294,48 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         }
 
 #if DEBUG
+        /// Records the exact AppKit answer behind a native-interaction veto:
+        /// the hit view under the press, every ancestor up to the root with
+        /// its window-space frame, and the event context, so a veto can be
+        /// attributed from the debug log alone.
+        private func logNativeInteractionChain(at windowPoint: NSPoint, in window: NSWindow, event: NSEvent) {
+            guard let contentView = window.contentView else { return }
+            let contentPoint = contentView.convert(windowPoint, from: nil)
+            let currentType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "nil"
+            let contentFrame = contentView.frame
+            let contentBounds = contentView.bounds
+            let themeFlipped = contentView.superview?.isFlipped ?? false
+            dlog(
+                "tab.drag.arm.veto context event=\(String(describing: event.type)) current=\(currentType) " +
+                "windowPoint=\(windowPoint.x.rounded()),\(windowPoint.y.rounded()) " +
+                "contentFrame=\(contentFrame.origin.x.rounded()),\(contentFrame.origin.y.rounded()),\(contentFrame.width.rounded()),\(contentFrame.height.rounded()) " +
+                "contentBounds=\(contentBounds.origin.x.rounded()),\(contentBounds.origin.y.rounded()) " +
+                "contentFlipped=\(contentView.isFlipped) themeFlipped=\(themeFlipped)"
+            )
+            var candidate = contentView.hitTest(contentPoint)
+            var depth = 0
+            while let view = candidate, depth < 12 {
+                let frame = view.convert(view.bounds, to: nil)
+                var flags: [String] = []
+                if let control = view as? NSControl {
+                    flags.append("control enabled=\(control.isEnabled) target=\(control.target != nil) action=\(control.action != nil)")
+                }
+                if let textView = view as? NSTextView {
+                    flags.append("textView editable=\(textView.isEditable) firstResponder=\(window.firstResponder === textView)")
+                }
+                if let textField = view as? NSTextField {
+                    flags.append("textField editable=\(textField.isEditable)")
+                }
+                dlog(
+                    "tab.drag.arm.veto chain[\(depth)] \(NSStringFromClass(type(of: view))) " +
+                    "frame=\(frame.origin.x.rounded()),\(frame.origin.y.rounded()),\(frame.width.rounded()),\(frame.height.rounded()) " +
+                    "hidden=\(view.isHiddenOrHasHiddenAncestor) \(flags.joined(separator: " "))"
+                )
+                candidate = view.superview
+                depth += 1
+            }
+        }
+
         /// Records why a press inside the strip did not arm a tab drag, with
         /// the model and geometry counts needed to attribute the miss.
         private func logArmMiss(reason: String, point: NSPoint) {
