@@ -194,6 +194,95 @@ import Testing
         #expect(!began)
     }
 
+    @Test func laidOutTabStillArmsWhenGeometryRegistryLagsBehindTheStrip() throws {
+        // Regression (cmux issue 12152): the press gate must judge a press
+        // against what is on screen, not against the strip's bookkeeping.
+        // SwiftUI mounts each tab's hit-region view as a sibling subtree of
+        // the strip background and the registry entry is pushed separately;
+        // a laid-out tab whose registry entry lags (or was dropped) is still a
+        // real tab under the pointer and must arm a drag.
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = try #require(window.contentView)
+        let sourceView = TabBarDragAndHoverView.TabBarBackgroundNSView(frame: contentView.bounds)
+        let tabId = UUID()
+        let geometryRegistry = TabBarItemGeometryRegistry()
+        let regionView = TabItemHitRegionView.RegionNSView(
+            frame: NSRect(x: 20, y: 20, width: 120, height: 30)
+        )
+        regionView.configure(tabId: tabId, geometryRegistry: geometryRegistry)
+        var beganTabId: UUID?
+
+        contentView.addSubview(sourceView)
+        contentView.addSubview(regionView)
+        sourceView.geometryRegistry = geometryRegistry
+        sourceView.tabIds = [tabId]
+        sourceView.onBeginTabDrag = { tabId, _, _, _, _ in
+            beganTabId = tabId
+            return true
+        }
+        window.makeKeyAndOrderFront(nil)
+        defer { regionView.removeFromSuperview() }
+
+        // The strip's geometry registry has not caught up with the laid-out tab.
+        geometryRegistry.unregister(regionView, for: tabId)
+        #expect(geometryRegistry.frame(for: tabId, in: sourceView) == nil)
+
+        let mouseDown = try mouseEvent(
+            type: .leftMouseDown,
+            in: sourceView,
+            at: NSPoint(x: 40, y: 35)
+        )
+        let mouseDragged = try mouseEvent(
+            type: .leftMouseDragged,
+            in: sourceView,
+            at: NSPoint(x: 52, y: 35)
+        )
+
+        _ = sourceView.handleTabDragEvent(mouseDown)
+        _ = sourceView.handleTabDragEvent(mouseDragged)
+
+        #expect(beganTabId == tabId)
+    }
+
+    @Test func pressOverLaidOutTabIsATabPressWhenGeometryRegistryLagsBehindTheStrip() throws {
+        // Regression (cmux issue 12152): the same laid-out tab must also count
+        // as a tab press for the strip background, or minimal mode turns the
+        // press into a window drag and the double-click path into a new tab.
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = try #require(window.contentView)
+        let sourceView = TabBarDragAndHoverView.TabBarBackgroundNSView(frame: contentView.bounds)
+        let tabId = UUID()
+        let geometryRegistry = TabBarItemGeometryRegistry()
+        let regionView = TabItemHitRegionView.RegionNSView(
+            frame: NSRect(x: 20, y: 20, width: 120, height: 30)
+        )
+        regionView.configure(tabId: tabId, geometryRegistry: geometryRegistry)
+
+        contentView.addSubview(sourceView)
+        contentView.addSubview(regionView)
+        sourceView.geometryRegistry = geometryRegistry
+        sourceView.tabIds = [tabId]
+        window.makeKeyAndOrderFront(nil)
+        defer { regionView.removeFromSuperview() }
+
+        geometryRegistry.unregister(regionView, for: tabId)
+
+        #expect(sourceView.containsBonsplitTabItemHit(localPoint: NSPoint(x: 40, y: 35)))
+        #expect(!sourceView.containsBonsplitTabItemHit(localPoint: NSPoint(x: 200, y: 35)))
+    }
+
     private func mouseEvent(
         type: NSEvent.EventType,
         in view: NSView,
