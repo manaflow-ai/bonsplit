@@ -2265,7 +2265,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             }
             let point = convert(event.locationInWindow, from: nil)
             guard bounds.contains(point) else { return }
-            guard !Self.isNativeInteraction(at: event.locationInWindow, in: window) else {
+            guard !isNativeInteraction(at: event.locationInWindow, in: window) else {
 #if DEBUG
                 logArmMiss(reason: "nativeInteraction", point: point)
                 logNativeInteractionChain(at: event.locationInWindow, in: window, event: event)
@@ -2416,33 +2416,46 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         /// own gesture. SwiftUI renders static tab titles through AppKit text
         /// controls too; treating every ``NSControl`` as interactive therefore
         /// made drag arming depend on title width and renderer details. Only
-        /// controls that can actually consume the press veto the tab source.
-        private static func isNativeInteraction(
+        /// controls that can actually consume the press veto the tab source,
+        /// and only when the press is inside that control and the control
+        /// sits in this strip. A host window's hit-test can answer a view the
+        /// pointer is not in (cmux resolved the focused file editor for presses
+        /// on the pane tab strip); such a view owns nothing about the press.
+        private func isNativeInteraction(
             at windowPoint: NSPoint,
             in window: NSWindow
         ) -> Bool {
             guard let contentView = window.contentView else { return false }
             let contentPoint = contentView.convert(windowPoint, from: nil)
             guard var candidate = contentView.hitTest(contentPoint) else { return false }
+            let stripFrame = convert(bounds, to: nil)
             while true {
-                if let button = candidate as? NSButton, button.isEnabled {
-                    return true
-                }
-                if let textField = candidate as? NSTextField, textField.isEditable {
-                    return true
-                }
-                if let textView = candidate as? NSTextView, textView.isEditable {
-                    return true
-                }
-                if let control = candidate as? NSControl,
-                   control.isEnabled,
-                   control.target != nil,
-                   control.action != nil {
-                    return true
+                if Self.canConsumePress(candidate) {
+                    let frame = candidate.convert(candidate.bounds, to: nil)
+                    return frame.contains(windowPoint) && frame.intersects(stripFrame)
                 }
                 guard let parent = candidate.superview else { return false }
                 candidate = parent
             }
+        }
+
+        private static func canConsumePress(_ view: NSView) -> Bool {
+            if let button = view as? NSButton, button.isEnabled {
+                return true
+            }
+            if let textField = view as? NSTextField, textField.isEditable {
+                return true
+            }
+            if let textView = view as? NSTextView, textView.isEditable {
+                return true
+            }
+            if let control = view as? NSControl,
+               control.isEnabled,
+               control.target != nil,
+               control.action != nil {
+                return true
+            }
+            return false
         }
 
         private func updateHover(from event: NSEvent) {
