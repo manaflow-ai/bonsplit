@@ -4,7 +4,12 @@ import AppKit
 private var splitContainerProgrammaticSyncDepth = 0
 
 private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
-    var customDividerColor: NSColor?
+    var customDividerColor: NSColor? {
+        didSet {
+            guard oldValue != customDividerColor else { return }
+            needsDisplay = true
+        }
+    }
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
     weak var stampedInternalController: SplitViewController?
