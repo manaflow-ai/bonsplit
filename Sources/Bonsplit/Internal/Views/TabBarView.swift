@@ -2265,9 +2265,10 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             }
             let point = convert(event.locationInWindow, from: nil)
             guard bounds.contains(point) else { return }
-            guard !Self.isNativeInteraction(at: event.locationInWindow, in: window) else {
+            guard !isNativeInteraction(at: event.locationInWindow, in: window) else {
 #if DEBUG
                 logArmMiss(reason: "nativeInteraction", point: point)
+                logNativeInteractionChain(at: event.locationInWindow, in: window, event: event)
 #endif
                 return
             }
@@ -2293,6 +2294,47 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         }
 
 #if DEBUG
+        /// Records the exact AppKit answer behind a native-interaction veto:
+        /// the hit view under the press, every ancestor up to the root with
+        /// its window-space frame, and the event context, so a veto can be
+        /// attributed from the debug log alone.
+        private func logNativeInteractionChain(at windowPoint: NSPoint, in window: NSWindow, event: NSEvent) {
+            guard let contentView = window.contentView else { return }
+            let currentType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "nil"
+            let contentFrame = contentView.frame
+            let contentBounds = contentView.bounds
+            let themeFlipped = contentView.superview?.isFlipped ?? false
+            dlog(
+                "tab.drag.arm.veto context event=\(String(describing: event.type)) current=\(currentType) " +
+                "windowPoint=\(windowPoint.x.rounded()),\(windowPoint.y.rounded()) " +
+                "contentFrame=\(contentFrame.origin.x.rounded()),\(contentFrame.origin.y.rounded()),\(contentFrame.width.rounded()),\(contentFrame.height.rounded()) " +
+                "contentBounds=\(contentBounds.origin.x.rounded()),\(contentBounds.origin.y.rounded()) " +
+                "contentFlipped=\(contentView.isFlipped) themeFlipped=\(themeFlipped)"
+            )
+            var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView)
+            var depth = 0
+            while let view = candidate, depth < 12 {
+                let frame = view.convert(view.bounds, to: nil)
+                var flags: [String] = []
+                if let control = view as? NSControl {
+                    flags.append("control enabled=\(control.isEnabled) target=\(control.target != nil) action=\(control.action != nil)")
+                }
+                if let textView = view as? NSTextView {
+                    flags.append("textView editable=\(textView.isEditable) firstResponder=\(window.firstResponder === textView)")
+                }
+                if let textField = view as? NSTextField {
+                    flags.append("textField editable=\(textField.isEditable)")
+                }
+                dlog(
+                    "tab.drag.arm.veto chain[\(depth)] \(NSStringFromClass(type(of: view))) " +
+                    "frame=\(frame.origin.x.rounded()),\(frame.origin.y.rounded()),\(frame.width.rounded()),\(frame.height.rounded()) " +
+                    "hidden=\(view.isHiddenOrHasHiddenAncestor) \(flags.joined(separator: " "))"
+                )
+                candidate = view.superview
+                depth += 1
+            }
+        }
+
         /// Records why a press inside the strip did not arm a tab drag, with
         /// the model and geometry counts needed to attribute the miss.
         private func logArmMiss(reason: String, point: NSPoint) {
@@ -2373,33 +2415,58 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         /// own gesture. SwiftUI renders static tab titles through AppKit text
         /// controls too; treating every ``NSControl`` as interactive therefore
         /// made drag arming depend on title width and renderer details. Only
-        /// controls that can actually consume the press veto the tab source.
-        private static func isNativeInteraction(
+        /// controls that can actually consume the press veto the tab source,
+        /// and only when the press is inside that control and the control
+        /// sits in this strip. A host window's hit-test can answer a view the
+        /// pointer is not in (cmux resolved the focused file editor for presses
+        /// on the pane tab strip); such a view owns nothing about the press.
+        private func isNativeInteraction(
             at windowPoint: NSPoint,
             in window: NSWindow
         ) -> Bool {
-            guard let contentView = window.contentView else { return false }
-            let contentPoint = contentView.convert(windowPoint, from: nil)
-            guard var candidate = contentView.hitTest(contentPoint) else { return false }
+            guard let contentView = window.contentView,
+                  var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView) else {
+                return false
+            }
+            let stripFrame = convert(bounds, to: nil)
             while true {
-                if let button = candidate as? NSButton, button.isEnabled {
-                    return true
-                }
-                if let textField = candidate as? NSTextField, textField.isEditable {
-                    return true
-                }
-                if let textView = candidate as? NSTextView, textView.isEditable {
-                    return true
-                }
-                if let control = candidate as? NSControl,
-                   control.isEnabled,
-                   control.target != nil,
-                   control.action != nil {
-                    return true
+                if Self.canConsumePress(candidate) {
+                    let frame = candidate.convert(candidate.bounds, to: nil)
+                    return frame.contains(windowPoint) && frame.intersects(stripFrame)
                 }
                 guard let parent = candidate.superview else { return false }
                 candidate = parent
             }
+        }
+
+        /// `NSView.hitTest(_:)` takes a point in the receiver's superview
+        /// coordinate space. A host's content view can be flipped while its
+        /// window frame is not (cmux's main window hosts SwiftUI directly), so
+        /// a point converted into the content view itself is mirrored
+        /// vertically when handed to `hitTest`, and a press on the strip at
+        /// the top of the window is answered by whatever sits at the bottom.
+        private static func hitTest(windowPoint: NSPoint, in view: NSView) -> NSView? {
+            let reference = view.superview ?? view
+            return view.hitTest(reference.convert(windowPoint, from: nil))
+        }
+
+        private static func canConsumePress(_ view: NSView) -> Bool {
+            if let button = view as? NSButton, button.isEnabled {
+                return true
+            }
+            if let textField = view as? NSTextField, textField.isEditable {
+                return true
+            }
+            if let textView = view as? NSTextView, textView.isEditable {
+                return true
+            }
+            if let control = view as? NSControl,
+               control.isEnabled,
+               control.target != nil,
+               control.action != nil {
+                return true
+            }
+            return false
         }
 
         private func updateHover(from event: NSEvent) {
