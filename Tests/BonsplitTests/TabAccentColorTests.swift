@@ -81,6 +81,32 @@ final class TabAccentColorTests: XCTestCase {
         XCTAssertNil(decoded.colorHex)
     }
 
+    /// The selected tab's indicator is drawn by an overlay above the tab's own
+    /// accent strip. It must adopt the tab's color, or selecting a colored tab
+    /// repaints its top edge with the system accent.
+    func testSelectedTabIndicatorAdoptsTheTabColor() {
+        let appearance = BonsplitConfiguration.Appearance()
+
+        let accent = TabBarColors.nsColorTabAccent(hex: "#C0392B", for: appearance)
+        XCTAssertNotNil(accent)
+
+        let systemIndicator = TabBarColors.nsColorActiveIndicator(saturation: 1)
+        XCTAssertNotEqual(
+            accent?.usingColorSpace(.sRGB)?.redComponent,
+            systemIndicator.usingColorSpace(.sRGB)?.redComponent
+        )
+    }
+
+    /// The strip and the AppKit indicator must derive from one place, so a
+    /// selected colored tab reads as a single solid band rather than two shades.
+    func testStripAndIndicatorShareTheirDerivation() {
+        let appearance = BonsplitConfiguration.Appearance()
+
+        XCTAssertNotNil(TabBarColors.tabAccentStrip(hex: "#196F3D", for: appearance, isSelected: true))
+        XCTAssertNotNil(TabBarColors.nsColorTabAccent(hex: "#196F3D", for: appearance))
+        XCTAssertNil(TabBarColors.nsColorTabAccent(hex: "nope", for: appearance))
+    }
+
     func testAccentStripRejectsMalformedHex() {
         let appearance = BonsplitConfiguration.Appearance()
 

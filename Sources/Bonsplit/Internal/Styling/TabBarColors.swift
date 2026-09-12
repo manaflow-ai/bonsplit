@@ -318,12 +318,28 @@ enum TabBarColors {
         for appearance: BonsplitConfiguration.Appearance,
         isSelected: Bool
     ) -> Color? {
+        guard let resolved = nsColorTabAccent(
+            hex: hex,
+            for: appearance,
+            opacity: isSelected ? 1.0 : 0.85
+        ) else { return nil }
+        return Color(nsColor: resolved)
+    }
+
+    /// The accent color as an `NSColor`, for AppKit chrome that has to paint it
+    /// directly (the selected-tab indicator). Shares its derivation with
+    /// ``tabAccentStrip(hex:for:isSelected:)`` so the strip and the indicator
+    /// can never drift to two different shades of the same color.
+    static func nsColorTabAccent(
+        hex: String,
+        for appearance: BonsplitConfiguration.Appearance,
+        opacity: CGFloat = 1
+    ) -> NSColor? {
         guard let base = NSColor(bonsplitHex: hex) else { return nil }
         let chrome = semanticTabBarBackgroundColor(for: appearance)
-        let opacity: CGFloat = isSelected ? 1.0 : 0.85
         // The alpha is applied inside the provider: folding it in afterwards
         // would flatten the dynamic color and freeze it to one appearance.
-        let resolved = NSColor(name: nil) { systemAppearance in
+        return NSColor(name: nil) { systemAppearance in
             let chromeIsLight: Bool
             if let chrome {
                 chromeIsLight = chrome.isBonsplitLightColor
@@ -333,7 +349,6 @@ enum TabBarColors {
             let toned = chromeIsLight ? base : base.bonsplitBrightenedForDarkChrome
             return toned.withAlphaComponent(toned.alphaComponent * opacity)
         }
-        return Color(nsColor: resolved)
     }
 
     // MARK: - Shadows
