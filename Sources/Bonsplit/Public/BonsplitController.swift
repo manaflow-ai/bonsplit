@@ -77,6 +77,10 @@ public final class BonsplitController {
     /// Host-provided destinations for the tab context menu's Move Tab submenu.
     @ObservationIgnored public var tabContextMoveDestinationsProvider: ((TabID, PaneID) -> [TabContextMoveDestination])?
 
+    /// Host-provided accent-color palette for the tab context menu's Tab Color
+    /// submenu. Returning an empty array hides the submenu.
+    @ObservationIgnored public var tabContextColorOptionsProvider: ((TabID, PaneID) -> [TabColorOption])?
+
     /// Host-provided state evaluated when the tab context menu opens. Refreshing actions
     /// remain visible but disabled; hidden actions are omitted.
     @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> TabContextForkConversationAvailability)?
@@ -216,6 +220,7 @@ public final class BonsplitController {
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
         showsRemoteIndicator: Bool = false,
+        colorHex: String? = nil,
         inPane pane: PaneID? = nil
     ) -> TabID? {
         let tabId = TabID()
@@ -233,7 +238,8 @@ public final class BonsplitController {
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
             isPinned: isPinned,
-            showsRemoteIndicator: showsRemoteIndicator
+            showsRemoteIndicator: showsRemoteIndicator,
+            colorHex: colorHex
         )
         let targetPane = pane ?? focusedPaneId ?? PaneID(id: internalController.rootNode.allPaneIds.first!.id)
 
@@ -274,7 +280,8 @@ public final class BonsplitController {
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
             isPinned: isPinned,
-            showsRemoteIndicator: showsRemoteIndicator
+            showsRemoteIndicator: showsRemoteIndicator,
+            colorHex: colorHex
         )
         internalController.addTab(tabItem, toPane: PaneID(id: targetPane.id), atIndex: insertIndex)
 
@@ -312,6 +319,13 @@ public final class BonsplitController {
         delegate?.splitTabBar(self, didRequestTabMoveToDestination: destinationId, for: tab, inPane: pane)
     }
 
+    /// Request the delegate to apply an accent color to a tab.
+    /// - Parameter colorHex: The chosen `#RRGGBB` hex, or `nil` to clear the color.
+    public func requestTabColor(_ colorHex: String?, for tabId: TabID, inPane pane: PaneID) {
+        guard let tab = tab(tabId) else { return }
+        delegate?.splitTabBar(self, didRequestTabColor: colorHex, for: tab, inPane: pane)
+    }
+
     /// Update an existing tab's metadata
     /// - Parameters:
     ///   - tabId: The tab to update
@@ -327,6 +341,7 @@ public final class BonsplitController {
     ///   - isAudioMuted: New browser-audio mute state (pass nil to keep current)
     ///   - isAudioPlaying: New audible-audio state (pass nil to keep current)
     ///   - isPinned: New pinned state (pass nil to keep current)
+    ///   - colorHex: New accent color hex (pass nil to keep current, pass .some(nil) to clear)
     public func updateTab(
         _ tabId: TabID,
         title: String? = nil,
@@ -341,7 +356,8 @@ public final class BonsplitController {
         isAudioMuted: Bool? = nil,
         isAudioPlaying: Bool? = nil,
         isPinned: Bool? = nil,
-        showsRemoteIndicator: Bool? = nil
+        showsRemoteIndicator: Bool? = nil,
+        colorHex: String?? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
         let currentTab = pane.tabs[tabIndex]
@@ -358,7 +374,8 @@ public final class BonsplitController {
             isAudioMuted.map { currentTab.isAudioMuted != $0 } ?? false ||
             isAudioPlaying.map { currentTab.isAudioPlaying != $0 } ?? false ||
             isPinned.map { currentTab.isPinned != $0 } ?? false ||
-            showsRemoteIndicator.map { currentTab.showsRemoteIndicator != $0 } ?? false
+            showsRemoteIndicator.map { currentTab.showsRemoteIndicator != $0 } ?? false ||
+            colorHex.map { currentTab.colorHex != $0 } ?? false
         guard didChange else { return }
 
         if let title = title {
@@ -399,6 +416,9 @@ public final class BonsplitController {
         }
         if let showsRemoteIndicator = showsRemoteIndicator {
             pane.tabs[tabIndex].showsRemoteIndicator = showsRemoteIndicator
+        }
+        if let colorHex = colorHex {
+            pane.tabs[tabIndex].colorHex = colorHex
         }
     }
 
@@ -572,7 +592,8 @@ public final class BonsplitController {
                 isAudioMuted: tab.isAudioMuted,
                 isAudioPlaying: tab.isAudioPlaying,
                 isPinned: tab.isPinned,
-                showsRemoteIndicator: tab.showsRemoteIndicator
+                showsRemoteIndicator: tab.showsRemoteIndicator,
+                colorHex: tab.colorHex
             )
         } else {
             internalTab = nil
@@ -641,7 +662,8 @@ public final class BonsplitController {
             isAudioMuted: tab.isAudioMuted,
             isAudioPlaying: tab.isAudioPlaying,
             isPinned: tab.isPinned,
-            showsRemoteIndicator: tab.showsRemoteIndicator
+            showsRemoteIndicator: tab.showsRemoteIndicator,
+            colorHex: tab.colorHex
         )
 
         // Perform split with insertion side.

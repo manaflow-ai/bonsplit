@@ -1265,6 +1265,9 @@ struct TabBarView: View {
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },
+            colorOptionsProvider: {
+                controller.tabContextColorOptionsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
             forkConversationAvailabilityProvider: {
                 controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? .hidden
             },
@@ -1305,6 +1308,9 @@ struct TabBarView: View {
             },
             onMoveDestination: { destinationId in
                 controller.requestTabMove(toDestination: destinationId, for: TabID(id: tab.id), inPane: pane.id)
+            },
+            onColorSelection: { colorHex in
+                controller.requestTabColor(colorHex, for: TabID(id: tab.id), inPane: pane.id)
             }
         )
         .background(

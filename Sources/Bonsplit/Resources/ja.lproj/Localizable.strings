@@ -1,6 +1,8 @@
 "command.copyIdentifiers.title" = "IDをコピー";
 "command.moveTabToNewWorkspace.title" = "タブを新しいワークスペースへ移動";
 "tabContext.moveTab" = "タブを移動";
+"tabContext.tabColor" = "タブの色";
+"tabContext.clearTabColor" = "色をクリア";
 "command.moveTabToLeftPane.title" = "左のペインへ移動";
 "command.moveTabToRightPane.title" = "右のペインへ移動";
 "tabContext.renameTab" = "タブ名を変更…";

@@ -31,6 +31,9 @@ struct TabItem: Identifiable, Hashable, Codable {
     var isAudioPlaying: Bool
     var isPinned: Bool
     var showsRemoteIndicator: Bool
+    /// Optional accent color as a `#RRGGBB` / `#RRGGBBAA` hex string, rendered
+    /// as a strip along the tab's top edge. Consumer-defined meaning.
+    var colorHex: String?
 
     init(
         id: UUID = UUID(),
@@ -46,7 +49,8 @@ struct TabItem: Identifiable, Hashable, Codable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
-        showsRemoteIndicator: Bool = false
+        showsRemoteIndicator: Bool = false,
+        colorHex: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -62,6 +66,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
+        self.colorHex = colorHex
     }
 
     func hash(into hasher: inout Hasher) {
@@ -87,6 +92,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         case isAudioPlaying
         case isPinned
         case showsRemoteIndicator
+        case colorHex
     }
 
     init(from decoder: Decoder) throws {
@@ -105,6 +111,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioPlaying = try c.decodeIfPresent(Bool.self, forKey: .isAudioPlaying) ?? false
         self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.showsRemoteIndicator = try c.decodeIfPresent(Bool.self, forKey: .showsRemoteIndicator) ?? false
+        self.colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -123,6 +130,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         try c.encode(isAudioPlaying, forKey: .isAudioPlaying)
         try c.encode(isPinned, forKey: .isPinned)
         try c.encode(showsRemoteIndicator, forKey: .showsRemoteIndicator)
+        try c.encodeIfPresent(colorHex, forKey: .colorHex)
     }
 }
 

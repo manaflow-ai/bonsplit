@@ -26,6 +26,10 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let isPinned: Bool
     /// Whether the tab should show a remote-connection indicator (library consumer-defined meaning, e.g. SSH).
     public let showsRemoteIndicator: Bool
+    /// Optional accent color for the tab, as a `#RRGGBB` / `#RRGGBBAA` hex string.
+    /// Rendered as a strip along the tab's top edge. `nil` leaves the tab unaccented.
+    /// The meaning of the color is consumer-defined (for example, priority or category).
+    public let colorHex: String?
 
     public init(
         id: TabID = TabID(),
@@ -41,7 +45,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
-        showsRemoteIndicator: Bool = false
+        showsRemoteIndicator: Bool = false,
+        colorHex: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -57,6 +62,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
+        self.colorHex = colorHex
     }
 
     internal init(from tabItem: TabItem) {
@@ -74,5 +80,6 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioPlaying = tabItem.isAudioPlaying
         self.isPinned = tabItem.isPinned
         self.showsRemoteIndicator = tabItem.showsRemoteIndicator
+        self.colorHex = tabItem.colorHex
     }
 }
