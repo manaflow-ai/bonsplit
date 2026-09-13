@@ -64,6 +64,14 @@ enum TabBarColors {
         return NSColor(bonsplitHex: value)
     }
 
+    private static func configuredColor(
+        _ value: String?,
+        fallback: @autoclosure () -> NSColor
+    ) -> NSColor {
+        guard let value, let color = NSColor(bonsplitHex: value) else { return fallback() }
+        return color
+    }
+
     private static func effectiveBackgroundColor(
         for appearance: BonsplitConfiguration.Appearance,
         fallback fallbackColor: NSColor
@@ -227,6 +235,19 @@ enum TabBarColors {
         effectiveTextColor(for: appearance, secondary: true)
     }
 
+    static func nsColorTabIcon(
+        for appearance: BonsplitConfiguration.Appearance,
+        isSelected: Bool
+    ) -> NSColor {
+        if let iconHex = appearance.chromeColors.iconHex,
+           let color = NSColor(bonsplitHex: iconHex) {
+            return isSelected ? color : color.withAlphaComponent(color.alphaComponent * 0.72)
+        }
+        return isSelected
+            ? nsColorActiveText(for: appearance)
+            : nsColorInactiveText(for: appearance)
+    }
+
     static func splitActionIcon(for appearance: BonsplitConfiguration.Appearance, isPressed: Bool) -> Color {
         Color(nsColor: nsColorSplitActionIcon(for: appearance, isPressed: isPressed))
     }
@@ -268,20 +289,40 @@ enum TabBarColors {
     }
 
     static func dropIndicator(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        _ = appearance
-        return dropIndicator
+        let fallback = configuredColor(appearance.chromeColors.accentHex, fallback: .controlAccentColor)
+        return Color(nsColor: configuredColor(appearance.chromeColors.dropTargetHex, fallback: fallback))
     }
 
     static func activeIndicator(saturation: Double) -> Color {
         Color(nsColor: nsColorActiveIndicator(saturation: saturation))
     }
 
+    static func activeIndicator(
+        for appearance: BonsplitConfiguration.Appearance,
+        saturation: Double
+    ) -> Color {
+        Color(nsColor: nsColorActiveIndicator(for: appearance, saturation: saturation))
+    }
+
     static func nsColorActiveIndicator(saturation: Double) -> NSColor {
         NSColor.controlAccentColor.bonsplitSaturating(by: saturation)
     }
 
+    static func nsColorActiveIndicator(
+        for appearance: BonsplitConfiguration.Appearance,
+        saturation: Double
+    ) -> NSColor {
+        configuredColor(appearance.chromeColors.accentHex, fallback: .controlAccentColor)
+            .bonsplitSaturating(by: saturation)
+    }
+
     static var focusRing: Color {
         Color.accentColor.opacity(0.5)
+    }
+
+    static func focusRing(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        Color(nsColor: configuredColor(appearance.chromeColors.accentHex, fallback: .controlAccentColor))
+            .opacity(0.5)
     }
 
     static var dirtyIndicator: Color {
@@ -298,8 +339,7 @@ enum TabBarColors {
     }
 
     static func notificationBadge(for appearance: BonsplitConfiguration.Appearance) -> Color {
-        _ = appearance
-        return notificationBadge
+        Color(nsColor: configuredColor(appearance.chromeColors.notificationHex, fallback: .systemBlue))
     }
 
     // MARK: - Shadows
