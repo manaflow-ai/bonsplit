@@ -1262,6 +1262,9 @@ struct TabBarView: View {
             allowsClose: controller.configuration.allowCloseTabs,
             allowsContextMenu: controller.configuration.allowsTabContextMenu,
             contextMenuState: contextMenuState,
+            additionalMenuItemsProvider: {
+                controller.tabContextMenuItemsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },

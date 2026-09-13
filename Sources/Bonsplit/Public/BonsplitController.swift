@@ -74,6 +74,10 @@ public final class BonsplitController {
     /// Return `true` when the drop has been handled by the host application.
     @ObservationIgnored public var onExternalFileDrop: ((ExternalFileDropRequest) -> Bool)?
 
+    /// Additional native menu items for the clicked tab, evaluated when its menu opens.
+    /// Return new items on each call. The host owns their titles, targets, and actions.
+    @ObservationIgnored public var tabContextMenuItemsProvider: (@MainActor (TabID, PaneID) -> [NSMenuItem])?
+
     /// Host-provided destinations for the tab context menu's Move Tab submenu.
     @ObservationIgnored public var tabContextMoveDestinationsProvider: ((TabID, PaneID) -> [TabContextMoveDestination])?
 
