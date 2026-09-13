@@ -325,12 +325,12 @@ public final class BonsplitController {
         let tabItems: [TabItem]
         let tabIndex: Int
         if let visibleTabIds {
-            tabItems = visibleTabIds.compactMap { visibleId in
-                findTabInternal(visibleId).map { $0.0.tabs[$0.1] }
+            let entries = visibleTabIds.compactMap { visibleId in
+                findTabInternal(visibleId).map { (visibleId, $0.0.tabs[$0.1]) }
             }
-            guard let visibleIndex = visibleTabIds.firstIndex(of: tabId),
-                  visibleIndex < tabItems.count else { return nil }
-            tabIndex = visibleIndex
+            guard let entryIndex = entries.firstIndex(where: { $0.0 == tabId }) else { return nil }
+            tabItems = entries.map(\.1)
+            tabIndex = entryIndex
         } else {
             tabItems = sourcePane.tabs
             tabIndex = sourceIndex
