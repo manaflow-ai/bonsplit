@@ -97,9 +97,14 @@ final class TabContextMenu: NSMenu, NSMenuDelegate {
     }
 }
 
+@MainActor
 extension NSMenu {
     func removeItems(for actions: Set<TabContextAction>) {
         for item in items {
+            if actions.contains(.move), item.identifier == TabContextMenuBuilder.moveSubmenuIdentifier {
+                removeItem(item)
+                continue
+            }
             if let submenu = item.submenu {
                 submenu.removeItems(for: actions)
             }
