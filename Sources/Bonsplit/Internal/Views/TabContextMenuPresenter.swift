@@ -46,6 +46,7 @@ final class TabContextMenu: NSMenu, NSMenuDelegate {
     let snapshot: TabContextMenuSnapshot
     private(set) var forkConversationAvailability: TabContextForkConversationAvailability
     private var refreshTask: Task<Void, Never>?
+    var actionTarget: TabContextMenuActionTarget?
 
     init(
         snapshot: TabContextMenuSnapshot,
@@ -93,6 +94,21 @@ final class TabContextMenu: NSMenu, NSMenuDelegate {
         let availability = snapshot.forkConversationAvailabilityProvider()
         forkConversationAvailability = availability
         TabContextMenuBuilder.updateForkConversationAvailability(availability, in: self)
+    }
+}
+
+extension NSMenu {
+    func removeItems(for actions: Set<TabContextAction>) {
+        for item in items {
+            if let submenu = item.submenu {
+                submenu.removeItems(for: actions)
+            }
+            if let rawValue = item.representedObject as? String,
+               let action = TabContextAction(rawValue: rawValue),
+               actions.contains(action) {
+                removeItem(item)
+            }
+        }
     }
 }
 

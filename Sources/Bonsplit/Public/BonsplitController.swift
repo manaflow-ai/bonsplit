@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -304,6 +305,74 @@ public final class BonsplitController {
 
         guard let tab = tab(tabId) else { return }
         delegate?.splitTabBar(self, didRequestTabContextAction: action, for: tab, inPane: pane)
+    }
+
+    /// Builds the same localized tab context menu used by the standard tab
+    /// strip for a host-rendered tab surface.
+    ///
+    /// `visibleTabIds` lets a host such as Canvas describe its own tab group
+    /// while retaining Bonsplit's menu labels, availability, and action
+    /// routing. The returned menu owns its action target until dismissal.
+    public func makeTabContextMenu(
+        for tabId: TabID,
+        inPane paneId: PaneID,
+        visibleTabIds: [TabID]? = nil,
+        excludingActions: Set<TabContextAction> = []
+    ) -> NSMenu? {
+        guard let (sourcePane, sourceIndex) = findTabInternal(tabId),
+              sourcePane.id == paneId else { return nil }
+
+        let tabItems: [TabItem]
+        let tabIndex: Int
+        if let visibleTabIds {
+            tabItems = visibleTabIds.compactMap { visibleId in
+                findTabInternal(visibleId).map { $0.0.tabs[$0.1] }
+            }
+            guard let visibleIndex = visibleTabIds.firstIndex(of: tabId),
+                  visibleIndex < tabItems.count else { return nil }
+            tabIndex = visibleIndex
+        } else {
+            tabItems = sourcePane.tabs
+            tabIndex = sourceIndex
+        }
+
+        let menuPane = PaneState(
+            id: paneId,
+            tabs: tabItems,
+            selectedTabId: sourcePane.selectedTabId,
+            isFullWidthTabMode: sourcePane.isFullWidthTabMode
+        )
+        let snapshot = TabContextMenuSnapshot(
+            tabId: tabId.id,
+            state: TabContextMenuState(
+                tab: tabItems[tabIndex],
+                index: tabIndex,
+                pane: menuPane,
+                controller: self,
+                splitViewController: internalController
+            ),
+            moveDestinationsProvider: { [weak self] in
+                self?.tabContextMoveDestinationsProvider?(tabId, paneId) ?? []
+            },
+            forkConversationAvailabilityProvider: { [weak self] in
+                self?.tabContextForkConversationAvailabilityProvider?(tabId, paneId) ?? .hidden
+            },
+            forkConversationAvailabilityRefreshHandler: { [weak self] in
+                guard let handler = self?.tabContextForkConversationAvailabilityRefreshHandler else { return }
+                await handler(tabId, paneId)
+            }
+        )
+        let target = TabContextMenuActionTarget()
+        target.onContextAction = { [weak self] action in
+            self?.requestTabContextAction(action, for: tabId, inPane: paneId)
+        }
+        target.onMoveDestination = { [weak self] destinationId in
+            self?.requestTabMove(toDestination: destinationId, for: tabId, inPane: paneId)
+        }
+        let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
+        menu.removeItems(for: excludingActions)
+        menu.actionTarget = target
+        return menu
     }
 
     /// Request the delegate to move a tab to a host-provided destination.
