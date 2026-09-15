@@ -207,6 +207,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     let dividerPositionRange: ClosedRange<CGFloat>
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
+    var isMainContentFocused: Bool = true
     var showSplitButtons: Bool = true
     var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
@@ -681,6 +682,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 controller: controller,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                isMainContentFocused: isMainContentFocused,
                 showSplitButtons: showSplitButtons,
                 tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle
@@ -693,6 +695,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 dividerPositionRange: dividerPositionRange,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                isMainContentFocused: isMainContentFocused,
                 showSplitButtons: showSplitButtons,
                 tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle,
