@@ -77,6 +77,12 @@ public final class BonsplitController {
     /// Host-provided destinations for the tab context menu's Move Tab submenu.
     @ObservationIgnored public var tabContextMoveDestinationsProvider: ((TabID, PaneID) -> [TabContextMoveDestination])?
 
+    /// Host-provided availability for the built-in Move Tab to New Workspace
+    /// action. When unset, Bonsplit keeps its default policy of requiring more
+    /// than one tab in the controller. Hosts whose container may become empty
+    /// (for example, a detachable Dock) can return `true` for the affected tab.
+    @ObservationIgnored public var tabContextMoveToNewWorkspaceAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+
     /// Host-provided state evaluated when the tab context menu opens. Refreshing actions
     /// remain visible but disabled; hidden actions are omitted.
     @ObservationIgnored public var tabContextForkConversationAvailabilityProvider: ((TabID, PaneID) -> TabContextForkConversationAvailability)?
