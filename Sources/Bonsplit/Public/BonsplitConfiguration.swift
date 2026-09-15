@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 
 /// Controls how tab content views are managed when switching between tabs
 public enum ContentViewLifecycle: Sendable {
@@ -504,6 +505,135 @@ extension BonsplitConfiguration {
             }
         }
 
+        /// Per-selection-state color, border, and typography overrides for the
+        /// surface tab bar.
+        ///
+        /// Every field is optional; a `nil` value preserves Bonsplit's existing
+        /// derived styling for that attribute, so an empty ``TabStyle`` is a no-op
+        /// and the feature stays fully backward compatible. Hosts set only the
+        /// attributes they want to theme — e.g. a flat, color-driven strip that
+        /// matches a terminal theme:
+        ///
+        /// ```swift
+        /// var style = BonsplitConfiguration.Appearance.TabStyle()
+        /// style.activeBackgroundHex = "#1a1b26"
+        /// style.activeForegroundHex = "#c0caf5"
+        /// style.inactiveForegroundHex = "#565f89"
+        /// style.activeIndicatorHex = "#7aa2f7"   // replaces the system accent
+        /// style.dividerHex = "none"
+        /// ```
+        public struct TabStyle: Sendable, Equatable, Codable {
+            /// Which edge of the selected tab carries the accent indicator line.
+            ///
+            /// The case is named `hidden` rather than `none` to avoid colliding
+            /// with `Optional.none` when the property is compared as an optional.
+            public enum IndicatorEdge: String, Sendable, Codable, Equatable {
+                /// Draw the accent line along the top edge of the selected tab.
+                case top
+                /// Draw the accent line along the bottom edge of the selected tab.
+                case bottom
+                /// Draw no accent line; selection reads from color alone.
+                case hidden
+            }
+
+            /// Weight applied to tab title labels.
+            public enum FontWeight: String, Sendable, Codable, CaseIterable {
+                case ultraLight, thin, light, regular, medium, semibold, bold, heavy, black
+
+                /// The AppKit font weight this case maps to.
+                public var nsFontWeight: NSFont.Weight {
+                    switch self {
+                    case .ultraLight: return .ultraLight
+                    case .thin: return .thin
+                    case .light: return .light
+                    case .regular: return .regular
+                    case .medium: return .medium
+                    case .semibold: return .semibold
+                    case .bold: return .bold
+                    case .heavy: return .heavy
+                    case .black: return .black
+                    }
+                }
+
+                /// The SwiftUI font weight this case maps to.
+                public var swiftUIFontWeight: Font.Weight {
+                    switch self {
+                    case .ultraLight: return .ultraLight
+                    case .thin: return .thin
+                    case .light: return .light
+                    case .regular: return .regular
+                    case .medium: return .medium
+                    case .semibold: return .semibold
+                    case .bold: return .bold
+                    case .heavy: return .heavy
+                    case .black: return .black
+                    }
+                }
+            }
+
+            /// Background hex for the selected tab. `nil` keeps the derived active background.
+            public var activeBackgroundHex: String?
+            /// Label hex for the selected tab. `nil` keeps the derived active text color.
+            public var activeForegroundHex: String?
+            /// Background hex for unselected tabs. `nil` keeps the transparent/derived background.
+            public var inactiveBackgroundHex: String?
+            /// Label hex for unselected tabs. `nil` keeps the derived secondary text color.
+            public var inactiveForegroundHex: String?
+            /// Background hex for a hovered, unselected tab. `nil` keeps the derived hover tint.
+            public var hoverBackgroundHex: String?
+            /// Hex for the thin dividers between tabs. `"none"` (or a fully transparent
+            /// hex) hides them; `nil` keeps the derived separator color.
+            public var dividerHex: String?
+            /// Hex for the accent indicator line on the selected tab. `nil` keeps the
+            /// system-accent–derived indicator.
+            public var activeIndicatorHex: String?
+            /// Which edge carries the accent indicator, or `.hidden` to hide it. `nil`
+            /// keeps the historical top-edge indicator.
+            public var activeIndicatorEdge: IndicatorEdge?
+            /// Font family for tab title labels. `nil` keeps the system font.
+            public var fontFamily: String?
+            /// Weight for tab title labels. `nil` keeps the default weight.
+            public var fontWeight: FontWeight?
+
+            public init(
+                activeBackgroundHex: String? = nil,
+                activeForegroundHex: String? = nil,
+                inactiveBackgroundHex: String? = nil,
+                inactiveForegroundHex: String? = nil,
+                hoverBackgroundHex: String? = nil,
+                dividerHex: String? = nil,
+                activeIndicatorHex: String? = nil,
+                activeIndicatorEdge: IndicatorEdge? = nil,
+                fontFamily: String? = nil,
+                fontWeight: FontWeight? = nil
+            ) {
+                self.activeBackgroundHex = activeBackgroundHex
+                self.activeForegroundHex = activeForegroundHex
+                self.inactiveBackgroundHex = inactiveBackgroundHex
+                self.inactiveForegroundHex = inactiveForegroundHex
+                self.hoverBackgroundHex = hoverBackgroundHex
+                self.dividerHex = dividerHex
+                self.activeIndicatorHex = activeIndicatorHex
+                self.activeIndicatorEdge = activeIndicatorEdge
+                self.fontFamily = fontFamily
+                self.fontWeight = fontWeight
+            }
+
+            /// Whether any override is set. When `false`, tab styling is unchanged
+            /// from Bonsplit's defaults and every resolver falls through to its
+            /// historical derivation.
+            public var hasOverrides: Bool {
+                activeBackgroundHex != nil || activeForegroundHex != nil
+                    || inactiveBackgroundHex != nil || inactiveForegroundHex != nil
+                    || hoverBackgroundHex != nil || dividerHex != nil
+                    || activeIndicatorHex != nil || activeIndicatorEdge != nil
+                    || fontFamily != nil || fontWeight != nil
+            }
+
+            /// An empty style with no overrides.
+            public static let none = TabStyle()
+        }
+
         /// Controls how surface tabs are sized within a pane's tab bar.
         public enum TabWidthMode: Sendable, Equatable, Codable {
             /// Tabs use a fixed width clamped to `tabMinWidth...tabMaxWidth` and the
@@ -609,6 +739,10 @@ extension BonsplitConfiguration {
         /// Optional color overrides for tab/pane chrome.
         public var chromeColors: ChromeColors
 
+        /// Optional per-selection-state color, border, and typography overrides
+        /// for the surface tab bar. Empty by default, leaving tab styling unchanged.
+        public var tabStyle: TabStyle
+
         /// When true, the host app is trying to make all surfaces share the
         /// same backdrop. Bonsplit should avoid local chrome color adjustments
         /// that would create visibly different translucent layers.
@@ -656,6 +790,7 @@ extension BonsplitConfiguration {
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
             chromeColors: ChromeColors = .init(),
+            tabStyle: TabStyle = .none,
             usesSharedBackdrop: Bool = false
         ) {
             self.tabBarHeight = tabBarHeight
@@ -678,6 +813,7 @@ extension BonsplitConfiguration {
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations
             self.chromeColors = chromeColors
+            self.tabStyle = tabStyle
             self.usesSharedBackdrop = usesSharedBackdrop
         }
 

@@ -41,6 +41,17 @@ enum TabBarColors {
         return resolved.alphaComponent <= 0.001 ? nil : resolved
     }
 
+    /// Resolves a host-supplied ``TabStyle`` hex override into an `NSColor`.
+    ///
+    /// Returns `.clear` for the sentinel `"none"` so callers can hide an element
+    /// (e.g. the divider), the parsed color for a valid hex, and `nil` when the
+    /// override is unset — letting the caller fall back to derived styling.
+    private static func tabStyleColor(_ hex: String?) -> NSColor? {
+        guard let hex else { return nil }
+        if hex.caseInsensitiveCompare("none") == .orderedSame { return .clear }
+        return NSColor(bonsplitHex: hex)
+    }
+
     private static func semanticTabBarBackgroundColor(
         for appearance: BonsplitConfiguration.Appearance
     ) -> NSColor? {
@@ -93,6 +104,14 @@ enum TabBarColors {
         for appearance: BonsplitConfiguration.Appearance,
         secondary: Bool
     ) -> NSColor {
+        // Explicit per-state label overrides win over any derived text color.
+        let overrideHex = secondary
+            ? appearance.tabStyle.inactiveForegroundHex
+            : appearance.tabStyle.activeForegroundHex
+        if let overrideHex, let overrideColor = NSColor(bonsplitHex: overrideHex) {
+            return overrideColor
+        }
+
         guard let custom = semanticTabBarBackgroundColor(for: appearance) else {
             return secondary ? .secondaryLabelColor : .labelColor
         }
@@ -164,6 +183,9 @@ enum TabBarColors {
     }
 
     static func activeTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        if let override = tabStyleColor(appearance.tabStyle.activeBackgroundHex) {
+            return Color(nsColor: override)
+        }
         guard let custom = tabBarBackgroundColor(for: appearance) else {
             return activeTabBackground
         }
@@ -181,6 +203,9 @@ enum TabBarColors {
     }
 
     static func hoveredTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        if let override = tabStyleColor(appearance.tabStyle.hoverBackgroundHex) {
+            return Color(nsColor: override)
+        }
         guard let custom = tabBarBackgroundColor(for: appearance) else {
             return hoveredTabBackground
         }
@@ -199,6 +224,13 @@ enum TabBarColors {
 
     static var inactiveTabBackground: Color {
         .clear
+    }
+
+    static func inactiveTabBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
+        if let override = tabStyleColor(appearance.tabStyle.inactiveBackgroundHex) {
+            return Color(nsColor: override)
+        }
+        return inactiveTabBackground
     }
 
     // MARK: - Text Colors
@@ -249,6 +281,10 @@ enum TabBarColors {
     }
 
     static func nsColorSeparator(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        // An explicit tab divider override (including `"none"` → transparent) wins.
+        if let override = tabStyleColor(appearance.tabStyle.dividerHex) {
+            return override
+        }
         if let explicit = chromeBorderColor(for: appearance) {
             return explicit
         }
@@ -278,6 +314,28 @@ enum TabBarColors {
 
     static func nsColorActiveIndicator(saturation: Double) -> NSColor {
         NSColor.controlAccentColor.bonsplitSaturating(by: saturation)
+    }
+
+    static func activeIndicator(
+        for appearance: BonsplitConfiguration.Appearance,
+        saturation: Double
+    ) -> Color {
+        Color(nsColor: nsColorActiveIndicator(for: appearance, saturation: saturation))
+    }
+
+    /// The selected-tab accent color, preferring an explicit ``TabStyle`` override
+    /// over the system-accent–derived indicator so the highlight can match a theme.
+    static func nsColorActiveIndicator(
+        for appearance: BonsplitConfiguration.Appearance,
+        saturation: Double
+    ) -> NSColor {
+        if let hex = appearance.tabStyle.activeIndicatorHex,
+           let override = NSColor(bonsplitHex: hex) {
+            // Apply the same saturation the derived indicator uses so a themed
+            // indicator dims consistently when the window loses focus.
+            return override.bonsplitSaturating(by: saturation)
+        }
+        return nsColorActiveIndicator(saturation: saturation)
     }
 
     static var focusRing: Color {
