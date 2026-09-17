@@ -742,12 +742,12 @@ struct TabItemView: View {
         .onDisappear {
             globeFallbackScheduler.cancel()
         }
-        .onChange(of: tab.isLoading) { _ in updateGlobeFallback() }
-        .onChange(of: tab.iconImageData) { _ in
+        .onChange(of: tab.isLoading) { _, _ in updateGlobeFallback() }
+        .onChange(of: tab.iconImageData) { _, _ in
             updateRenderedFaviconImage()
             updateGlobeFallback()
         }
-        .onChange(of: tab.icon) { _ in updateGlobeFallback() }
+        .onChange(of: tab.icon) { _, _ in updateGlobeFallback() }
     }
 
     /// Small corner badge for icon-only pinned tabs, preserving the audio/unread/
