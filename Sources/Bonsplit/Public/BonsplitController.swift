@@ -97,6 +97,13 @@ public final class BonsplitController {
     /// the provider) to hide it.
     @ObservationIgnored public var tabContextDisconnectRemoteAvailabilityProvider: ((TabID, PaneID) -> Bool)?
 
+    /// Host-provided synchronous check that decides whether the tab context menu should
+    /// surface the cloud terminal pair "Detach Terminal" / "Kill Process" for the tab
+    /// (a terminal surface that projects a terminal running on a remote machine, where
+    /// closing the tab and ending the process are different things). Return `true` to
+    /// show both items, `false` (or omit the provider) to hide them.
+    @ObservationIgnored public var tabContextCloudTerminalAvailabilityProvider: ((TabID, PaneID) -> Bool)?
+
     /// Called when the user explicitly requests to close a tab from the tab strip UI.
     /// Internal host-driven closes should not use this hook.
     @ObservationIgnored public var onTabCloseRequest: ((_ tabId: TabID, _ paneId: PaneID, _ source: TabCloseRequestSource) -> Void)?

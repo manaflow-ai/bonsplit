@@ -2393,6 +2393,60 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuShowsCloudTerminalActionsOnlyWhenAvailable() throws {
+        let target = TabContextMenuActionTarget()
+        var selectedActions: [TabContextAction] = []
+        target.onContextAction = { selectedActions.append($0) }
+        func makeState(canDetachCloudTerminal: Bool) -> TabContextMenuState {
+            TabContextMenuState(
+                isPinned: false,
+                isUnread: false,
+                isBrowser: false,
+                isAudioMuted: false,
+                isTerminal: true,
+                hasCustomTitle: false,
+                canCloseToLeft: false,
+                canCloseToRight: false,
+                canCloseOthers: false,
+                canMoveToNewWorkspace: false,
+                canMoveToLeftPane: false,
+                canMoveToRightPane: false,
+                forkConversationDefaultAction: .forkConversationRight,
+                isZoomed: false,
+                hasSplits: false,
+                shortcuts: [:],
+                canDetachCloudTerminal: canDetachCloudTerminal
+            )
+        }
+
+        let local = TabContextMenuBuilder.makeMenu(
+            snapshot: TabContextMenuSnapshot(
+                tabId: UUID(),
+                state: makeState(canDetachCloudTerminal: false),
+                moveDestinationsProvider: { [] },
+                forkConversationAvailabilityProvider: { .available }
+            ),
+            target: target
+        )
+        XCTAssertFalse(local.items.contains { $0.title == "Detach Terminal" || $0.title == "Kill Process" })
+
+        let cloud = TabContextMenuBuilder.makeMenu(
+            snapshot: TabContextMenuSnapshot(
+                tabId: UUID(),
+                state: makeState(canDetachCloudTerminal: true),
+                moveDestinationsProvider: { [] },
+                forkConversationAvailabilityProvider: { .available }
+            ),
+            target: target
+        )
+        let detachItem = try XCTUnwrap(cloud.items.first { $0.title == "Detach Terminal" })
+        let killItem = try XCTUnwrap(cloud.items.first { $0.title == "Kill Process" })
+        target.performContextAction(detachItem)
+        target.performContextAction(killItem)
+        XCTAssertEqual(selectedActions, [.detachCloudTerminal, .killCloudTerminal])
+    }
+
+    @MainActor
     func testDoubleClickingEmptyTrailingTabBarSpaceRequestsNewTerminalTab() {
         let appearance = BonsplitConfiguration.Appearance()
         let configuration = BonsplitConfiguration(appearance: appearance)

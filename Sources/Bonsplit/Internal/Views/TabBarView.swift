@@ -723,6 +723,7 @@ struct TabContextMenuState {
     let hasSplits: Bool
     let shortcuts: [TabContextAction: KeyboardShortcut]
     var canDisconnectRemote: Bool = false
+    var canDetachCloudTerminal: Bool = false
 
     var canMarkAsUnread: Bool {
         !isUnread
@@ -750,7 +751,8 @@ struct TabContextMenuState {
         isFullWidthTabMode: Bool = false,
         hasSplits: Bool,
         shortcuts: [TabContextAction: KeyboardShortcut],
-        canDisconnectRemote: Bool = false
+        canDisconnectRemote: Bool = false,
+        canDetachCloudTerminal: Bool = false
     ) {
         self.isPinned = isPinned
         self.isUnread = isUnread
@@ -770,6 +772,7 @@ struct TabContextMenuState {
         self.hasSplits = hasSplits
         self.shortcuts = shortcuts
         self.canDisconnectRemote = canDisconnectRemote
+        self.canDetachCloudTerminal = canDetachCloudTerminal
     }
 
     @MainActor
@@ -811,7 +814,8 @@ struct TabContextMenuState {
             isFullWidthTabMode: pane.isFullWidthTabMode,
             hasSplits: splitViewController.rootNode.allPaneIds.count > 1,
             shortcuts: controller.contextMenuShortcuts,
-            canDisconnectRemote: controller.tabContextDisconnectRemoteAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false
+            canDisconnectRemote: controller.tabContextDisconnectRemoteAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false,
+            canDetachCloudTerminal: controller.tabContextCloudTerminalAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? false
         )
     }
 }
