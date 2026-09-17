@@ -371,6 +371,43 @@ final class BonsplitTests: XCTestCase {
         XCTAssertTrue(controller.configuration.allowCloseTabs)
     }
 
+    /// Layout: [ P1 | (P2-top / P2-bottom) | P3 ]
+    /// Going right from P1 must land in the adjacent stacked sub-tree (P2),
+    /// not jump over it to the full-height P3 — even though P3 has more
+    /// perpendicular overlap with P1.
+    @MainActor
+    func testNavigateRightDoesNotSkipAdjacentStackedPane() throws {
+        let controller = BonsplitController()
+        let p1 = controller.focusedPaneId!
+
+        let p2 = controller.splitPane(p1, orientation: .horizontal, withTab: nil)!
+        let p3 = controller.splitPane(p2, orientation: .horizontal, withTab: nil)!
+        let p2Bottom = controller.splitPane(p2, orientation: .vertical, withTab: nil)!
+
+        let neighbor = try XCTUnwrap(controller.adjacentPane(to: p1, direction: .right))
+
+        XCTAssertNotEqual(neighbor, p3, "Right-navigation skipped the adjacent stacked pane and landed on the far pane.")
+        XCTAssertTrue(neighbor == p2 || neighbor == p2Bottom, "Right-navigation should land in the stacked sub-tree (P2-top or P2-bottom).")
+    }
+
+    /// Mirror of the right-navigation case: same `[ P1 | (P2-top / P2-bottom) | P3 ]`
+    /// layout, but going left from P3. The shared `findBestNeighbor` sort must
+    /// also pick the adjacent stacked sub-tree (P2) over the farther full-height P1.
+    @MainActor
+    func testNavigateLeftDoesNotSkipAdjacentStackedPane() throws {
+        let controller = BonsplitController()
+        let p1 = controller.focusedPaneId!
+
+        let p2 = controller.splitPane(p1, orientation: .horizontal, withTab: nil)!
+        let p3 = controller.splitPane(p2, orientation: .horizontal, withTab: nil)!
+        let p2Bottom = controller.splitPane(p2, orientation: .vertical, withTab: nil)!
+
+        let neighbor = try XCTUnwrap(controller.adjacentPane(to: p3, direction: .left))
+
+        XCTAssertNotEqual(neighbor, p1, "Left-navigation skipped the adjacent stacked pane and landed on the far pane.")
+        XCTAssertTrue(neighbor == p2 || neighbor == p2Bottom, "Left-navigation should land in the stacked sub-tree (P2-top or P2-bottom).")
+    }
+
     func testDefaultSplitButtonTooltips() {
         let defaults = BonsplitConfiguration.SplitButtonTooltips.default
         XCTAssertEqual(defaults.newTerminal, "New Terminal")
