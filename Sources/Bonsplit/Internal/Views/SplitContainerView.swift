@@ -4,7 +4,12 @@ import AppKit
 private var splitContainerProgrammaticSyncDepth = 0
 
 private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
-    var customDividerColor: NSColor?
+    var customDividerColor: NSColor? {
+        didSet {
+            guard oldValue != customDividerColor else { return }
+            needsDisplay = true
+        }
+    }
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
     weak var stampedInternalController: SplitViewController?
@@ -476,8 +481,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
 
-        DispatchQueue.main.async {
-            applyInitialDividerPosition()
+        // Ordinary restored splits get their fractional layout when AppKit
+        // assigns their bounds. Only entry animation and imposed extents need
+        // the deferred initialization above.
+        if animationOrigin != nil || splitState.imposedFirstExtent != nil {
+            DispatchQueue.main.async {
+                applyInitialDividerPosition()
+            }
         }
 
         return splitView
@@ -1302,6 +1312,46 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 )
 #endif
             }
+        }
+
+        func splitView(_ splitView: NSSplitView, resizeSubviewsWithOldSize oldSize: NSSize) {
+            guard !isAnimating,
+                  !isDragging,
+                  !isSyncingProgrammatically,
+                  splitState.imposedFirstExtent == nil,
+                  splitView.arrangedSubviews.count == 2,
+                  splitAvailableSize(in: splitView) > 0 else {
+                splitView.adjustSubviews()
+                return
+            }
+
+            // The model owns fractional layout, including the first nonzero
+            // bounds of a newly mounted split. Applying it here avoids first
+            // publishing AppKit's equal/proportional frames and repairing them
+            // from didResize or a later main-queue callback. An ancestor's
+            // programmatic layout must not suppress this child's layout.
+            let scale = splitView.window?.backingScaleFactor ?? 1
+            let requestedPosition = splitAvailableSize(in: splitView) * splitState.dividerPosition
+            let position = clampedDividerPosition(
+                (requestedPosition * scale).rounded() / scale,
+                in: splitView
+            )
+            var first = splitView.bounds
+            var second = splitView.bounds
+            if splitView.isVertical {
+                first.size.width = position
+                second.origin.x = first.maxX + splitView.dividerThickness
+                second.size.width = max(0, splitView.bounds.maxX - second.minX)
+            } else {
+                first.size.height = position
+                second.origin.y = first.maxY + splitView.dividerThickness
+                second.size.height = max(0, splitView.bounds.maxY - second.minY)
+            }
+            isSyncingProgrammatically = true
+            defer { isSyncingProgrammatically = false }
+            splitView.arrangedSubviews[0].frame = first
+            splitView.arrangedSubviews[1].frame = second
+            lastAppliedPosition = position / splitAvailableSize(in: splitView)
         }
 
         func splitViewDidResizeSubviews(_ notification: Notification) {

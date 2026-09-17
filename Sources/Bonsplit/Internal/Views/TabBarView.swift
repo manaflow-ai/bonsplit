@@ -95,6 +95,32 @@ public enum BonsplitTabItemHitRegionRegistry {
         }
         return false
     }
+
+    /// Frames of the laid-out tab item views for `tabIds` in `strip`'s window,
+    /// in `strip`'s coordinates.
+    ///
+    /// SwiftUI mounts one hit-region view per tab and AppKit hit-tests that
+    /// hierarchy directly. Identity, window membership, hidden state and frame
+    /// are read from those views, so the answer matches what is on screen even
+    /// while a per-strip geometry snapshot is still catching up.
+    @MainActor
+    static func laidOutFrames(for tabIds: [UUID], in strip: NSView) -> [UUID: CGRect] {
+        guard !tabIds.isEmpty, let window = strip.window else { return [:] }
+        let wanted = Set(tabIds)
+        var frames: [UUID: CGRect] = [:]
+        for view in snapshot() {
+            guard let region = view as? TabItemHitRegionView.RegionNSView,
+                  let tabId = region.tabId,
+                  wanted.contains(tabId),
+                  frames[tabId] == nil,
+                  region.window === window,
+                  !region.isHiddenOrHasHiddenAncestor else { continue }
+            let frame = region.convert(region.bounds, to: strip)
+            guard !frame.isEmpty else { continue }
+            frames[tabId] = frame
+        }
+        return frames
+    }
 }
 
 enum BonsplitTabItemHitTesting {
@@ -1005,7 +1031,7 @@ struct TabBarView: View {
         TabBarDragAndHoverView(
             isMinimalMode: isMinimalMode,
             geometryRegistry: tabItemGeometryRegistry,
-            tabIds: tabIds,
+            pane: pane,
             onBeginTabDrag: { tabId, sourceView, event, draggingFrame, dragImage in
                 guard let tab = pane.tabs.first(where: { $0.id == tabId }) else {
                     return false
@@ -1968,7 +1994,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 
     let isMinimalMode: Bool
     let geometryRegistry: TabBarItemGeometryRegistry
-    let tabIds: [UUID]
+    let pane: PaneState
     let onBeginTabDrag: BeginTabDrag
     let onDoubleClick: () -> Bool
     let onHoverChanged: (Bool) -> Void
@@ -1977,7 +2003,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         let view = TabBarBackgroundNSView()
         view.isMinimalMode = isMinimalMode
         view.geometryRegistry = geometryRegistry
-        view.tabIds = tabIds
+        view.pane = pane
         view.onBeginTabDrag = onBeginTabDrag
         view.onDoubleClick = onDoubleClick
         view.onHoverChanged = onHoverChanged
@@ -1987,7 +2013,7 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
     func updateNSView(_ nsView: TabBarBackgroundNSView, context: Context) {
         nsView.isMinimalMode = isMinimalMode
         nsView.geometryRegistry = geometryRegistry
-        nsView.tabIds = tabIds
+        nsView.pane = pane
         nsView.onBeginTabDrag = onBeginTabDrag
         nsView.onDoubleClick = onDoubleClick
         nsView.onHoverChanged = onHoverChanged
@@ -2000,8 +2026,16 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             let frame: NSRect
         }
 
+        private enum TabItemFrameSource {
+            case registry
+            case laidOut
+        }
+
         var isMinimalMode = false
-        nonisolated(unsafe) var tabIds: [UUID] = []
+        /// The pane whose tabs this strip renders. Presses resolve tab
+        /// membership from this live model, never from an id list pushed
+        /// through SwiftUI, which can trail the model by a commit.
+        weak var pane: PaneState?
         weak var geometryRegistry: TabBarItemGeometryRegistry?
         var onBeginTabDrag: BeginTabDrag?
         var onDoubleClick: (() -> Bool)?
@@ -2052,13 +2086,59 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 
         nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
             MainActor.assumeIsolated {
-                let frames = geometryRegistry?.frames(for: tabIds, in: self).values.map { $0 } ?? []
-                return BonsplitTabItemHitTesting.containsTabLaneHit(
+                BonsplitTabItemHitTesting.containsTabLaneHit(
                     localPoint: localPoint,
-                    tabFrames: frames,
+                    tabFrames: tabItemFrames(for: liveTabIds).values.map { $0 },
                     bounds: bounds
                 )
             }
+        }
+
+        private var liveTabIds: [UUID] {
+            pane?.tabs.map(\.id) ?? []
+        }
+
+        /// Frames for `tabIds` in local coordinates: the geometry registry
+        /// where it has caught up, otherwise the tab item views AppKit has
+        /// laid out in this window. Only tabs the pane owns are consulted, so
+        /// another strip's laid-out views never answer for this one.
+        private func tabItemFrames(for tabIds: [UUID]) -> [UUID: CGRect] {
+            var frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            guard frames.count < tabIds.count else { return frames }
+            let missing = tabIds.filter { frames[$0] == nil }
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(for: missing, in: self)
+            frames.merge(laidOut) { registered, _ in registered }
+            return frames
+        }
+
+        /// The tab under `point`, in the pane's tab order, with the source that
+        /// supplied its frame.
+        private func resolveTabItem(
+            at point: NSPoint
+        ) -> (tabId: UUID, frame: CGRect, source: TabItemFrameSource)? {
+            let tabIds = liveTabIds
+            guard !tabIds.isEmpty else { return nil }
+            let registered = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            if let tabId = tabIds.first(where: { registered[$0]?.contains(point) == true }),
+               let frame = registered[tabId] {
+                return (tabId, frame, .registry)
+            }
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(
+                for: tabIds.filter { registered[$0] == nil },
+                in: self
+            )
+            if let tabId = tabIds.first(where: { laidOut[$0]?.contains(point) == true }),
+               let frame = laidOut[tabId] {
+                return (tabId, frame, .laidOut)
+            }
+            return nil
+        }
+
+        private func tabItemFrame(for tabId: UUID) -> CGRect? {
+            if let frame = geometryRegistry?.frame(for: tabId, in: self) {
+                return frame
+            }
+            return BonsplitTabItemHitRegionRegistry.laidOutFrames(for: [tabId], in: self)[tabId]
         }
 
         override func updateTrackingAreas() {
@@ -2188,19 +2268,89 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
                 return
             }
             let point = convert(event.locationInWindow, from: nil)
-            let frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
-            guard bounds.contains(point),
-                  !Self.isNativeInteraction(at: event.locationInWindow, in: window),
-                  let tabId = tabIds.first(where: { frames[$0]?.contains(point) == true }),
-                  let frame = frames[tabId] else {
+            guard bounds.contains(point) else { return }
+            guard !isNativeInteraction(at: event.locationInWindow, in: window) else {
+#if DEBUG
+                logArmMiss(reason: "nativeInteraction", point: point)
+                logNativeInteractionChain(at: event.locationInWindow, in: window, event: event)
+#endif
                 return
             }
+            guard let tabItem = resolveTabItem(at: point) else {
+#if DEBUG
+                logArmMiss(reason: "noTabAtPoint", point: point)
+#endif
+                return
+            }
+#if DEBUG
+            if tabItem.source == .laidOut {
+                dlog(
+                    "tab.drag.arm registryLag tab=\(tabItem.tabId.uuidString.prefix(5)) " +
+                    "point=\(point.x.rounded()),\(point.y.rounded())"
+                )
+            }
+#endif
             pendingTabDrag = PendingTabDrag(
-                tabId: tabId,
+                tabId: tabItem.tabId,
                 startPoint: point,
-                frame: frame
+                frame: tabItem.frame
             )
         }
+
+#if DEBUG
+        /// Records the exact AppKit answer behind a native-interaction veto:
+        /// the hit view under the press, every ancestor up to the root with
+        /// its window-space frame, and the event context, so a veto can be
+        /// attributed from the debug log alone.
+        private func logNativeInteractionChain(at windowPoint: NSPoint, in window: NSWindow, event: NSEvent) {
+            guard let contentView = window.contentView else { return }
+            let currentType = NSApp.currentEvent.map { String(describing: $0.type) } ?? "nil"
+            let contentFrame = contentView.frame
+            let contentBounds = contentView.bounds
+            let themeFlipped = contentView.superview?.isFlipped ?? false
+            dlog(
+                "tab.drag.arm.veto context event=\(String(describing: event.type)) current=\(currentType) " +
+                "windowPoint=\(windowPoint.x.rounded()),\(windowPoint.y.rounded()) " +
+                "contentFrame=\(contentFrame.origin.x.rounded()),\(contentFrame.origin.y.rounded()),\(contentFrame.width.rounded()),\(contentFrame.height.rounded()) " +
+                "contentBounds=\(contentBounds.origin.x.rounded()),\(contentBounds.origin.y.rounded()) " +
+                "contentFlipped=\(contentView.isFlipped) themeFlipped=\(themeFlipped)"
+            )
+            var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView)
+            var depth = 0
+            while let view = candidate, depth < 12 {
+                let frame = view.convert(view.bounds, to: nil)
+                var flags: [String] = []
+                if let control = view as? NSControl {
+                    flags.append("control enabled=\(control.isEnabled) target=\(control.target != nil) action=\(control.action != nil)")
+                }
+                if let textView = view as? NSTextView {
+                    flags.append("textView editable=\(textView.isEditable) firstResponder=\(window.firstResponder === textView)")
+                }
+                if let textField = view as? NSTextField {
+                    flags.append("textField editable=\(textField.isEditable)")
+                }
+                dlog(
+                    "tab.drag.arm.veto chain[\(depth)] \(NSStringFromClass(type(of: view))) " +
+                    "frame=\(frame.origin.x.rounded()),\(frame.origin.y.rounded()),\(frame.width.rounded()),\(frame.height.rounded()) " +
+                    "hidden=\(view.isHiddenOrHasHiddenAncestor) \(flags.joined(separator: " "))"
+                )
+                candidate = view.superview
+                depth += 1
+            }
+        }
+
+        /// Records why a press inside the strip did not arm a tab drag, with
+        /// the model and geometry counts needed to attribute the miss.
+        private func logArmMiss(reason: String, point: NSPoint) {
+            let tabIds = liveTabIds
+            let registered = geometryRegistry?.frames(for: tabIds, in: self).count ?? 0
+            let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(for: tabIds, in: self).count
+            dlog(
+                "tab.drag.arm.miss reason=\(reason) tabs=\(tabIds.count) registered=\(registered) " +
+                "laidOut=\(laidOut) point=\(point.x.rounded()),\(point.y.rounded())"
+            )
+        }
+#endif
 
         private func handleTabMouseDragged(_ event: NSEvent) -> NSEvent? {
             guard let pendingTabDrag,
@@ -2221,19 +2371,28 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             // the press and the threshold event. Refresh the source frame so
             // AppKit's item and the destination's geometry snapshot agree at
             // the moment the session starts.
-            let draggingFrame = geometryRegistry?.frame(for: pendingTabDrag.tabId, in: self)
-                ?? pendingTabDrag.frame
+            let draggingFrame = tabItemFrame(for: pendingTabDrag.tabId) ?? pendingTabDrag.frame
             guard let dragImage = dragImage(for: draggingFrame),
                   let onBeginTabDrag else {
+#if DEBUG
+                dlog(
+                    "tab.drag.begin.miss reason=\(onBeginTabDrag == nil ? "noHandler" : "dragImage") " +
+                    "tab=\(pendingTabDrag.tabId.uuidString.prefix(5))"
+                )
+#endif
                 return event
             }
-            _ = onBeginTabDrag(
+            if !onBeginTabDrag(
                 pendingTabDrag.tabId,
                 self,
                 event,
                 draggingFrame,
                 dragImage
-            )
+            ) {
+#if DEBUG
+                dlog("tab.drag.begin.miss reason=controller tab=\(pendingTabDrag.tabId.uuidString.prefix(5))")
+#endif
+            }
             // SwiftUI already received the mouse-down. Forward the threshold-
             // crossing move so its pending tap/press fails before AppKit owns
             // the native drag session and terminal mouse-up.
@@ -2260,33 +2419,58 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
         /// own gesture. SwiftUI renders static tab titles through AppKit text
         /// controls too; treating every ``NSControl`` as interactive therefore
         /// made drag arming depend on title width and renderer details. Only
-        /// controls that can actually consume the press veto the tab source.
-        private static func isNativeInteraction(
+        /// controls that can actually consume the press veto the tab source,
+        /// and only when the press is inside that control and the control
+        /// sits in this strip. A host window's hit-test can answer a view the
+        /// pointer is not in (cmux resolved the focused file editor for presses
+        /// on the pane tab strip); such a view owns nothing about the press.
+        private func isNativeInteraction(
             at windowPoint: NSPoint,
             in window: NSWindow
         ) -> Bool {
-            guard let contentView = window.contentView else { return false }
-            let contentPoint = contentView.convert(windowPoint, from: nil)
-            guard var candidate = contentView.hitTest(contentPoint) else { return false }
+            guard let contentView = window.contentView,
+                  var candidate = Self.hitTest(windowPoint: windowPoint, in: contentView) else {
+                return false
+            }
+            let stripFrame = convert(bounds, to: nil)
             while true {
-                if let button = candidate as? NSButton, button.isEnabled {
-                    return true
-                }
-                if let textField = candidate as? NSTextField, textField.isEditable {
-                    return true
-                }
-                if let textView = candidate as? NSTextView, textView.isEditable {
-                    return true
-                }
-                if let control = candidate as? NSControl,
-                   control.isEnabled,
-                   control.target != nil,
-                   control.action != nil {
-                    return true
+                if Self.canConsumePress(candidate) {
+                    let frame = candidate.convert(candidate.bounds, to: nil)
+                    return frame.contains(windowPoint) && frame.intersects(stripFrame)
                 }
                 guard let parent = candidate.superview else { return false }
                 candidate = parent
             }
+        }
+
+        /// `NSView.hitTest(_:)` takes a point in the receiver's superview
+        /// coordinate space. A host's content view can be flipped while its
+        /// window frame is not (cmux's main window hosts SwiftUI directly), so
+        /// a point converted into the content view itself is mirrored
+        /// vertically when handed to `hitTest`, and a press on the strip at
+        /// the top of the window is answered by whatever sits at the bottom.
+        private static func hitTest(windowPoint: NSPoint, in view: NSView) -> NSView? {
+            let reference = view.superview ?? view
+            return view.hitTest(reference.convert(windowPoint, from: nil))
+        }
+
+        private static func canConsumePress(_ view: NSView) -> Bool {
+            if let button = view as? NSButton, button.isEnabled {
+                return true
+            }
+            if let textField = view as? NSTextField, textField.isEditable {
+                return true
+            }
+            if let textView = view as? NSTextView, textView.isEditable {
+                return true
+            }
+            if let control = view as? NSControl,
+               control.isEnabled,
+               control.target != nil,
+               control.action != nil {
+                return true
+            }
+            return false
         }
 
         private func updateHover(from event: NSEvent) {
