@@ -30,6 +30,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     /// consumer-defined meaning, e.g. a browser page playing sound).
     var isAudioPlaying: Bool
     var isPinned: Bool
+    var customColor: String?
     var showsRemoteIndicator: Bool
 
     init(
@@ -46,6 +47,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
+        customColor: String? = nil,
         showsRemoteIndicator: Bool = false
     ) {
         self.id = id
@@ -61,6 +63,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioMuted = isAudioMuted
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
+        self.customColor = customColor
         self.showsRemoteIndicator = showsRemoteIndicator
     }
 
@@ -86,6 +89,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         case isAudioMuted
         case isAudioPlaying
         case isPinned
+        case customColor
         case showsRemoteIndicator
     }
 
@@ -104,6 +108,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioMuted = try c.decodeIfPresent(Bool.self, forKey: .isAudioMuted) ?? false
         self.isAudioPlaying = try c.decodeIfPresent(Bool.self, forKey: .isAudioPlaying) ?? false
         self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
+        self.customColor = try c.decodeIfPresent(String.self, forKey: .customColor)
         self.showsRemoteIndicator = try c.decodeIfPresent(Bool.self, forKey: .showsRemoteIndicator) ?? false
     }
 
@@ -122,6 +127,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         try c.encode(isAudioMuted, forKey: .isAudioMuted)
         try c.encode(isAudioPlaying, forKey: .isAudioPlaying)
         try c.encode(isPinned, forKey: .isPinned)
+        try c.encodeIfPresent(customColor, forKey: .customColor)
         try c.encode(showsRemoteIndicator, forKey: .showsRemoteIndicator)
     }
 }

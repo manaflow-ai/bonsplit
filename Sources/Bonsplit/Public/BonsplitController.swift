@@ -215,6 +215,7 @@ public final class BonsplitController {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
+        customColor: String? = nil,
         showsRemoteIndicator: Bool = false,
         inPane pane: PaneID? = nil
     ) -> TabID? {
@@ -233,6 +234,7 @@ public final class BonsplitController {
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
             isPinned: isPinned,
+            customColor: customColor,
             showsRemoteIndicator: showsRemoteIndicator
         )
         let targetPane = pane ?? focusedPaneId ?? PaneID(id: internalController.rootNode.allPaneIds.first!.id)
@@ -274,6 +276,7 @@ public final class BonsplitController {
             isAudioMuted: isAudioMuted,
             isAudioPlaying: isAudioPlaying,
             isPinned: isPinned,
+            customColor: customColor,
             showsRemoteIndicator: showsRemoteIndicator
         )
         internalController.addTab(tabItem, toPane: PaneID(id: targetPane.id), atIndex: insertIndex)
@@ -341,6 +344,7 @@ public final class BonsplitController {
         isAudioMuted: Bool? = nil,
         isAudioPlaying: Bool? = nil,
         isPinned: Bool? = nil,
+        customColor: String?? = nil,
         showsRemoteIndicator: Bool? = nil
     ) {
         guard let (pane, tabIndex) = findTabInternal(tabId) else { return }
@@ -358,6 +362,7 @@ public final class BonsplitController {
             isAudioMuted.map { currentTab.isAudioMuted != $0 } ?? false ||
             isAudioPlaying.map { currentTab.isAudioPlaying != $0 } ?? false ||
             isPinned.map { currentTab.isPinned != $0 } ?? false ||
+            customColor.map { currentTab.customColor != $0 } ?? false ||
             showsRemoteIndicator.map { currentTab.showsRemoteIndicator != $0 } ?? false
         guard didChange else { return }
 
@@ -396,6 +401,9 @@ public final class BonsplitController {
         }
         if let isPinned = isPinned {
             pane.tabs[tabIndex].isPinned = isPinned
+        }
+        if let customColor = customColor {
+            pane.tabs[tabIndex].customColor = customColor
         }
         if let showsRemoteIndicator = showsRemoteIndicator {
             pane.tabs[tabIndex].showsRemoteIndicator = showsRemoteIndicator
@@ -572,6 +580,7 @@ public final class BonsplitController {
                 isAudioMuted: tab.isAudioMuted,
                 isAudioPlaying: tab.isAudioPlaying,
                 isPinned: tab.isPinned,
+                customColor: tab.customColor,
                 showsRemoteIndicator: tab.showsRemoteIndicator
             )
         } else {
@@ -641,6 +650,7 @@ public final class BonsplitController {
             isAudioMuted: tab.isAudioMuted,
             isAudioPlaying: tab.isAudioPlaying,
             isPinned: tab.isPinned,
+            customColor: tab.customColor,
             showsRemoteIndicator: tab.showsRemoteIndicator
         )
 

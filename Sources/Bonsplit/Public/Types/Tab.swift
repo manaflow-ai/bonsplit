@@ -24,6 +24,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let isAudioPlaying: Bool
     /// Whether the tab is pinned in its pane.
     public let isPinned: Bool
+    /// Optional `#RRGGBB` color rendered as a leading tab marker.
+    public let customColor: String?
     /// Whether the tab should show a remote-connection indicator (library consumer-defined meaning, e.g. SSH).
     public let showsRemoteIndicator: Bool
 
@@ -41,6 +43,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
+        customColor: String? = nil,
         showsRemoteIndicator: Bool = false
     ) {
         self.id = id
@@ -56,6 +59,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioMuted = isAudioMuted
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
+        self.customColor = customColor
         self.showsRemoteIndicator = showsRemoteIndicator
     }
 
@@ -73,6 +77,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioMuted = tabItem.isAudioMuted
         self.isAudioPlaying = tabItem.isAudioPlaying
         self.isPinned = tabItem.isPinned
+        self.customColor = tabItem.customColor
         self.showsRemoteIndicator = tabItem.showsRemoteIndicator
     }
 }
