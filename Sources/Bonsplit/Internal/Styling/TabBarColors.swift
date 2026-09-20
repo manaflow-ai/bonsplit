@@ -302,6 +302,55 @@ enum TabBarColors {
         return notificationBadge
     }
 
+    // MARK: - Tab Accent Color
+
+    /// Resolves a tab's consumer-supplied accent hex into the strip color drawn
+    /// along the tab's top edge.
+    ///
+    /// The hex is authored for light chrome, so it is brightened against dark
+    /// chrome to stay legible. Custom tab-bar chrome decides by its own
+    /// luminance; otherwise the color resolves dynamically against the system
+    /// appearance at draw time, so it follows a light/dark switch without the
+    /// view rebuilding. Unselected tabs render slightly softer so the selected
+    /// tab still reads as selected.
+    static func tabAccentStrip(
+        hex: String,
+        for appearance: BonsplitConfiguration.Appearance,
+        isSelected: Bool
+    ) -> Color? {
+        guard let resolved = nsColorTabAccent(
+            hex: hex,
+            for: appearance,
+            opacity: isSelected ? 1.0 : 0.85
+        ) else { return nil }
+        return Color(nsColor: resolved)
+    }
+
+    /// The accent color as an `NSColor`, for AppKit chrome that has to paint it
+    /// directly (the selected-tab indicator). Shares its derivation with
+    /// ``tabAccentStrip(hex:for:isSelected:)`` so the strip and the indicator
+    /// can never drift to two different shades of the same color.
+    static func nsColorTabAccent(
+        hex: String,
+        for appearance: BonsplitConfiguration.Appearance,
+        opacity: CGFloat = 1
+    ) -> NSColor? {
+        guard let base = NSColor(bonsplitHex: hex) else { return nil }
+        let chrome = semanticTabBarBackgroundColor(for: appearance)
+        // The alpha is applied inside the provider: folding it in afterwards
+        // would flatten the dynamic color and freeze it to one appearance.
+        return NSColor(name: nil) { systemAppearance in
+            let chromeIsLight: Bool
+            if let chrome {
+                chromeIsLight = chrome.isBonsplitLightColor
+            } else {
+                chromeIsLight = systemAppearance.bonsplitIsLightAppearance
+            }
+            let toned = chromeIsLight ? base : base.bonsplitBrightenedForDarkChrome
+            return toned.withAlphaComponent(toned.alphaComponent * opacity)
+        }
+    }
+
     // MARK: - Shadows
 
     static var tabShadow: Color {
@@ -366,6 +415,29 @@ private extension NSColor {
         )
     }
 
+    /// Brightens a light-chrome-authored color so it stays legible on dark
+    /// chrome, preserving hue and leaving near-neutral grays unshifted.
+    var bonsplitBrightenedForDarkChrome: NSColor {
+        let rgbColor = usingColorSpace(.sRGB) ?? self
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        rgbColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
+
+        let boostedBrightness = min(1, max(brightness, 0.62) + ((1 - brightness) * 0.28))
+        let boostedSaturation = saturation <= 0.08
+            ? saturation
+            : min(1, saturation + ((1 - saturation) * 0.12))
+
+        return NSColor(
+            hue: hue,
+            saturation: boostedSaturation,
+            brightness: boostedBrightness,
+            alpha: alpha
+        )
+    }
+
     func bonsplitLighten(by amount: CGFloat) -> NSColor {
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -394,5 +466,12 @@ private extension NSColor {
             blue: max(0.0, blue - amount),
             alpha: alpha
         )
+    }
+}
+
+private extension NSAppearance {
+    /// Whether this appearance is one of the light (aqua) variants.
+    var bonsplitIsLightAppearance: Bool {
+        bestMatch(from: [.aqua, .darkAqua]) != .darkAqua
     }
 }

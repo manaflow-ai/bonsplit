@@ -285,6 +285,7 @@ struct TabItemView: View {
     let allowsContextMenu: Bool
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let colorOptionsProvider: () -> [TabColorOption]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
     let onSelect: () -> Void
@@ -292,6 +293,7 @@ struct TabItemView: View {
     let onZoomToggle: () -> Void
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
+    let onColorSelection: (String?) -> Void
 
     @State private var isHovered = false
     @State private var isCloseHovered = false
@@ -352,11 +354,14 @@ struct TabItemView: View {
                         tabId: tab.id,
                         state: contextMenuState,
                         moveDestinationsProvider: moveDestinationsProvider,
+                        colorOptionsProvider: colorOptionsProvider,
+                        currentColorHex: tab.colorHex,
                         forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
                         forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
                     ),
                     onContextAction: onContextAction,
-                    onMoveDestination: onMoveDestination
+                    onMoveDestination: onMoveDestination,
+                    onColorSelection: onColorSelection
                 )
             }
         }
@@ -1013,6 +1018,20 @@ struct TabItemView: View {
                     .frame(width: 1)
                     .padding(.bottom, max(0, trailingSeparatorBottomInset))
             }
+
+            // Consumer-assigned accent color, drawn last so it reads above the
+            // tab fill and the trailing separator in every selection state.
+            if let colorHex = tab.colorHex,
+               let accent = TabBarColors.tabAccentStrip(
+                   hex: colorHex,
+                   for: appearance,
+                   isSelected: isSelected
+               ) {
+                Rectangle()
+                    .fill(accent)
+                    .frame(height: TabBarMetrics.tabAccentStripHeight)
+                    .allowsHitTesting(false)
+            }
         }
     }
 
@@ -1413,6 +1432,10 @@ enum TabContextMenuBuilder {
 
         menu.addItem(moveSubmenuItem(snapshot: snapshot, target: target))
 
+        if let colorItem = colorSubmenuItem(snapshot: snapshot, target: target) {
+            menu.addItem(colorItem)
+        }
+
         if state.isTerminal {
             addAction(
                 title: localized("command.moveTabToLeftPane.title", defaultValue: "Move to Left Pane"),
@@ -1636,6 +1659,77 @@ enum TabContextMenuBuilder {
         return item
     }
 
+    /// Builds the Tab Color submenu from the host-provided palette. Returns nil
+    /// when the host offers no colors, so hosts that never set a palette provider
+    /// see no extra menu entry.
+    private static func colorSubmenuItem(
+        snapshot: TabContextMenuSnapshot,
+        target: TabContextMenuActionTarget
+    ) -> NSMenuItem? {
+        let options = snapshot.colorOptionsProvider()
+        guard !options.isEmpty else { return nil }
+
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+
+        if snapshot.currentColorHex != nil {
+            let clearItem = NSMenuItem(
+                title: localized("tabContext.clearTabColor", defaultValue: "Clear Color"),
+                action: #selector(TabContextMenuActionTarget.performColorSelection(_:)),
+                keyEquivalent: ""
+            )
+            clearItem.target = target
+            clearItem.representedObject = nil
+            submenu.addItem(clearItem)
+            submenu.addItem(.separator())
+        }
+
+        let currentHex = normalizedColorHex(snapshot.currentColorHex)
+        for option in options {
+            let optionItem = NSMenuItem(
+                title: option.name,
+                action: #selector(TabContextMenuActionTarget.performColorSelection(_:)),
+                keyEquivalent: ""
+            )
+            optionItem.target = target
+            optionItem.representedObject = option.hex
+            optionItem.state = (currentHex != nil && normalizedColorHex(option.hex) == currentHex) ? .on : .off
+            optionItem.image = colorSwatchImage(hex: option.hex)
+            submenu.addItem(optionItem)
+        }
+
+        let item = NSMenuItem(
+            title: localized("tabContext.tabColor", defaultValue: "Tab Color"),
+            action: nil,
+            keyEquivalent: ""
+        )
+        item.submenu = submenu
+        return item
+    }
+
+    /// Case- and prefix-insensitive hex compare so a persisted "#c0392b" still
+    /// checks the "#C0392B" palette row.
+    private static func normalizedColorHex(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let body = trimmed.hasPrefix("#") ? String(trimmed.dropFirst()) : trimmed
+        return body.uppercased()
+    }
+
+    private static func colorSwatchImage(hex: String) -> NSImage? {
+        guard let color = NSColor(tabColorSwatchHex: hex) else { return nil }
+        let diameter: CGFloat = 12
+        let size = NSSize(width: diameter, height: diameter)
+        let image = NSImage(size: size)
+        image.lockFocus()
+        color.setFill()
+        NSBezierPath(ovalIn: NSRect(origin: .zero, size: size)).fill()
+        image.unlockFocus()
+        image.isTemplate = false
+        return image
+    }
+
     private static func forkConversationSubmenuItem(
         state: TabContextMenuState,
         target: TabContextMenuActionTarget,
@@ -1819,5 +1913,20 @@ private extension EventModifiers {
         if contains(.option) { flags.insert(.option) }
         if contains(.control) { flags.insert(.control) }
         return flags
+    }
+}
+
+private extension NSColor {
+    /// Parses a `#RRGGBB` / `#RRGGBBAA` hex for context-menu swatches.
+    convenience init?(tabColorSwatchHex value: String) {
+        var hex = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if hex.hasPrefix("#") { hex.removeFirst() }
+        guard hex.count == 6 || hex.count == 8, let rgba = UInt64(hex, radix: 16) else { return nil }
+        let hasAlpha = hex.count == 8
+        let red = CGFloat((rgba >> (hasAlpha ? 24 : 16)) & 0xFF) / 255.0
+        let green = CGFloat((rgba >> (hasAlpha ? 16 : 8)) & 0xFF) / 255.0
+        let blue = CGFloat((rgba >> (hasAlpha ? 8 : 0)) & 0xFF) / 255.0
+        let alpha = hasAlpha ? CGFloat(rgba & 0xFF) / 255.0 : 1.0
+        self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
 }

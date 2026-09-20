@@ -5,6 +5,9 @@ struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
+    let colorOptionsProvider: () -> [TabColorOption]
+    /// The tab's current accent hex, used to check the matching palette row.
+    let currentColorHex: String?
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
 
@@ -12,12 +15,16 @@ struct TabContextMenuSnapshot {
         tabId: UUID,
         state: TabContextMenuState,
         moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
+        colorOptionsProvider: @escaping () -> [TabColorOption] = { [] },
+        currentColorHex: String? = nil,
         forkConversationAvailabilityProvider: @escaping () -> TabContextForkConversationAvailability,
         forkConversationAvailabilityRefreshHandler: @escaping @MainActor () async -> Void = {}
     ) {
         self.tabId = tabId
         self.state = state
         self.moveDestinationsProvider = moveDestinationsProvider
+        self.colorOptionsProvider = colorOptionsProvider
+        self.currentColorHex = currentColorHex
         self.forkConversationAvailabilityProvider = forkConversationAvailabilityProvider
         self.forkConversationAvailabilityRefreshHandler = forkConversationAvailabilityRefreshHandler
     }
@@ -26,6 +33,8 @@ struct TabContextMenuSnapshot {
 final class TabContextMenuActionTarget: NSObject {
     var onContextAction: ((TabContextAction) -> Void)?
     var onMoveDestination: ((String) -> Void)?
+    /// Receives the chosen accent hex, or nil when the user clears the color.
+    var onColorSelection: ((String?) -> Void)?
 
     @objc func performContextAction(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
@@ -38,6 +47,11 @@ final class TabContextMenuActionTarget: NSObject {
     @objc func performMoveDestination(_ sender: NSMenuItem) {
         guard let destinationId = sender.representedObject as? String else { return }
         onMoveDestination?(destinationId)
+    }
+
+    /// A nil `representedObject` is the Clear Color row.
+    @objc func performColorSelection(_ sender: NSMenuItem) {
+        onColorSelection?(sender.representedObject as? String)
     }
 }
 
@@ -100,6 +114,7 @@ struct TabContextMenuPresenter: NSViewRepresentable {
     let snapshot: TabContextMenuSnapshot
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
+    let onColorSelection: (String?) -> Void
 
     @MainActor
     final class Coordinator {
@@ -128,6 +143,7 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         let coordinator = Coordinator(snapshot: snapshot)
         coordinator.actionTarget.onContextAction = onContextAction
         coordinator.actionTarget.onMoveDestination = onMoveDestination
+        coordinator.actionTarget.onColorSelection = onColorSelection
         return coordinator
     }
 
@@ -159,5 +175,6 @@ struct TabContextMenuPresenter: NSViewRepresentable {
         context.coordinator.snapshot = snapshot
         context.coordinator.actionTarget.onContextAction = onContextAction
         context.coordinator.actionTarget.onMoveDestination = onMoveDestination
+        context.coordinator.actionTarget.onColorSelection = onColorSelection
     }
 }

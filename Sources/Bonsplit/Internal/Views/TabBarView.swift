@@ -994,12 +994,24 @@ struct TabBarView: View {
         pane.tabs.map(\.id)
     }
 
+    /// A colored tab owns its top edge even while selected: the selection
+    /// indicator is drawn by this overlay, above the tab's own accent strip, so
+    /// leaving it the system accent would repaint a colored tab's edge blue the
+    /// moment it was selected. Uncolored tabs keep the system accent.
+    private var selectedTabAccentIndicatorColor: NSColor? {
+        guard let selectedTabId = pane.selectedTabId,
+              let selectedTab = pane.tabs.first(where: { $0.id == selectedTabId }),
+              let colorHex = selectedTab.colorHex else { return nil }
+        return TabBarColors.nsColorTabAccent(hex: colorHex, for: appearance)
+    }
+
     @ViewBuilder
     private var selectionChrome: some View {
         TabBarSelectionChromeView(
             selectedTabId: pane.selectedTabId,
             geometryRegistry: tabItemGeometryRegistry,
-            indicatorColor: TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
+            indicatorColor: selectedTabAccentIndicatorColor
+                ?? TabBarColors.nsColorActiveIndicator(saturation: tabBarSaturation),
             separatorColor: TabBarColors.nsColorSeparator(for: appearance),
             mask: selectionChromeMask
         )
@@ -1265,6 +1277,9 @@ struct TabBarView: View {
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },
+            colorOptionsProvider: {
+                controller.tabContextColorOptionsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
             forkConversationAvailabilityProvider: {
                 controller.tabContextForkConversationAvailabilityProvider?(TabID(id: tab.id), pane.id) ?? .hidden
             },
@@ -1305,6 +1320,9 @@ struct TabBarView: View {
             },
             onMoveDestination: { destinationId in
                 controller.requestTabMove(toDestination: destinationId, for: TabID(id: tab.id), inPane: pane.id)
+            },
+            onColorSelection: { colorHex in
+                controller.requestTabColor(colorHex, for: TabID(id: tab.id), inPane: pane.id)
             }
         )
         .background(
