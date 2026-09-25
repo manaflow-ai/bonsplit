@@ -1021,6 +1021,16 @@ struct TabBarView: View {
         }
     }
 
+    private var pinnedTabEntries: [(index: Int, tab: TabItem)] {
+        // Shrink mode keeps the entire row visible, including pinned tabs.
+        // Overflow modes still give pinned tabs their own stationary lane.
+        shrinksTabsToWidth ? [] : visibleTabEntries.filter { $0.tab.isPinned }
+    }
+
+    private var scrollableTabEntries: [(index: Int, tab: TabItem)] {
+        shrinksTabsToWidth ? visibleTabEntries : visibleTabEntries.filter { !$0.tab.isPinned }
+    }
+
     private var tabIds: [UUID] {
         pane.tabs.map(\.id)
     }
@@ -1112,7 +1122,7 @@ struct TabBarView: View {
     private var tabScrollContent: some View {
         let fittedWidths = shrinkTabWidths
         HStack(spacing: TabBarMetrics.tabSpacing) {
-            ForEach(visibleTabEntries, id: \.tab.id) { entry in
+            ForEach(scrollableTabEntries, id: \.tab.id) { entry in
                 tabItem(for: entry.tab, at: entry.index, fittedWidth: fittedWidths[entry.tab.id])
                     .id(entry.tab.id)
             }
@@ -1141,6 +1151,18 @@ struct TabBarView: View {
         )
     }
 
+    @ViewBuilder
+    private var pinnedTabContent: some View {
+        HStack(spacing: TabBarMetrics.tabSpacing) {
+            ForEach(pinnedTabEntries, id: \.tab.id) { entry in
+                tabItem(for: entry.tab, at: entry.index, fillsWidth: false)
+                    .id(entry.tab.id)
+            }
+        }
+        .padding(.leading, TabBarMetrics.barPadding)
+        .frame(height: tabBarHeight, alignment: .topLeading)
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
@@ -1150,6 +1172,11 @@ struct TabBarView: View {
                     onSingleClick: focusPaneFromTabBarChrome
                 ) { return false }
                     .frame(width: appearance.tabBarLeadingInset)
+            }
+            // Pinned tabs stay outside the scroll view so their frames remain fixed
+            // while the unpinned tab row moves through the remaining viewport.
+            if !pinnedTabEntries.isEmpty {
+                pinnedTabContent
             }
             // Scrollable tabs with fade overlays
             GeometryReader { containerGeo in
@@ -1272,7 +1299,13 @@ struct TabBarView: View {
     }
 
     @ViewBuilder
-    private func tabItem(for tab: TabItem, at index: Int, fittedWidth: CGFloat?) -> some View {
+    private func tabItem(
+        for tab: TabItem,
+        at index: Int,
+        fillsWidth: Bool? = nil,
+        fittedWidth: CGFloat? = nil
+    ) -> some View {
+        let tabFillsWidth = fillsWidth ?? fillsTabsToWidth
         let contextMenuState = contextMenuState(for: tab, at: index)
         let showsZoomIndicator = splitViewController.zoomedPaneId == pane.id && pane.selectedTabId == tab.id
         let isImmediatelyBeforeSelected = pane.tabs.indices.contains(index + 1)
@@ -1282,7 +1315,7 @@ struct TabBarView: View {
             isSelected: pane.selectedTabId == tab.id,
             showsZoomIndicator: showsZoomIndicator,
             appearance: appearance,
-            fillsWidth: fillsTabsToWidth,
+            fillsWidth: tabFillsWidth,
             fittedWidth: fittedWidth,
             saturation: tabBarSaturation,
             trailingSeparatorBottomInset: isImmediatelyBeforeSelected
@@ -2111,6 +2144,9 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             if superview == nil {
                 BonsplitTabBarHitRegionRegistry.unregister(self)
                 BonsplitTabItemHitRegionRegistry.unregister(self)
+            } else if window != nil {
+                BonsplitTabBarHitRegionRegistry.register(self)
+                BonsplitTabItemHitRegionRegistry.register(self)
             }
         }
 
