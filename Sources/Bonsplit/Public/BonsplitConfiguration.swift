@@ -520,9 +520,9 @@ extension BonsplitConfiguration {
             /// shrinks tabs below their natural width.
             case fill
 
-            /// Tabs stretch to fill the pane's available tab-bar width, allowing
-            /// their titles to truncate below the normal visual minimum so every
-            /// tab remains represented in the strip instead of scrolling away.
+            /// Tabs share the available tab-bar width up to ``tabMaxWidth``.
+            /// Crowded titles truncate, then collapse to icons so every tab stays
+            /// represented in the strip. Pinned browser tabs retain compact widths.
             case shrink
         }
 

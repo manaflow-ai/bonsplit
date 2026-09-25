@@ -5905,8 +5905,7 @@ final class BonsplitTests: XCTestCase {
     }
 
     /// Shrink mode must lower the visual floor so a crowded pane can keep every
-    /// tab in the visible row. This currently fails until the sizing policy uses
-    /// the new mode.
+    /// tab in the visible row.
     func testTabWidthModeShrinkUsesCompactMinimum() {
         let appearance = BonsplitConfiguration.Appearance(tabWidthMode: .shrink)
         let range = TabItemStyling.tabWidthRange(for: appearance)

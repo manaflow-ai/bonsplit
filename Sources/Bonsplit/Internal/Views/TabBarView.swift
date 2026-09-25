@@ -875,8 +875,38 @@ struct TabBarView: View {
     /// viewport and SwiftUI distributes the slack across the flexible tabs. `nil` in fixed mode
     /// (and before the container width is known) leaves the historical layout intact.
     private var fillRowMinWidth: CGFloat? {
-        guard fillsTabsToWidth, containerWidth > 0 else { return nil }
+        guard fillsTabsToWidth, !shrinksTabsToWidth, containerWidth > 0 else { return nil }
         return containerWidth
+    }
+
+    private var shrinksTabsToWidth: Bool {
+        appearance.tabWidthMode == .shrink && !isFullWidthTabMode
+    }
+
+    /// Allocate the viewport before laying out the horizontal scroll content.
+    /// A minimum row width alone cannot constrain the scroll view's ideal width.
+    private var shrinkTabWidths: [UUID: CGFloat] {
+        guard shrinksTabsToWidth, containerWidth > 0, !pane.tabs.isEmpty else { return [:] }
+        let count = CGFloat(pane.tabs.count)
+        let available = max(0, containerWidth - trailingTabContentInset - 30
+            - 2 * TabBarMetrics.barPadding - count * TabBarMetrics.tabSpacing)
+        let fontScale = max(0.1, appearance.tabTitleFontSize / TabBarMetrics.titleFontSize)
+        let pinnedWidth = min(available / count, TabItemStyling.pinnedIconOnlyWidth(
+            iconSlotSize: TabBarMetrics.iconSize * fontScale,
+            horizontalPadding: TabBarMetrics.tabHorizontalPadding
+        ))
+        let pinnedCount = pane.tabs.filter {
+            TabItemStyling.isIconOnlyPinned(isPinned: $0.isPinned, kind: $0.kind)
+        }.count
+        let regularCount = pane.tabs.count - pinnedCount
+        let regularWidth = min(
+            max(1, appearance.tabMaxWidth),
+            (available - CGFloat(pinnedCount) * pinnedWidth) / CGFloat(max(1, regularCount))
+        )
+        return Dictionary(uniqueKeysWithValues: pane.tabs.map { tab in
+            (tab.id, TabItemStyling.isIconOnlyPinned(isPinned: tab.isPinned, kind: tab.kind)
+                ? pinnedWidth : regularWidth)
+        })
     }
 
     private var tabBarHeight: CGFloat {
@@ -1080,9 +1110,10 @@ struct TabBarView: View {
     /// distribute the slack.
     @ViewBuilder
     private var tabScrollContent: some View {
+        let fittedWidths = shrinkTabWidths
         HStack(spacing: TabBarMetrics.tabSpacing) {
             ForEach(visibleTabEntries, id: \.tab.id) { entry in
-                tabItem(for: entry.tab, at: entry.index)
+                tabItem(for: entry.tab, at: entry.index, fittedWidth: fittedWidths[entry.tab.id])
                     .id(entry.tab.id)
             }
 
@@ -1241,7 +1272,7 @@ struct TabBarView: View {
     }
 
     @ViewBuilder
-    private func tabItem(for tab: TabItem, at index: Int) -> some View {
+    private func tabItem(for tab: TabItem, at index: Int, fittedWidth: CGFloat?) -> some View {
         let contextMenuState = contextMenuState(for: tab, at: index)
         let showsZoomIndicator = splitViewController.zoomedPaneId == pane.id && pane.selectedTabId == tab.id
         let isImmediatelyBeforeSelected = pane.tabs.indices.contains(index + 1)
@@ -1252,6 +1283,7 @@ struct TabBarView: View {
             showsZoomIndicator: showsZoomIndicator,
             appearance: appearance,
             fillsWidth: fillsTabsToWidth,
+            fittedWidth: fittedWidth,
             saturation: tabBarSaturation,
             trailingSeparatorBottomInset: isImmediatelyBeforeSelected
                 ? TabBarMetrics.selectedTabLeftSeparatorBottomInset

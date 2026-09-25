@@ -6,14 +6,20 @@ import Testing
 @Suite(.serialized)
 @MainActor
 struct TabBarShrinkToFitTests {
-    @Test
-    func crowdedTabsStayInsideViewportWhenResized() throws {
+    @Test(arguments: [false, true])
+    func crowdedTabsStayInsideViewportWhenResized(withPinnedTabs: Bool) throws {
         let appearance = BonsplitConfiguration.Appearance(tabWidthMode: .shrink)
         let controller = BonsplitController(configuration: BonsplitConfiguration(appearance: appearance))
         controller.tabShortcutHintsEnabled = false
         let pane = try #require(controller.internalController.rootNode.allPanes.first)
         pane.tabs = (0..<9).map { index in
             TabItem(title: "Agent \(index + 1) with a long session title", icon: "terminal.fill", kind: "terminal")
+        }
+        if withPinnedTabs {
+            for index in 0..<2 {
+                pane.tabs[index].isPinned = true
+                pane.tabs[index].kind = "browser"
+            }
         }
         pane.selectedTabId = pane.tabs.last?.id
         let hostingView = NSHostingView(
@@ -53,6 +59,6 @@ struct TabBarShrinkToFitTests {
     }
 
     private func descendants<T: NSView>(_ type: T.Type, in view: NSView) -> [T] {
-        (view as? T).map { [$0] } ?? [] + view.subviews.flatMap { descendants(type, in: $0) }
+        ((view as? T).map { [$0] } ?? []) + view.subviews.flatMap { descendants(type, in: $0) }
     }
 }
