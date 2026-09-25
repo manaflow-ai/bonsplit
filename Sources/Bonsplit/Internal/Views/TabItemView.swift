@@ -1135,23 +1135,23 @@ final class TabLoadingSpinnerLayerView: NSView {
         if sizeChanged {
             invalidateIntrinsicContentSize()
         }
-        if window != nil {
-            startAnimating()
-        }
+        synchronizeAnimation()
     }
 
     override func layout() {
         super.layout()
         updateGeometry()
+        synchronizeAnimation()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil {
-            stopAnimating()
-        } else {
-            startAnimating()
-        }
+        synchronizeAnimation()
+    }
+
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        synchronizeAnimation()
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -1231,8 +1231,30 @@ final class TabLoadingSpinnerLayerView: NSView {
         arcContainerLayer.removeAnimation(forKey: Self.rotationAnimationKey)
     }
 
+    private func synchronizeAnimation() {
+        guard window != nil else {
+            stopAnimating()
+            return
+        }
+
+        startAnimating()
+
+        // A tab switch can reparent this view in the same window while the
+        // current Core Animation transaction is still reconciling SwiftUI's
+        // layout. Recheck once that transaction has finished in case it
+        // removed the animation from the still-visible layer.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window != nil else { return }
+            self.startAnimating()
+        }
+    }
+
     var activeRotationAnimationForTesting: CAAnimation? {
         arcContainerLayer.animation(forKey: Self.rotationAnimationKey)
+    }
+
+    func removeRotationAnimationForTesting() {
+        arcContainerLayer.removeAnimation(forKey: Self.rotationAnimationKey)
     }
 
     var arcStrokeEndForTesting: CGFloat {
