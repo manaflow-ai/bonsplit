@@ -544,6 +544,60 @@ public final class BonsplitController {
 
     // MARK: - Split Operations
 
+    /// Splits the workspace root, keeping the existing pane tree intact.
+    ///
+    /// The new pane becomes a sibling of the complete existing tree, so a
+    /// horizontal split always creates a full-height column and a vertical
+    /// split always creates a full-width row regardless of the focused pane.
+    ///
+    /// - Parameters:
+    ///   - orientation: Direction to split (horizontal = side-by-side, vertical = stacked).
+    ///   - tab: Tab to add to the new root pane.
+    ///   - insertFirst: Whether to place the new pane before the existing tree.
+    ///   - initialDividerPosition: Optional normalized divider position.
+    /// - Returns: The new pane ID, or nil if the delegate vetoes the split.
+    @discardableResult
+    public func splitRoot(
+        orientation: SplitOrientation,
+        withTab tab: Tab,
+        insertFirst: Bool = false,
+        initialDividerPosition: CGFloat? = nil
+    ) -> PaneID? {
+        guard configuration.allowSplits,
+              let originalPaneId = internalController.rootNode.allPaneIds.first else {
+            return nil
+        }
+        if delegate?.splitTabBar(self, shouldSplitPane: originalPaneId, orientation: orientation) == false {
+            return nil
+        }
+
+        let internalTab = TabItem(
+            id: tab.id.id,
+            title: tab.title,
+            hasCustomTitle: tab.hasCustomTitle,
+            icon: tab.icon,
+            iconImageData: tab.iconImageData,
+            iconAsset: tab.iconAsset,
+            kind: tab.kind,
+            isDirty: tab.isDirty,
+            showsNotificationBadge: tab.showsNotificationBadge,
+            isLoading: tab.isLoading,
+            isAudioMuted: tab.isAudioMuted,
+            isAudioPlaying: tab.isAudioPlaying,
+            isPinned: tab.isPinned,
+            showsRemoteIndicator: tab.showsRemoteIndicator
+        )
+        let newPaneId = internalController.splitRootWithTab(
+            orientation: orientation,
+            tab: internalTab,
+            insertFirst: insertFirst,
+            initialDividerPosition: initialDividerPosition
+        )
+        delegate?.splitTabBar(self, didSplitPane: originalPaneId, newPane: newPaneId, orientation: orientation)
+        notifyGeometryChange()
+        return newPaneId
+    }
+
     /// Split the focused pane (or specified pane)
     /// - Parameters:
     ///   - paneId: Optional pane to split (defaults to focused pane)

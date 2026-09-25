@@ -236,6 +236,44 @@ final class SplitViewController {
 
     // MARK: - Split Operations
 
+    /// Inserts a new pane beside the entire existing tree.
+    ///
+    /// Unlike `splitPane`, this operation does not descend into a leaf. The
+    /// existing root remains intact as one child of the new root split.
+    @discardableResult
+    func splitRootWithTab(
+        orientation: SplitOrientation,
+        tab: TabItem,
+        insertFirst: Bool,
+        initialDividerPosition: CGFloat?
+    ) -> PaneID {
+        clearPaneZoom()
+        let newPane = PaneState(tabs: [tab])
+        let existingRoot = rootNode
+        let splitState: SplitState
+        if insertFirst {
+            splitState = SplitState(
+                orientation: orientation,
+                first: .pane(newPane),
+                second: existingRoot,
+                dividerPosition: normalizedInitialDividerPosition(initialDividerPosition),
+                animationOrigin: .fromFirst
+            )
+        } else {
+            splitState = SplitState(
+                orientation: orientation,
+                first: existingRoot,
+                second: .pane(newPane),
+                dividerPosition: normalizedInitialDividerPosition(initialDividerPosition),
+                animationOrigin: .fromSecond
+            )
+        }
+        rootNode = .split(splitState)
+        registerPane(newPane)
+        focusedPaneId = newPane.id
+        return newPane.id
+    }
+
     /// Split the specified pane in the given orientation
     func splitPane(
         _ paneId: PaneID,
