@@ -46,6 +46,9 @@ final class SplitViewController {
     /// Bonsplit while the selected pane remains unchanged.
     var tabShortcutHintsEnabled: Bool = true
 
+    /// The host-resolved modifier shown in numbered surface tab hints.
+    var surfaceNumberShortcutModifier: TabControlShortcutModifier? = .control
+
     /// Handler for file/URL drops from external apps (e.g. Finder).
     /// Receives the dropped URLs and the pane ID where the drop occurred.
     @ObservationIgnored var onFileDrop: ((_ urls: [URL], _ paneId: PaneID) -> Bool)?

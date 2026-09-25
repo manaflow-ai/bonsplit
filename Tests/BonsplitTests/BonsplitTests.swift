@@ -2846,27 +2846,8 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
-    func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
+    func testTabControlShortcutHintPolicyDoesNotTrustStaleSurfaceShortcutDefaults() {
         withShortcutHintDefaultsSuite { defaults in
-            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
-            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
-
-            XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol,
-                "⌃"
-            )
-            XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
-                "⌃"
-            )
-            XCTAssertEqual(
-                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(defaults: defaults),
-                "⌃"
-            )
-            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [], defaults: defaults))
-            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control, .shift], defaults: defaults))
-            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command, .option], defaults: defaults))
-
             defaults.set(
                 shortcutData(
                     key: "1",
@@ -2878,18 +2859,73 @@ final class BonsplitTests: XCTestCase {
                 forKey: "shortcut.selectSurfaceByNumber"
             )
 
-            let custom = TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.command],
+                    defaults: defaults
+                )?.symbol,
+                "⌃"
+            )
+        }
+    }
+
+    func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
+        withShortcutHintDefaultsSuite { defaults in
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
+
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.control],
+                    shortcutModifier: .control,
+                    defaults: defaults
+                )?.symbol,
+                "⌃"
+            )
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.command],
+                    shortcutModifier: .control,
+                    defaults: defaults
+                )?.symbol,
+                "⌃"
+            )
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(.control),
+                "⌃"
+            )
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [], defaults: defaults))
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.control, .shift], defaults: defaults))
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(for: [.command, .option], defaults: defaults))
+
+            let customModifier = TabControlShortcutModifier(
+                modifierFlags: [.command, .option],
+                symbol: "⌥⌘"
+            )
+            let custom = TabControlShortcutHintPolicy.hintModifier(
+                for: [.command],
+                shortcutModifier: customModifier,
+                defaults: defaults
+            )
             XCTAssertEqual(custom?.symbol, "⌥⌘")
             XCTAssertEqual(
-                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(defaults: defaults),
+                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(customModifier),
                 "⌥⌘"
             )
             XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.command],
+                    shortcutModifier: customModifier,
+                    defaults: defaults
+                )?.symbol,
                 "⌥⌘"
             )
             XCTAssertEqual(
-                TabControlShortcutHintPolicy.hintModifier(for: [.control], defaults: defaults)?.symbol,
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.control],
+                    shortcutModifier: customModifier,
+                    defaults: defaults
+                )?.symbol,
                 "⌥⌘"
             )
         }
@@ -2993,6 +3029,37 @@ final class BonsplitTests: XCTestCase {
                     defaults: defaults
                 )
             )
+        }
+    }
+
+    @MainActor
+    func testControllerPassesResolvedSurfaceShortcutModifierToTabBarController() {
+        let controller = BonsplitController()
+        let modifier = TabControlShortcutModifier(
+            modifierFlags: [.command, .option],
+            symbol: "⌥⌘"
+        )
+
+        controller.surfaceNumberShortcutModifier = modifier
+
+        XCTAssertEqual(controller.surfaceNumberShortcutModifier, modifier)
+        XCTAssertEqual(controller.internalController.surfaceNumberShortcutModifier, modifier)
+
+        controller.surfaceNumberShortcutModifier = nil
+        XCTAssertNil(controller.internalController.surfaceNumberShortcutModifier)
+        controller.surfaceNumberShortcutModifier = .control
+        XCTAssertEqual(controller.internalController.surfaceNumberShortcutModifier, .control)
+    }
+
+    func testTabControlShortcutHintPolicyHidesUnboundShortcutAndPreservesChordPrefix() {
+        withShortcutHintDefaultsSuite { defaults in
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(
+                for: [.command], shortcutModifier: nil, defaults: defaults
+            ))
+            let chord = TabControlShortcutModifier(modifierFlags: [.control], symbol: "⌘K ⌃")
+            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(
+                for: [.control], shortcutModifier: chord, defaults: defaults
+            )?.symbol, "⌘K ⌃")
         }
     }
 

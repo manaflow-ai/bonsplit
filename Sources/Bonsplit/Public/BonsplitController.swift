@@ -59,6 +59,16 @@ public final class BonsplitController {
         didSet { internalController.tabShortcutHintsEnabled = tabShortcutHintsEnabled }
     }
 
+    /// The resolved modifier shown in numbered surface tab hints.
+    ///
+    /// Hosts with configurable shortcuts must update this value whenever the
+    /// resolved surface-number binding changes. Bonsplit does not read host
+    /// persistence, so the tab hint always reflects the value supplied here.
+    /// Set this to `nil` when the shortcut is unbound to hide numbered hints.
+    public var surfaceNumberShortcutModifier: TabControlShortcutModifier? = .control {
+        didSet { internalController.surfaceNumberShortcutModifier = surfaceNumberShortcutModifier }
+    }
+
     /// Handler for file/URL drops from external apps (e.g., Finder).
     /// Called when files are dropped onto a pane's content area.
     /// Return `true` if the drop was handled.
@@ -150,6 +160,7 @@ public final class BonsplitController {
 
     private func configureInternalController() {
         internalController.publicController = self
+        internalController.surfaceNumberShortcutModifier = surfaceNumberShortcutModifier
         internalController.onDividerDragSessionChange = { [weak self] active in
             guard let self else { return }
             if active {
