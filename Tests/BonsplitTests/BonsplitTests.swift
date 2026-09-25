@@ -2846,6 +2846,26 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    func testTabControlShortcutHintPolicyDoesNotTrustStaleSurfaceShortcutDefaults() {
+        withShortcutHintDefaultsSuite { defaults in
+            defaults.set(
+                shortcutData(
+                    key: "1",
+                    command: true,
+                    shift: false,
+                    option: true,
+                    control: false
+                ),
+                forKey: "shortcut.selectSurfaceByNumber"
+            )
+
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(for: [.command], defaults: defaults)?.symbol,
+                "⌃"
+            )
+        }
+    }
+
     func testTabControlShortcutHintPolicyMatchesConfiguredModifiers() {
         withShortcutHintDefaultsSuite { defaults in
             defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
