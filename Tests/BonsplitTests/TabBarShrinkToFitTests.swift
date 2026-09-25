@@ -34,7 +34,7 @@ struct TabBarShrinkToFitTests {
         window.contentView = hostingView
         defer { window.orderOut(nil) }
 
-        for width: CGFloat in [600, 420, 900] {
+        for width: CGFloat in [600, 420, 100, 50, 900] {
             window.setContentSize(NSSize(width: width, height: 30))
             for _ in 0..<10 {
                 hostingView.layoutSubtreeIfNeeded()
@@ -47,13 +47,16 @@ struct TabBarShrinkToFitTests {
                 let frame = try #require(frames[tab.id])
                 #expect(frame.width > 0)
                 #expect(frame.minX >= -0.5)
+                #expect(frame.maxX <= width + 0.5)
                 // Every tab must precede the action buttons, not just the pane edge.
                 let layout = TabBarLayout(
                     tabBarHeight: 30, availableWidth: width,
                     splitButtonCount: appearance.splitButtons.count,
                     splitButtonLaneVisible: true, reservesSplitButtonLane: true
                 )
-                #expect(frame.maxX <= width - layout.trailingTabContentInset + 0.5)
+                if width >= 420 {
+                    #expect(frame.maxX <= width - layout.trailingTabContentInset + 0.5)
+                }
             }
         }
     }
