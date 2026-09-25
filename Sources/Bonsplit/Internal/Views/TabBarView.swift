@@ -302,6 +302,7 @@ struct TabBarLayout: Equatable {
     let splitButtonLaneVisible: Bool
     let reservesSplitButtonLane: Bool
     let measuredSplitButtonLaneWidth: CGFloat
+    let splitButtonLaneWidthLimit: CGFloat?
 
     init(
         tabBarHeight: CGFloat,
@@ -310,7 +311,8 @@ struct TabBarLayout: Equatable {
         splitButtonCount: Int,
         splitButtonLaneVisible: Bool,
         reservesSplitButtonLane: Bool,
-        measuredSplitButtonLaneWidth: CGFloat = 0
+        measuredSplitButtonLaneWidth: CGFloat = 0,
+        splitButtonLaneWidthLimit: CGFloat? = nil
     ) {
         self.barHeight = max(1, tabBarHeight)
         self.availableWidth = max(0, availableWidth)
@@ -321,6 +323,7 @@ struct TabBarLayout: Equatable {
         self.measuredSplitButtonLaneWidth = self.splitButtonCount > 0
             ? max(0, measuredSplitButtonLaneWidth)
             : 0
+        self.splitButtonLaneWidthLimit = splitButtonLaneWidthLimit.map { max(0, $0) }
     }
 
     var minimumSplitButtonLaneWidth: CGFloat {
@@ -351,7 +354,8 @@ struct TabBarLayout: Equatable {
     }
 
     var visibleSplitButtonLaneWidth: CGFloat {
-        min(fullSplitButtonLaneWidth, maximumSplitButtonLaneWidth)
+        min(fullSplitButtonLaneWidth, maximumSplitButtonLaneWidth,
+            splitButtonLaneWidthLimit ?? .greatestFiniteMagnitude)
     }
 
     var splitButtonLaneOverflowsViewport: Bool {
@@ -845,8 +849,7 @@ struct TabBarView: View {
     }
 
     private var canScrollRight: Bool {
-        // contentWidth includes the 30pt drop zone after tabs.
-        let tabsWidth = contentWidth - 30
+        let tabsWidth = contentWidth - trailingDropZoneWidth
         guard tabsWidth > containerWidth + 4 else { return false }
         return scrollOffset < tabsWidth - containerWidth
     }
@@ -871,7 +874,7 @@ struct TabBarView: View {
     }
 
     /// Minimum width to impose on the (already trailing-inset-padded) tab row when
-    /// filling or shrinking, so the horizontal `ScrollView` hands the row the full
+    /// filling, so the horizontal `ScrollView` hands the row the full
     /// viewport and SwiftUI distributes the slack across the flexible tabs. `nil` in fixed mode
     /// (and before the container width is known) leaves the historical layout intact.
     private var fillRowMinWidth: CGFloat? {
@@ -888,7 +891,7 @@ struct TabBarView: View {
     private var shrinkTabWidths: [UUID: CGFloat] {
         guard shrinksTabsToWidth, containerWidth > 0, !pane.tabs.isEmpty else { return [:] }
         let count = CGFloat(pane.tabs.count)
-        let available = max(0, containerWidth - trailingTabContentInset - 30
+        let available = max(0, containerWidth - trailingTabContentInset - trailingDropZoneWidth
             - 2 * TabBarMetrics.barPadding - count * TabBarMetrics.tabSpacing)
         let fontScale = max(0.1, appearance.tabTitleFontSize / TabBarMetrics.titleFontSize)
         let pinnedWidth = min(available / count, TabItemStyling.pinnedIconOnlyWidth(
@@ -921,7 +924,10 @@ struct TabBarView: View {
             splitButtonCount: visibleSplitButtons.count,
             splitButtonLaneVisible: shouldShowSplitButtons,
             reservesSplitButtonLane: showSplitButtons && !isMinimalMode,
-            measuredSplitButtonLaneWidth: measuredSplitButtonLaneWidth
+            measuredSplitButtonLaneWidth: measuredSplitButtonLaneWidth,
+            // A narrow pane must retain space for tabs. The action lane already
+            // supports scrolling when its controls exceed the visible width.
+            splitButtonLaneWidthLimit: shrinksTabsToWidth ? containerWidth / 2 : nil
         )
     }
 
@@ -962,6 +968,11 @@ struct TabBarView: View {
 
     private var trailingTabContentInset: CGFloat {
         tabBarLayout.trailingTabContentInset
+    }
+
+    private var trailingDropZoneWidth: CGFloat {
+        guard !isFullWidthTabMode else { return 0 }
+        return shrinksTabsToWidth ? min(30, containerWidth / 4) : 30
     }
 
     private var splitButtonScrollCoordinateSpaceName: String {
@@ -1115,7 +1126,7 @@ struct TabBarView: View {
     /// The horizontally-scrolling tab row hosted inside the tab strip's `ScrollView`.
     ///
     /// Extracted from `body` so the SwiftUI type-checker can resolve the surrounding
-    /// view tree in reasonable time. In fill/shrink/full-width mode
+    /// view tree in reasonable time. In fill/full-width mode
     /// `tabRowFillMinWidth` forces the row to the viewport width so the flexible tabs
     /// distribute the slack.
     @ViewBuilder
@@ -1184,8 +1195,8 @@ struct TabBarView: View {
                     tabScrollContent
                 }
                     // When the tab strip is shorter than the visible area, place a single
-                    // drag zone over both the empty trailing space AND the 30pt inline
-                    // dropZoneAfterTabs (extended leftward by 30pt). The inline zone's
+                    // drag zone over both the empty trailing space and the inline
+                    // dropZoneAfterTabs. The inline zone's
                     // DragNSView is then visually covered, so all clicks in this region land
                     // on this overlay's single DragNSView. AppKit tracks `clickCount` per
                     // view, so without this an unlucky shift in the inline/overlay boundary
@@ -1201,7 +1212,7 @@ struct TabBarView: View {
                             ) {
                                 performNewTerminalSplitButtonAction()
                             }
-                            .frame(width: trailing + 30, height: tabBarHeight)
+                            .frame(width: trailing + trailingDropZoneWidth, height: tabBarHeight)
                         }
                     }
                 .coordinateSpace(name: "tabScroll")
@@ -1428,7 +1439,7 @@ struct TabBarView: View {
         ) {
             performNewTerminalSplitButtonAction()
         }
-        .frame(width: 30, height: tabBarHeight)
+        .frame(width: trailingDropZoneWidth, height: tabBarHeight)
         .overlay(alignment: .leading) {
             if dropTargetIndex == pane.tabs.count {
                 dropIndicator

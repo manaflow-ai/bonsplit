@@ -689,17 +689,24 @@ struct TabItemView: View {
                     pinnedActivityBadge
                         .offset(x: 3, y: -2)
                 }
-                .opacity(showsShortcutHint ? 0 : 1)
+                .opacity(showsCompactShortcutHint ? 0 : 1)
                 // Suppress the audio badge's tap target while the hint pill is shown.
-                .allowsHitTesting(!showsShortcutHint)
+                .allowsHitTesting(!showsCompactShortcutHint)
 
             if let shortcutHintLabel {
                 TabControlShortcutHintPill(text: shortcutHintLabel)
-                    .opacity(showsShortcutHint ? 1 : 0)
+                    .opacity(showsCompactShortcutHint ? 1 : 0)
                     .allowsHitTesting(false)
             }
         }
-        .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
+        .tabControlShortcutHintVisibilityAnimation(value: showsCompactShortcutHint)
+    }
+
+    private var showsCompactShortcutHint: Bool {
+        guard showsShortcutHint else { return false }
+        guard let fittedWidth, let shortcutHintLabel else { return true }
+        return TabItemStyling.shortcutHintWidth(for: shortcutHintLabel)
+            + 2 * TabBarMetrics.tabHorizontalPadding <= fittedWidth
     }
 
     /// Leading favicon / loading spinner / symbol icon. Shared by the standard and
@@ -738,6 +745,12 @@ struct TabItemView: View {
                         .font(.system(size: glyphSize(for: iconName)))
                         .foregroundStyle(iconTint)
                 }
+            } else if usesCompactContent {
+                // Hosts may omit an icon. Keep a visible mark when the title
+                // has collapsed, including for tabs without activity badges.
+                Image(systemName: "rectangle")
+                    .font(.system(size: compactMarkSize))
+                    .foregroundStyle(iconTint)
             }
         }
         // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
