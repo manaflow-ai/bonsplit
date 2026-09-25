@@ -174,7 +174,9 @@ enum TabItemStyling {
     }
 
     static func tabWidthRange(for appearance: BonsplitConfiguration.Appearance) -> ClosedRange<CGFloat> {
-        let minimum = max(1, TabBarMetrics.tabMinWidth)
+        let minimum: CGFloat = appearance.tabWidthMode == .shrink
+            ? 1
+            : max(1, TabBarMetrics.tabMinWidth)
         let maximum = max(minimum, appearance.tabMaxWidth)
         return minimum...maximum
     }
@@ -321,8 +323,8 @@ struct TabItemView: View {
         .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
         .frame(
             minWidth: frameMinWidth,
-            // In fill mode the tab becomes flexible so the tab strip can distribute
-            // slack equally across tabs; the fixed upper bound only applies otherwise.
+            // Fill and shrink modes make the tab flexible so the tab strip can
+            // distribute slack equally across tabs; the fixed upper bound only applies otherwise.
             // Pinned browser tabs pin both bounds to a compact icon-only width.
             maxWidth: frameMaxWidth,
             minHeight: tabHeight,
@@ -333,7 +335,8 @@ struct TabItemView: View {
         // tab strip would otherwise propose. Without this the flexible `maxWidth`
         // frame lets SwiftUI distribute slack equally across tabs, so a single
         // long-titled tab drags every other tab wider (and over-truncates short
-        // titles). Fill mode keeps the flexible behavior so tabs share the strip.
+        // titles). Fill and shrink modes keep the flexible behavior so tabs share
+        // the strip.
         // Icon-only pinned tabs always size to their fixed compact width.
         .fixedSize(horizontal: isIconOnlyPinned || !fillsWidth, vertical: false)
         .background(tabBackground.saturation(saturation))

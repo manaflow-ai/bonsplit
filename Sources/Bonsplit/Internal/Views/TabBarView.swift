@@ -864,14 +864,15 @@ struct TabBarView: View {
     }
 
     /// Whether tabs should stretch to fill the pane's available tab-bar width.
-    /// Full-width mode uses the same flexible tab item chrome as configured fill mode.
+    /// Full-width mode uses the same flexible tab item chrome as configured fill
+    /// and shrink modes.
     private var fillsTabsToWidth: Bool {
-        appearance.tabWidthMode == .fill || isFullWidthTabMode
+        appearance.tabWidthMode == .fill || appearance.tabWidthMode == .shrink || isFullWidthTabMode
     }
 
     /// Minimum width to impose on the (already trailing-inset-padded) tab row when
-    /// filling, so the horizontal `ScrollView` hands the row the full viewport and
-    /// SwiftUI distributes the slack across the flexible tabs. `nil` in fixed mode
+    /// filling or shrinking, so the horizontal `ScrollView` hands the row the full
+    /// viewport and SwiftUI distributes the slack across the flexible tabs. `nil` in fixed mode
     /// (and before the container width is known) leaves the historical layout intact.
     private var fillRowMinWidth: CGFloat? {
         guard fillsTabsToWidth, containerWidth > 0 else { return nil }
@@ -1074,8 +1075,9 @@ struct TabBarView: View {
     /// The horizontally-scrolling tab row hosted inside the tab strip's `ScrollView`.
     ///
     /// Extracted from `body` so the SwiftUI type-checker can resolve the surrounding
-    /// view tree in reasonable time. In fill/full-width mode `tabRowFillMinWidth`
-    /// forces the row to the viewport width so the flexible tabs distribute the slack.
+    /// view tree in reasonable time. In fill/shrink/full-width mode
+    /// `tabRowFillMinWidth` forces the row to the viewport width so the flexible tabs
+    /// distribute the slack.
     @ViewBuilder
     private var tabScrollContent: some View {
         HStack(spacing: TabBarMetrics.tabSpacing) {
