@@ -2862,7 +2862,6 @@ final class BonsplitTests: XCTestCase {
             XCTAssertEqual(
                 TabControlShortcutHintPolicy.hintModifier(
                     for: [.command],
-                    shortcutModifier: .control,
                     defaults: defaults
                 )?.symbol,
                 "⌃"
@@ -3045,6 +3044,23 @@ final class BonsplitTests: XCTestCase {
 
         XCTAssertEqual(controller.surfaceNumberShortcutModifier, modifier)
         XCTAssertEqual(controller.internalController.surfaceNumberShortcutModifier, modifier)
+
+        controller.surfaceNumberShortcutModifier = nil
+        XCTAssertNil(controller.internalController.surfaceNumberShortcutModifier)
+        controller.surfaceNumberShortcutModifier = .control
+        XCTAssertEqual(controller.internalController.surfaceNumberShortcutModifier, .control)
+    }
+
+    func testTabControlShortcutHintPolicyHidesUnboundShortcutAndPreservesChordPrefix() {
+        withShortcutHintDefaultsSuite { defaults in
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(
+                for: [.command], shortcutModifier: nil, defaults: defaults
+            ))
+            let chord = TabControlShortcutModifier(modifierFlags: [.control], symbol: "⌘K ⌃")
+            XCTAssertEqual(TabControlShortcutHintPolicy.hintModifier(
+                for: [.control], shortcutModifier: chord, defaults: defaults
+            )?.symbol, "⌘K ⌃")
+        }
     }
 
     @MainActor

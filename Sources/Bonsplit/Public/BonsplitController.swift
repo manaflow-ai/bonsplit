@@ -64,7 +64,8 @@ public final class BonsplitController {
     /// Hosts with configurable shortcuts must update this value whenever the
     /// resolved surface-number binding changes. Bonsplit does not read host
     /// persistence, so the tab hint always reflects the value supplied here.
-    public var surfaceNumberShortcutModifier: TabControlShortcutModifier = .control {
+    /// Set this to `nil` when the shortcut is unbound to hide numbered hints.
+    public var surfaceNumberShortcutModifier: TabControlShortcutModifier? = .control {
         didSet { internalController.surfaceNumberShortcutModifier = surfaceNumberShortcutModifier }
     }
 

@@ -4,14 +4,14 @@ import AppKit
 public struct TabControlShortcutModifier: Equatable {
     /// The modifier flags used by the resolved surface-number shortcut.
     public let modifierFlags: NSEvent.ModifierFlags
-    /// The localized-independent macOS glyphs rendered in the tab hint.
+    /// The display prefix before each tab digit, including any chord prefix.
     public let symbol: String
 
     /// Creates a tab hint modifier from the resolved shortcut's flags and display glyphs.
     ///
     /// - Parameters:
     ///   - modifierFlags: The modifier flags for the resolved surface-number shortcut.
-    ///   - symbol: The macOS glyphs that represent those modifiers.
+    ///   - symbol: The prefix displayed before the digit, such as `⌃` or `⌘K ⌃`.
     public init(modifierFlags: NSEvent.ModifierFlags, symbol: String) {
         self.modifierFlags = modifierFlags
         self.symbol = symbol
