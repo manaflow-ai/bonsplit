@@ -1235,6 +1235,10 @@ final class TabLoadingSpinnerLayerView: NSView {
         arcContainerLayer.animation(forKey: Self.rotationAnimationKey)
     }
 
+    func removeRotationAnimationForTesting() {
+        arcContainerLayer.removeAnimation(forKey: Self.rotationAnimationKey)
+    }
+
     var arcStrokeEndForTesting: CGFloat {
         arcLayer.strokeEnd
     }
