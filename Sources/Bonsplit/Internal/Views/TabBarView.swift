@@ -2107,6 +2107,9 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             if superview == nil {
                 BonsplitTabBarHitRegionRegistry.unregister(self)
                 BonsplitTabItemHitRegionRegistry.unregister(self)
+            } else if window != nil {
+                BonsplitTabBarHitRegionRegistry.register(self)
+                BonsplitTabItemHitRegionRegistry.register(self)
             }
         }
 
