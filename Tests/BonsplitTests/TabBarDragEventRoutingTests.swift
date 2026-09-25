@@ -5,6 +5,46 @@ import Testing
 
 @MainActor
 @Suite struct TabBarDragEventRoutingTests {
+    @Test func tabBarBackgroundReregistersAfterReparentingWithinWindow() throws {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = try #require(window.contentView)
+        let firstContainer = NSView(frame: contentView.bounds)
+        let secondContainer = NSView(frame: contentView.bounds)
+        let tabBar = TabBarDragAndHoverView.TabBarBackgroundNSView(
+            frame: NSRect(x: 20, y: 132, width: 180, height: 30)
+        )
+
+        contentView.addSubview(firstContainer)
+        contentView.addSubview(secondContainer)
+        firstContainer.addSubview(tabBar)
+        window.makeKeyAndOrderFront(nil)
+
+        let hitPoint = tabBar.convert(NSPoint(x: 24, y: 12), to: nil)
+        #expect(
+            BonsplitTabBarHitRegionRegistry.containsWindowPoint(hitPoint, in: window),
+            "A tab bar attached to a window should register its hit region"
+        )
+
+        secondContainer.addSubview(tabBar)
+
+        // AppKit can reparent a view while its window stays unchanged. The
+        // remove side of that lifecycle unregisters the region, while the
+        // add-side callback below is the only chance to restore it.
+        BonsplitTabBarHitRegionRegistry.unregister(tabBar)
+        tabBar.viewDidMoveToSuperview()
+
+        #expect(
+            BonsplitTabBarHitRegionRegistry.containsWindowPoint(hitPoint, in: window),
+            "Reparenting within the same window should keep the tab bar hit region registered"
+        )
+    }
+
     @Test func dragStartForwardsThresholdMoveToCancelPendingSwiftUIPress() throws {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 240, height: 80),
