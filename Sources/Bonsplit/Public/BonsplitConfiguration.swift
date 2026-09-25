@@ -519,6 +519,11 @@ extension BonsplitConfiguration {
             /// the strip falls back to ``fixed`` sizing and scrolls, so this mode never
             /// shrinks tabs below their natural width.
             case fill
+
+            /// Tabs stretch to fill the pane's available tab-bar width, allowing
+            /// their titles to truncate below the normal visual minimum so every
+            /// tab remains represented in the strip instead of scrolling away.
+            case shrink
         }
 
         // MARK: - Tab Bar
