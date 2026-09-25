@@ -6,6 +6,93 @@ import XCTest
 #if DEBUG
 @MainActor
 final class TabBarLayoutFeedbackTests: XCTestCase {
+    func testPinnedTabStaysAtLeadingEdgeWhileUnpinnedTabsScroll() throws {
+        let size = NSSize(width: 420, height: TabBarMetrics.barHeight)
+        let controller = BonsplitController(
+            configuration: BonsplitConfiguration(appearance: .default)
+        )
+        controller.tabShortcutHintsEnabled = false
+        let pane = try XCTUnwrap(controller.internalController.rootNode.allPanes.first)
+        let pinnedTab = TabItem(
+            title: "Pinned Claude session",
+            icon: "terminal.fill",
+            kind: "terminal",
+            isPinned: true
+        )
+        let unpinnedTabs = (0..<50).map { index in
+            TabItem(
+                title: "Terminal \(index + 1) — \(String(repeating: "x", count: index % 17))",
+                icon: "terminal.fill",
+                kind: "terminal"
+            )
+        }
+        let tabs = [pinnedTab] + unpinnedTabs
+        pane.tabs = tabs
+        pane.selectedTabId = pinnedTab.id
+
+        let hostingView = NSHostingView(
+            rootView: TabBarView(pane: pane, isFocused: true, showSplitButtons: false)
+                .environment(controller)
+                .environment(controller.internalController)
+        )
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: size),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        defer { window.orderOut(nil) }
+        let contentView = try XCTUnwrap(window.contentView)
+        hostingView.frame = NSRect(origin: .zero, size: size)
+        hostingView.autoresizingMask = [.width, .height]
+        contentView.addSubview(hostingView)
+        window.makeKeyAndOrderFront(nil)
+
+        settleLayout(in: window, hostingView: hostingView)
+        let scrollView = try XCTUnwrap(tabBarScrollView(in: hostingView))
+        let chromeView = try XCTUnwrap(
+            descendants(ofType: TabBarSelectionChromeView.ChromeNSView.self, in: hostingView).first
+        )
+        let initialFrames = try XCTUnwrap(
+            chromeView.geometryRegistry?.frames(for: tabs.map(\.id), in: chromeView)
+        )
+        let maximumOffset = max(
+            0,
+            max(
+                scrollView.documentView?.frame.width ?? 0,
+                scrollView.documentView?.bounds.width ?? 0
+            ) - scrollView.contentView.bounds.width
+        )
+        XCTAssertGreaterThan(maximumOffset, 0)
+
+        NotificationCenter.default.post(
+            name: NSScrollView.willStartLiveScrollNotification,
+            object: scrollView
+        )
+        scrollView.contentView.scroll(to: NSPoint(x: maximumOffset, y: 0))
+        scrollView.reflectScrolledClipView(scrollView.contentView)
+        settleLayout(in: window, hostingView: hostingView, passes: 2)
+
+        let scrolledFrames = try XCTUnwrap(
+            chromeView.geometryRegistry?.frames(for: tabs.map(\.id), in: chromeView)
+        )
+        let initialPinnedFrame = try XCTUnwrap(initialFrames[pinnedTab.id])
+        let scrolledPinnedFrame = try XCTUnwrap(scrolledFrames[pinnedTab.id])
+        XCTAssertEqual(
+            scrolledPinnedFrame.minX,
+            initialPinnedFrame.minX,
+            accuracy: 1,
+            "Pinned tabs must remain fixed while the unpinned tab row scrolls."
+        )
+        let initialUnpinnedFrame = try XCTUnwrap(initialFrames[unpinnedTabs[0].id])
+        let scrolledUnpinnedFrame = try XCTUnwrap(scrolledFrames[unpinnedTabs[0].id])
+        XCTAssertLessThan(
+            scrolledUnpinnedFrame.minX,
+            initialUnpinnedFrame.minX - 1,
+            "Unpinned tabs should continue to scroll horizontally."
+        )
+    }
+
     func testScrollingManyTabsKeepsPlatformGeometryLive() throws {
         let size = NSSize(width: 420, height: TabBarMetrics.barHeight)
         let controller = BonsplitController(

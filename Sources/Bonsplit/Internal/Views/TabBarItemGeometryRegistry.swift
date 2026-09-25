@@ -230,7 +230,8 @@ final class TabBarItemGeometryRegistry {
               let documentView = scrollView.documentView,
               let itemView = itemViews.object(forKey: tabId as NSUUID),
               itemView.window === scrollView.window,
-              isVisibleInHierarchy(itemView) else {
+              isVisibleInHierarchy(itemView),
+              itemView.isDescendant(of: documentView) else {
             return false
         }
 
@@ -287,12 +288,23 @@ final class TabBarItemGeometryRegistry {
 
     @discardableResult
     private func revealTabIfClipped(_ tabId: UUID) -> Bool {
+        guard let itemView = itemViews.object(forKey: tabId as NSUUID),
+              isVisibleInHierarchy(itemView) else {
+            return false
+        }
         guard let scrollView,
-              let documentView = scrollView.documentView,
-              let itemView = itemViews.object(forKey: tabId as NSUUID),
-              itemView.window === scrollView.window,
-              isVisibleInHierarchy(itemView),
-              let metrics = currentScrollMetrics(),
+              let documentView = scrollView.documentView else {
+            // A tab without an enclosing scroll view is in the fixed pinned
+            // leading area, so it is already visible.
+            return itemView.enclosingScrollView == nil
+        }
+        guard itemView.window === scrollView.window else { return false }
+        guard itemView.isDescendant(of: documentView) else {
+            // Pinned tabs are hosted beside the scrolling document and never
+            // need a scroll adjustment.
+            return true
+        }
+        guard let metrics = currentScrollMetrics(),
               metrics.unobscuredViewportWidth > 0 else {
             return false
         }
@@ -497,7 +509,9 @@ struct TabItemHitRegionView: NSViewRepresentable {
 
         private func registerGeometryIfVisible() {
             guard window != nil, superview != nil, let tabId else { return }
-            geometryRegistry?.attachScrollView(enclosingScrollView)
+            if let enclosingScrollView {
+                geometryRegistry?.attachScrollView(enclosingScrollView)
+            }
             geometryRegistry?.register(self, for: tabId)
         }
 
