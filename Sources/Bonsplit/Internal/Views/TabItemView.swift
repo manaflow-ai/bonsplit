@@ -266,6 +266,9 @@ enum TabItemStyling {
 struct TabItemView: View {
     let tab: TabItem
     let isSelected: Bool
+    /// Owned by the tab strip so hover follows the pointer when tabs move
+    /// under it (see `TabBarView.hoveredTabId`).
+    let isHovered: Bool
     let showsZoomIndicator: Bool
     let appearance: BonsplitConfiguration.Appearance
     /// When true, the tab drops its fixed maximum width and grows to fill the slack
@@ -293,8 +296,7 @@ struct TabItemView: View {
     let onContextAction: (TabContextAction) -> Void
     let onMoveDestination: (String) -> Void
 
-    @State private var isHovered = false
-    @State private var isCloseHovered = false
+    @State private var closeButtonPointerInside = false
     @State private var isZoomHovered = false
     @State private var isAudioHovered = false
     @State private var showGlobeFallback = true
@@ -368,13 +370,16 @@ struct TabItemView: View {
                 onZoomToggle()
             }
         )
-        .onHover { hovering in
-            withTransaction(Transaction(animation: nil)) {
-                isHovered = hovering
-            }
-        }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(tab.title)
+        // The close button is only built while selected or hovered and is
+        // merged into this element, so VoiceOver needs a named action to
+        // close any tab.
+        .accessibilityActions {
+            if allowsClose && !tab.isPinned {
+                Button(closeTabAccessibilityName) { onClose(.closeButton) }
+            }
+        }
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
         .safeHelp(tab.title)
@@ -1018,11 +1023,25 @@ struct TabItemView: View {
 
     // MARK: - Close Button / Dirty Indicator
 
+    /// Close-button highlight. Gated by the strip-owned tab hover so a stale
+    /// button-level flag cannot keep highlighting after the tab moved away.
+    private var isCloseHovered: Bool {
+        closeButtonPointerInside && isHovered
+    }
+
+    private var closeTabAccessibilityName: String {
+        Bundle.module.localizedString(
+            forKey: "tab.close.accessibilityLabel",
+            value: "Close Tab",
+            table: nil
+        )
+    }
+
     @ViewBuilder
     private var closeOrDirtyIndicator: some View {
         ZStack {
             // Dirty indicator (shown when dirty and not hovering, hidden for selected tab)
-            if (!isSelected && !isHovered && !isCloseHovered) && (tab.isDirty || tab.showsNotificationBadge) {
+            if (!isSelected && !isHovered) && (tab.isDirty || tab.showsNotificationBadge) {
                 HStack(spacing: 2) {
                     if tab.showsNotificationBadge {
                         Circle()
@@ -1039,14 +1058,14 @@ struct TabItemView: View {
             }
 
             if tab.isPinned {
-                if isSelected || isHovered || isCloseHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
+                if isSelected || isHovered || (!tab.isDirty && !tab.showsNotificationBadge) {
                     Image(systemName: "pin.fill")
                         .font(.system(size: scaledCloseIconSize, weight: .semibold))
                         .foregroundStyle(TabBarColors.inactiveText(for: appearance))
                         .frame(width: accessorySlotSize, height: accessorySlotSize)
                         .saturation(saturation)
                 }
-            } else if allowsClose && (isSelected || isHovered || isCloseHovered) {
+            } else if allowsClose && (isSelected || isHovered) {
                 // Close button (always visible on active tab, shown on hover for others)
                 Button {
                     onClose(.closeButton)
@@ -1071,9 +1090,15 @@ struct TabItemView: View {
                 .buttonStyle(.plain)
                 .onHover { hovering in
                     withTransaction(Transaction(animation: nil)) {
-                        isCloseHovered = hovering
+                        closeButtonPointerInside = hovering
                     }
                 }
+                // Pinning, allowsClose, or deselect can remove the button with
+                // the pointer still on it, and .onHover(false) never arrives.
+                .onDisappear { closeButtonPointerInside = false }
+                // The tab element's named "Close Tab" action covers this;
+                // merged into the tab it would be announced twice.
+                .accessibilityHidden(true)
                 .saturation(saturation)
             }
         }
