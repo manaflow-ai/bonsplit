@@ -828,6 +828,12 @@ struct TabBarView: View {
     @AppStorage("workspacePresentationMode") private var presentationMode = "standard"
     @AppStorage("debugFadeColorStyle") private var fadeColorStyle = -1
     @State private var isHoveringTabBar = false
+    /// One hovered tab for the whole strip, resolved from the pointer against
+    /// the registered tab frames. Per-tab `.onHover` never fires when a tab
+    /// slides under a stationary pointer (closing the tab to its left), so the
+    /// tab under the cursor showed no hover or close button until the mouse
+    /// moved, while the tab that slid away could keep its stale hover.
+    @State private var hoveredTabId: UUID?
     @State private var dropTargetIndex: Int?
     @State private var scrollOffset: CGFloat = 0
     @State private var contentWidth: CGFloat = 0
@@ -1212,7 +1218,12 @@ struct TabBarView: View {
         }
         .background(dragAndHoverBackground)
         .overlay(
-            TabBarHoverTrackingView { updateTabBarHover($0) }
+            TabBarHoverTrackingView(
+                geometryRegistry: tabItemGeometryRegistry,
+                tabIds: pane.tabs.map(\.id),
+                onHoverChanged: { updateTabBarHover($0) },
+                onHoveredTabChanged: { updateHoveredTab($0) }
+            )
         )
         .overlay(tabDropDestination)
         .background {
@@ -1263,6 +1274,12 @@ struct TabBarView: View {
         }
     }
 
+    private func updateHoveredTab(_ tabId: UUID?) {
+        withTransaction(Transaction(animation: nil)) {
+            hoveredTabId = tabId
+        }
+    }
+
     @ViewBuilder
     private func tabItem(
         for tab: TabItem,
@@ -1277,6 +1294,7 @@ struct TabBarView: View {
         TabItemView(
             tab: tab,
             isSelected: pane.selectedTabId == tab.id,
+            isHovered: hoveredTabId == tab.id,
             showsZoomIndicator: showsZoomIndicator,
             appearance: appearance,
             fillsWidth: tabFillsWidth,
@@ -1890,24 +1908,67 @@ private final class SplitActionMouseDownNSView: NSView {
     }
 }
 
+/// Resolves which tab the pointer is over from the strip's registered tab
+/// frames. Pure so the stationary-pointer cases are unit testable.
+struct TabBarHoveredTabResolver {
+    func hoveredTabId(
+        pointInView: NSPoint?,
+        barBounds: CGRect,
+        tabIds: [UUID],
+        frames: [UUID: CGRect]
+    ) -> UUID? {
+        guard let pointInView, barBounds.insetBy(dx: -1, dy: -1).contains(pointInView) else {
+            return nil
+        }
+        return tabIds.first { frames[$0]?.contains(pointInView) == true }
+    }
+}
+
 private struct TabBarHoverTrackingView: NSViewRepresentable {
+    let geometryRegistry: TabBarItemGeometryRegistry
+    let tabIds: [UUID]
     let onHoverChanged: (Bool) -> Void
+    let onHoveredTabChanged: (UUID?) -> Void
 
     func makeNSView(context: Context) -> HoverNSView {
         let view = HoverNSView()
-        view.onHoverChanged = onHoverChanged
+        update(view)
         return view
     }
 
     func updateNSView(_ nsView: HoverNSView, context: Context) {
-        nsView.onHoverChanged = onHoverChanged
+        update(nsView)
     }
 
-    final class HoverNSView: NSView {
+    static func dismantleNSView(_ nsView: HoverNSView, coordinator: ()) {
+        nsView.geometryRegistry?.unregisterObserver(nsView)
+    }
+
+    private func update(_ view: HoverNSView) {
+        view.onHoverChanged = onHoverChanged
+        view.onHoveredTabChanged = onHoveredTabChanged
+        if view.geometryRegistry !== geometryRegistry {
+            view.geometryRegistry?.unregisterObserver(view)
+            view.geometryRegistry = geometryRegistry
+            geometryRegistry.registerObserver(view)
+        }
+        view.tabIds = tabIds
+    }
+
+    final class HoverNSView: NSView, TabBarItemGeometryObserving {
         var onHoverChanged: ((Bool) -> Void)?
+        var onHoveredTabChanged: ((UUID?) -> Void)?
+        weak var geometryRegistry: TabBarItemGeometryRegistry?
+        var tabIds: [UUID] = [] {
+            didSet {
+                guard tabIds != oldValue else { return }
+                updateHoverFromCurrentMouseLocation()
+            }
+        }
         private var trackingArea: NSTrackingArea?
         private var localMouseMonitor: Any?
         private var isHovering = false
+        private var hoveredTabId: UUID?
 
         deinit {
             removeLocalMouseMonitor()
@@ -1923,7 +1984,7 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
                 updateHoverFromCurrentMouseLocation()
             } else {
                 removeLocalMouseMonitor()
-                emitHoverChanged(false)
+                emitHover(pointInView: nil)
             }
         }
 
@@ -1953,6 +2014,12 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
             updateHover(from: event)
         }
 
+        /// Tabs were added, removed, resized, or scrolled: the pointer may now
+        /// sit over a different tab without having moved.
+        func tabBarItemGeometryDidChange() {
+            updateHoverFromCurrentMouseLocation()
+        }
+
         private func installLocalMouseMonitorIfNeeded() {
             guard localMouseMonitor == nil else { return }
             localMouseMonitor = NSEvent.addLocalMonitorForEvents(
@@ -1972,34 +2039,47 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
 
         private func updateHover(from event: NSEvent) {
             guard let window else {
-                emitHoverChanged(false)
+                emitHover(pointInView: nil)
                 return
             }
             guard event.window == nil || event.window === window else {
-                emitHoverChanged(false)
+                emitHover(pointInView: nil)
                 return
             }
 
             let pointInWindow = event.window === window
                 ? event.locationInWindow
                 : window.mouseLocationOutsideOfEventStream
-            let pointInView = convert(pointInWindow, from: nil)
-            emitHoverChanged(bounds.insetBy(dx: -1, dy: -1).contains(pointInView))
+            emitHover(pointInView: convert(pointInWindow, from: nil))
         }
 
         private func updateHoverFromCurrentMouseLocation() {
-            guard let window else {
-                emitHoverChanged(false)
+            guard let window,
+                  NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+                    == window.windowNumber else {
+                emitHover(pointInView: nil)
                 return
             }
-            let pointInView = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-            emitHoverChanged(bounds.insetBy(dx: -1, dy: -1).contains(pointInView))
+            emitHover(pointInView: convert(window.mouseLocationOutsideOfEventStream, from: nil))
         }
 
-        private func emitHoverChanged(_ newValue: Bool) {
-            guard isHovering != newValue else { return }
-            isHovering = newValue
-            onHoverChanged?(newValue)
+        private func emitHover(pointInView: NSPoint?) {
+            let hovering = pointInView.map { bounds.insetBy(dx: -1, dy: -1).contains($0) } ?? false
+            if isHovering != hovering {
+                isHovering = hovering
+                onHoverChanged?(hovering)
+            }
+            let frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
+            let tabId = TabBarHoveredTabResolver().hoveredTabId(
+                pointInView: pointInView,
+                barBounds: bounds,
+                tabIds: tabIds,
+                frames: frames
+            )
+            if hoveredTabId != tabId {
+                hoveredTabId = tabId
+                onHoveredTabChanged?(tabId)
+            }
         }
     }
 }

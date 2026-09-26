@@ -41,3 +41,4 @@
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
 "tabContext.disconnectRemote" = "Disconnect SSH";
 "tabContext.remoteConnectedAccessibility" = "Connected over SSH";
+"tab.close.accessibilityLabel" = "Close Tab";
