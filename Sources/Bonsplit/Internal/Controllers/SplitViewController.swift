@@ -663,10 +663,11 @@ final class SplitViewController {
             return (c.paneId, overlap, distance)
         }
 
-        // Sort: prefer more overlap, then closer distance
+        // Prefer the nearest pane along the requested axis. Perpendicular
+        // overlap breaks ties when multiple panes share the same boundary.
         let sorted = scored.sorted { a, b in
-            if abs(a.1 - b.1) > epsilon { return a.1 > b.1 }
-            return a.2 < b.2
+            if abs(a.2 - b.2) > epsilon { return a.2 < b.2 }
+            return a.1 > b.1
         }
 
         return sorted.first?.0
