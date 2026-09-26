@@ -1962,13 +1962,14 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
         var tabIds: [UUID] = [] {
             didSet {
                 guard tabIds != oldValue else { return }
-                updateHoverFromCurrentMouseLocation()
+                schedulePointerRecheck()
             }
         }
         private var trackingArea: NSTrackingArea?
         private var localMouseMonitor: Any?
         private var isHovering = false
         private var hoveredTabId: UUID?
+        private var pointerRecheckScheduled = false
 
         deinit {
             removeLocalMouseMonitor()
@@ -1981,7 +1982,7 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
             if let window {
                 window.acceptsMouseMovedEvents = true
                 installLocalMouseMonitorIfNeeded()
-                updateHoverFromCurrentMouseLocation()
+                schedulePointerRecheck()
             } else {
                 removeLocalMouseMonitor()
                 emitHover(pointInView: nil)
@@ -2017,7 +2018,22 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
         /// Tabs were added, removed, resized, or scrolled: the pointer may now
         /// sit over a different tab without having moved.
         func tabBarItemGeometryDidChange() {
-            updateHoverFromCurrentMouseLocation()
+            schedulePointerRecheck()
+        }
+
+        /// Tab-set and geometry changes arrive inside SwiftUI view updates
+        /// (updateNSView, hit-region registration), where publishing hover
+        /// would modify TabBarView state mid-update. Coalesce them into one
+        /// recheck on the next main-queue turn, resolved against the state at
+        /// that time so a superseded change never publishes.
+        private func schedulePointerRecheck() {
+            guard !pointerRecheckScheduled else { return }
+            pointerRecheckScheduled = true
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.pointerRecheckScheduled = false
+                self.updateHoverFromCurrentMouseLocation()
+            }
         }
 
         private func installLocalMouseMonitorIfNeeded() {
