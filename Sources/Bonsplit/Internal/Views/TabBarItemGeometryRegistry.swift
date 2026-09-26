@@ -36,7 +36,7 @@ final class TabBarItemGeometryRegistry {
     private var lastObservedSelectedTabDocumentFrame: CGRect?
     private var pendingScrollIntent: ScrollIntent?
     private var expectedProgrammaticOffset: CGFloat?
-    private var trailingObscuredWidth: CGFloat = 0
+    private(set) var trailingObscuredWidth: CGFloat = 0
 
     deinit {
         if let scrollBoundsObserver {
@@ -197,6 +197,24 @@ final class TabBarItemGeometryRegistry {
             if let frame = frame(for: tabId, in: targetView) {
                 frames[tabId] = frame
             }
+        }
+        return frames
+    }
+
+    /// The on-screen part of each tab: clipped by the strip's scroll view, so
+    /// a tab scrolled past either edge contributes only what is visible.
+    func visibleFrames(for tabIds: [UUID], in targetView: NSView) -> [UUID: CGRect] {
+        var frames: [UUID: CGRect] = [:]
+        frames.reserveCapacity(tabIds.count)
+        for tabId in tabIds {
+            guard let itemView = itemViews.object(forKey: tabId as NSUUID),
+                  itemView.window === targetView.window,
+                  isVisibleInHierarchy(itemView) else {
+                continue
+            }
+            let visible = itemView.visibleRect
+            guard !visible.isEmpty else { continue }
+            frames[tabId] = itemView.convert(visible, to: targetView)
         }
         return frames
     }

@@ -1096,7 +1096,9 @@ struct TabItemView: View {
                 // Pinning, allowsClose, or deselect can remove the button with
                 // the pointer still on it, and .onHover(false) never arrives.
                 .onDisappear { closeButtonPointerInside = false }
-                .accessibilityLabel(closeTabAccessibilityName)
+                // The tab element's named "Close Tab" action covers this;
+                // merged into the tab it would be announced twice.
+                .accessibilityHidden(true)
                 .saturation(saturation)
             }
         }

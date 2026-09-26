@@ -38,4 +38,23 @@ struct TabBarHoveredTabResolverTests {
         let pointer = CGPoint(x: 150, y: 17)
         #expect(resolver.hoveredTabId(pointInView: pointer, barBounds: bounds, tabIds: [a, b], frames: frames([a])) == nil)
     }
+
+    @Test("A tab scrolled under the trailing action lane is not hovered from the lane")
+    func trailingActionLaneMasksTabs() {
+        let ids = [a, b, c, UUID()]
+        #expect(resolver.hoveredTabId(
+            pointInView: CGPoint(x: 330, y: 17),
+            barBounds: bounds,
+            tabIds: ids,
+            frames: frames(ids),
+            trailingObscuredWidth: 60
+        ) == nil)
+        #expect(resolver.hoveredTabId(
+            pointInView: CGPoint(x: 290, y: 17),
+            barBounds: bounds,
+            tabIds: ids,
+            frames: frames(ids),
+            trailingObscuredWidth: 60
+        ) == c)
+    }
 }

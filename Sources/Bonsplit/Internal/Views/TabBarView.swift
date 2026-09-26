@@ -1221,6 +1221,7 @@ struct TabBarView: View {
             TabBarHoverTrackingView(
                 geometryRegistry: tabItemGeometryRegistry,
                 tabIds: pane.tabs.map(\.id),
+                isDraggingTab: splitViewController.tabDragSession != nil,
                 onHoverChanged: { updateTabBarHover($0) },
                 onHoveredTabChanged: { updateHoveredTab($0) }
             )
@@ -1915,11 +1916,15 @@ struct TabBarHoveredTabResolver {
         pointInView: NSPoint?,
         barBounds: CGRect,
         tabIds: [UUID],
-        frames: [UUID: CGRect]
+        frames: [UUID: CGRect],
+        trailingObscuredWidth: CGFloat = 0
     ) -> UUID? {
         guard let pointInView, barBounds.insetBy(dx: -1, dy: -1).contains(pointInView) else {
             return nil
         }
+        // Tabs scrolled under the trailing action lane are masked out; the
+        // pointer there is over the split buttons, not a tab.
+        guard pointInView.x < barBounds.maxX - trailingObscuredWidth else { return nil }
         return tabIds.first { frames[$0]?.contains(pointInView) == true }
     }
 }
@@ -1927,6 +1932,7 @@ struct TabBarHoveredTabResolver {
 private struct TabBarHoverTrackingView: NSViewRepresentable {
     let geometryRegistry: TabBarItemGeometryRegistry
     let tabIds: [UUID]
+    let isDraggingTab: Bool
     let onHoverChanged: (Bool) -> Void
     let onHoveredTabChanged: (UUID?) -> Void
 
@@ -1953,6 +1959,7 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
             geometryRegistry.registerObserver(view)
         }
         view.tabIds = tabIds
+        view.isDraggingTab = isDraggingTab
     }
 
     final class HoverNSView: NSView, TabBarItemGeometryObserving {
@@ -1970,6 +1977,15 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
         private var isHovering = false
         private var hoveredTabId: UUID?
         private var pointerRecheckScheduled = false
+        /// A tab drag gets no move events here, but its autoscroll still
+        /// changes geometry; resolving hover then would reveal the close
+        /// button on the drop target under the drag.
+        var isDraggingTab = false {
+            didSet {
+                guard isDraggingTab != oldValue else { return }
+                schedulePointerRecheck()
+            }
+        }
 
         deinit {
             removeLocalMouseMonitor()
@@ -2085,13 +2101,18 @@ private struct TabBarHoverTrackingView: NSViewRepresentable {
                 isHovering = hovering
                 onHoverChanged?(hovering)
             }
-            let frames = geometryRegistry?.frames(for: tabIds, in: self) ?? [:]
-            let tabId = TabBarHoveredTabResolver().hoveredTabId(
-                pointInView: pointInView,
-                barBounds: bounds,
-                tabIds: tabIds,
-                frames: frames
-            )
+            let tabId: UUID?
+            if isDraggingTab {
+                tabId = nil
+            } else {
+                tabId = TabBarHoveredTabResolver().hoveredTabId(
+                    pointInView: pointInView,
+                    barBounds: bounds,
+                    tabIds: tabIds,
+                    frames: geometryRegistry?.visibleFrames(for: tabIds, in: self) ?? [:],
+                    trailingObscuredWidth: geometryRegistry?.trailingObscuredWidth ?? 0
+                )
+            }
             if hoveredTabId != tabId {
                 hoveredTabId = tabId
                 onHoveredTabChanged?(tabId)
