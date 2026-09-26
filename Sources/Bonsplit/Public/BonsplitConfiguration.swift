@@ -519,6 +519,11 @@ extension BonsplitConfiguration {
             /// the strip falls back to ``fixed`` sizing and scrolls, so this mode never
             /// shrinks tabs below their natural width.
             case fill
+
+            /// Tabs share the available tab-bar width up to ``tabMaxWidth``.
+            /// Crowded titles truncate, then collapse to icons so every tab stays
+            /// represented in the strip. Pinned browser tabs retain compact widths.
+            case shrink
         }
 
         // MARK: - Tab Bar

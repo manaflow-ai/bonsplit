@@ -5903,4 +5903,14 @@ final class BonsplitTests: XCTestCase {
         let configured = BonsplitConfiguration.Appearance(tabWidthMode: .fill)
         XCTAssertEqual(configured.tabWidthMode, .fill)
     }
+
+    /// Shrink mode must lower the visual floor so a crowded pane can keep every
+    /// tab in the visible row.
+    func testTabWidthModeShrinkUsesCompactMinimum() {
+        let appearance = BonsplitConfiguration.Appearance(tabWidthMode: .shrink)
+        let range = TabItemStyling.tabWidthRange(for: appearance)
+
+        XCTAssertEqual(range.lowerBound, 1)
+        XCTAssertEqual(range.upperBound, 220)
+    }
 }

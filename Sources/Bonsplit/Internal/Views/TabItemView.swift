@@ -7,6 +7,15 @@ enum TabControlShortcutHintAnimation {
 }
 
 extension View {
+    @ViewBuilder
+    func clipFittedTab(_ fittedWidth: CGFloat?) -> some View {
+        if fittedWidth != nil {
+            clipped()
+        } else {
+            self
+        }
+    }
+
     func tabControlShortcutHintVisibilityAnimation<Value: Equatable>(value: Value) -> some View {
         animation(TabControlShortcutHintAnimation.visibility, value: value)
     }
@@ -174,7 +183,9 @@ enum TabItemStyling {
     }
 
     static func tabWidthRange(for appearance: BonsplitConfiguration.Appearance) -> ClosedRange<CGFloat> {
-        let minimum = max(1, TabBarMetrics.tabMinWidth)
+        let minimum: CGFloat = appearance.tabWidthMode == .shrink
+            ? 1
+            : max(1, TabBarMetrics.tabMinWidth)
         let maximum = max(minimum, appearance.tabMaxWidth)
         return minimum...maximum
     }
@@ -271,6 +282,8 @@ struct TabItemView: View {
     /// When true, the tab drops its fixed maximum width and grows to fill the slack
     /// the enclosing tab strip distributes (see ``BonsplitConfiguration/Appearance/tabWidthMode``).
     let fillsWidth: Bool
+    /// The tab strip's share of the viewport in shrink mode, including padding.
+    var fittedWidth: CGFloat? = nil
     let saturation: Double
     let trailingSeparatorBottomInset: CGFloat
     let controlShortcutDigit: Int?
@@ -321,21 +334,23 @@ struct TabItemView: View {
         .padding(.horizontal, TabBarMetrics.tabHorizontalPadding)
         .frame(
             minWidth: frameMinWidth,
-            // In fill mode the tab becomes flexible so the tab strip can distribute
-            // slack equally across tabs; the fixed upper bound only applies otherwise.
+            // Fill and shrink modes make the tab flexible so the tab strip can
+            // distribute slack equally across tabs; the fixed upper bound only applies otherwise.
             // Pinned browser tabs pin both bounds to a compact icon-only width.
             maxWidth: frameMaxWidth,
             minHeight: tabHeight,
             maxHeight: tabHeight,
-            alignment: isIconOnlyPinned ? .center : .leading
+            alignment: usesCompactContent ? .center : .leading
         )
         // Fixed mode: size each tab to its own content and ignore the width the
         // tab strip would otherwise propose. Without this the flexible `maxWidth`
         // frame lets SwiftUI distribute slack equally across tabs, so a single
         // long-titled tab drags every other tab wider (and over-truncates short
-        // titles). Fill mode keeps the flexible behavior so tabs share the strip.
+        // titles). Fill and shrink modes keep the flexible behavior so tabs share
+        // the strip.
         // Icon-only pinned tabs always size to their fixed compact width.
-        .fixedSize(horizontal: isIconOnlyPinned || !fillsWidth, vertical: false)
+        .fixedSize(horizontal: (isIconOnlyPinned && fittedWidth == nil) || !fillsWidth, vertical: false)
+        .clipFittedTab(fittedWidth)
         .background(tabBackground.saturation(saturation))
         .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
         .contentShape(Rectangle().inset(by: -BonsplitTabItemHitTesting.horizontalSlop))
@@ -519,7 +534,7 @@ struct TabItemView: View {
 
     @ViewBuilder
     private var tabContent: some View {
-        if isIconOnlyPinned {
+        if usesCompactContent {
             iconOnlyContent
         } else {
             standardContent
@@ -674,17 +689,24 @@ struct TabItemView: View {
                     pinnedActivityBadge
                         .offset(x: 3, y: -2)
                 }
-                .opacity(showsShortcutHint ? 0 : 1)
+                .opacity(showsCompactShortcutHint ? 0 : 1)
                 // Suppress the audio badge's tap target while the hint pill is shown.
-                .allowsHitTesting(!showsShortcutHint)
+                .allowsHitTesting(!showsCompactShortcutHint)
 
             if let shortcutHintLabel {
                 TabControlShortcutHintPill(text: shortcutHintLabel)
-                    .opacity(showsShortcutHint ? 1 : 0)
+                    .opacity(showsCompactShortcutHint ? 1 : 0)
                     .allowsHitTesting(false)
             }
         }
-        .tabControlShortcutHintVisibilityAnimation(value: showsShortcutHint)
+        .tabControlShortcutHintVisibilityAnimation(value: showsCompactShortcutHint)
+    }
+
+    private var showsCompactShortcutHint: Bool {
+        guard showsShortcutHint else { return false }
+        guard let fittedWidth, let shortcutHintLabel else { return true }
+        return TabItemStyling.shortcutHintWidth(for: shortcutHintLabel)
+            + 2 * TabBarMetrics.tabHorizontalPadding <= fittedWidth
     }
 
     /// Leading favicon / loading spinner / symbol icon. Shared by the standard and
@@ -723,6 +745,12 @@ struct TabItemView: View {
                         .font(.system(size: glyphSize(for: iconName)))
                         .foregroundStyle(iconTint)
                 }
+            } else if usesCompactContent {
+                // Hosts may omit an icon. Keep a visible mark when the title
+                // has collapsed, including for tabs without activity badges.
+                Image(systemName: "rectangle")
+                    .font(.system(size: compactMarkSize))
+                    .foregroundStyle(iconTint)
             }
         }
         // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
@@ -804,14 +832,22 @@ struct TabItemView: View {
     /// Lower width bound: a compact icon-only width for pinned browser tabs,
     /// otherwise the standard minimum visual width.
     private var frameMinWidth: CGFloat {
-        isIconOnlyPinned ? pinnedIconOnlyWidth : tabWidthRange.lowerBound
+        fittedWidth ?? (isIconOnlyPinned ? pinnedIconOnlyWidth : tabWidthRange.lowerBound)
     }
 
     /// Upper width bound: pinned browser tabs are pinned to the compact width;
     /// fill mode stays flexible; fixed mode clamps to the configured maximum.
     private var frameMaxWidth: CGFloat {
+        if let fittedWidth { return fittedWidth }
         if isIconOnlyPinned { return pinnedIconOnlyWidth }
         return fillsWidth ? .infinity : tabWidthRange.upperBound
+    }
+
+    private var usesCompactContent: Bool {
+        isIconOnlyPinned || fittedWidth.map {
+            $0 < 2 * TabBarMetrics.tabHorizontalPadding + scaledIconSize
+                + accessorySlotSize + 2 * scaledContentSpacing
+        } == true
     }
 
     /// Fixed compact width used for icon-only pinned browser tabs. When the tab can
