@@ -3159,17 +3159,29 @@ enum TabControlShortcutHintPolicy {
 private struct TabBarHostWindowReader: NSViewRepresentable {
     let onResolve: (NSWindow?) -> Void
 
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { [weak view] in
-            onResolve(view?.window)
+    func makeNSView(context: Context) -> WindowTrackingView {
+        let view = WindowTrackingView()
+        Task { @MainActor [weak view] in
+            onResolve(view?.trackedWindow)
         }
         return view
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async { [weak nsView] in
-            onResolve(nsView?.window)
+    func updateNSView(_ nsView: WindowTrackingView, context: Context) {
+        Task { @MainActor [weak nsView] in
+            onResolve(nsView?.trackedWindow)
+        }
+    }
+
+    final class WindowTrackingView: NSView {
+        // NSView.window can still return a deallocating window. Capture it
+        // while AppKit attaches the view so deferred lookups safely read nil
+        // during teardown, before the shortcut monitor forms another weak ref.
+        private(set) weak var trackedWindow: NSWindow?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            trackedWindow = window
         }
     }
 }
