@@ -601,6 +601,11 @@ extension BonsplitConfiguration {
         /// Extra leading inset for the tab bar (e.g. for traffic light buttons when sidebar is collapsed)
         public var tabBarLeadingInset: CGFloat
 
+        /// Extra trailing inset reserved at the end of the top-trailing pane's tab bar,
+        /// after its action buttons, for a host-owned control drawn over that corner.
+        /// A zoomed pane receives the inset because it fills the container.
+        public var tabBarTrailingInset: CGFloat
+
         /// Tooltip text for the tab bar's right-side action buttons
         public var splitButtonTooltips: SplitButtonTooltips
 
@@ -660,6 +665,7 @@ extension BonsplitConfiguration {
             splitButtonBackdropStyle: SplitButtonBackdropStyle? = nil,
             splitButtonBackdropEffect: SplitButtonBackdropEffect? = nil,
             tabBarLeadingInset: CGFloat = 0,
+            tabBarTrailingInset: CGFloat = 0,
             splitButtonTooltips: SplitButtonTooltips = .default,
             animationDuration: Double = 0.15,
             enableAnimations: Bool = true,
@@ -682,6 +688,7 @@ extension BonsplitConfiguration {
             self.splitButtonBackdropStyle = splitButtonBackdropStyle
             self.splitButtonBackdropEffect = splitButtonBackdropEffect
             self.tabBarLeadingInset = tabBarLeadingInset
+            self.tabBarTrailingInset = tabBarTrailingInset
             self.splitButtonTooltips = splitButtonTooltips
             self.animationDuration = animationDuration
             self.enableAnimations = enableAnimations

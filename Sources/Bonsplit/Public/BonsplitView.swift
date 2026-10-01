@@ -19,6 +19,10 @@ import SwiftUI
 /// ```
 public struct BonsplitView<Content: View, EmptyContent: View>: View {
     @Bindable private var controller: BonsplitController
+    /// Whether the main pane currently owns keyboard focus. Selection remains
+    /// owned by Bonsplit, but a host may move focus to an adjacent surface
+    /// while keeping the selected pane alive.
+    private let isMainContentFocused: Bool
     private let contentBuilder: (Tab, PaneID) -> Content
     private let emptyPaneBuilder: (PaneID) -> EmptyContent
 
@@ -29,10 +33,12 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
     ///   - emptyPane: A ViewBuilder closure that provides content for empty panes
     public init(
         controller: BonsplitController,
+        isMainContentFocused: Bool = true,
         @ViewBuilder content: @escaping (Tab, PaneID) -> Content,
         @ViewBuilder emptyPane: @escaping (PaneID) -> EmptyContent
     ) {
         self.controller = controller
+        self.isMainContentFocused = isMainContentFocused
         self.contentBuilder = content
         self.emptyPaneBuilder = emptyPane
     }
@@ -47,6 +53,7 @@ public struct BonsplitView<Content: View, EmptyContent: View>: View {
             },
             appearance: controller.configuration.appearance,
             dividerPositionRange: controller.configuration.dividerPositionRange,
+            isMainContentFocused: isMainContentFocused,
             showSplitButtons: controller.configuration.allowSplits && controller.configuration.appearance.showSplitButtons,
             tabBarVisibility: controller.configuration.tabBarVisibility,
             contentViewLifecycle: controller.configuration.contentViewLifecycle,
@@ -70,9 +77,11 @@ extension BonsplitView where EmptyContent == DefaultEmptyPaneView {
     ///   - content: A ViewBuilder closure that provides content for each tab. Receives the tab and pane ID.
     public init(
         controller: BonsplitController,
+        isMainContentFocused: Bool = true,
         @ViewBuilder content: @escaping (Tab, PaneID) -> Content
     ) {
         self.controller = controller
+        self.isMainContentFocused = isMainContentFocused
         self.contentBuilder = content
         self.emptyPaneBuilder = { _ in DefaultEmptyPaneView() }
     }

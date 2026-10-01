@@ -11,6 +11,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
     let appearance: BonsplitConfiguration.Appearance
     let dividerPositionRange: ClosedRange<CGFloat>
     var showSplitButtons: Bool = true
+    var isMainContentFocused: Bool = true
     var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
     var onGeometryChange: ((_ isDragging: Bool) -> Void)?
@@ -25,6 +26,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 pane: paneState,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                isMainContentFocused: isMainContentFocused,
                 showSplitButtons: showSplitButtons,
                 tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle
@@ -38,6 +40,7 @@ struct SplitNodeView<Content: View, EmptyContent: View>: View {
                 dividerPositionRange: dividerPositionRange,
                 contentBuilder: contentBuilder,
                 emptyPaneBuilder: emptyPaneBuilder,
+                isMainContentFocused: isMainContentFocused,
                 showSplitButtons: showSplitButtons,
                 tabBarVisibility: tabBarVisibility,
                 contentViewLifecycle: contentViewLifecycle,
@@ -98,6 +101,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     let pane: PaneState
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
+    var isMainContentFocused: Bool = true
     var showSplitButtons: Bool = true
     var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
@@ -108,6 +112,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             controller: controller,
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
+            isMainContentFocused: isMainContentFocused,
             showSplitButtons: showSplitButtons,
             tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle
@@ -165,6 +170,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             controller: controller,
             contentBuilder: contentBuilder,
             emptyPaneBuilder: emptyPaneBuilder,
+            isMainContentFocused: isMainContentFocused,
             showSplitButtons: showSplitButtons,
             tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle

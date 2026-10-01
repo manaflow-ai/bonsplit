@@ -42,6 +42,25 @@ indirect enum SplitNode: Identifiable, Equatable {
         }
     }
 
+    /// The pane whose tab bar ends at the tree's top-trailing corner.
+    ///
+    /// Side-by-side splits take their trailing child and stacked splits their
+    /// top child, so the result's tab bar always touches the container's top
+    /// and trailing edges.
+    var topTrailingPaneId: PaneID {
+        switch self {
+        case .pane(let state):
+            return state.id
+        case .split(let state):
+            switch state.orientation {
+            case .horizontal:
+                return state.second.topTrailingPaneId
+            case .vertical:
+                return state.first.topTrailingPaneId
+            }
+        }
+    }
+
     /// Get all pane IDs in the tree
     var allPaneIds: [PaneID] {
         switch self {

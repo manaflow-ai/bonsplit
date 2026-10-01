@@ -153,6 +153,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     @Bindable var controller: SplitViewController
     let contentBuilder: (TabItem, PaneID) -> Content
     let emptyPaneBuilder: (PaneID) -> EmptyContent
+    var isMainContentFocused: Bool = true
     var showSplitButtons: Bool = true
     var tabBarVisibility: TabBarVisibility = .always
     var contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch
@@ -161,7 +162,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     @State private var dropLifecycle: PaneDropLifecycle = .idle
 
     private var isFocused: Bool {
-        controller.focusedPaneId == pane.id
+        isMainContentFocused && controller.focusedPaneId == pane.id
     }
 
     private var isTabDragActive: Bool {

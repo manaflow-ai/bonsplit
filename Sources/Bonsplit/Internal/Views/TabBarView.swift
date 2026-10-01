@@ -1222,7 +1222,38 @@ struct TabBarView: View {
         .frame(height: tabBarHeight, alignment: .topLeading)
     }
 
+    /// Width reserved after this tab bar's action lane for a host-owned control.
+    /// Only the pane at the container's top-trailing corner reserves it.
+    private var reservedTrailingInset: CGFloat {
+        let inset = appearance.tabBarTrailingInset
+        guard inset > 0 else { return 0 }
+        let cornerPaneId = splitViewController.zoomedPaneId
+            ?? controller.internalController.rootNode.topTrailingPaneId
+        return cornerPaneId == pane.id ? inset : 0
+    }
+
     var body: some View {
+        let trailingInset = reservedTrailingInset
+        tabBarContent
+            .padding(.trailing, trailingInset)
+            .background(alignment: .trailing) {
+                if trailingInset > 0 {
+                    TabBarDragZoneView(
+                        isMinimalMode: isMinimalMode,
+                        isFocusedPane: isFocused,
+                        onSingleClick: focusPaneFromTabBarChrome
+                    ) { return false }
+                        .frame(width: trailingInset, height: tabBarHeight)
+                        .background(
+                            TabBarLayerBackedColor(color: chromeSnapshot.barColor)
+                                .frame(width: trailingInset, height: tabBarHeight)
+                        )
+                        .accessibilityIdentifier("paneTabBar.trailingInset")
+                }
+            }
+    }
+
+    private var tabBarContent: some View {
         HStack(spacing: 0) {
             if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
                 TabBarDragZoneView(
