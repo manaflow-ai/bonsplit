@@ -14,6 +14,7 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
     let selectedTabId: UUID?
     let geometryRegistry: TabBarItemGeometryRegistry
     let indicatorColor: NSColor
+    let indicatorEdge: BonsplitConfiguration.Appearance.TabStyle.IndicatorEdge
     let separatorColor: NSColor
     let mask: TabBarSelectionChromeMask
 
@@ -37,6 +38,7 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
     private func update(_ view: ChromeNSView) {
         view.selectedTabId = selectedTabId
         view.indicatorColor = indicatorColor
+        view.indicatorEdge = indicatorEdge
         view.separatorColor = separatorColor
         view.mask = mask
         view.needsDisplay = true
@@ -46,6 +48,7 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
         weak var geometryRegistry: TabBarItemGeometryRegistry?
         var selectedTabId: UUID?
         var indicatorColor: NSColor = .controlAccentColor
+        var indicatorEdge: BonsplitConfiguration.Appearance.TabStyle.IndicatorEdge = .top
         var separatorColor: NSColor = .separatorColor
         var mask = TabBarSelectionChromeMask(
             leftFadeWidth: 0,
@@ -151,11 +154,32 @@ struct TabBarSelectionChromeView: NSViewRepresentable {
             }
         }
 
-        private func drawSelectedIndicator(in selectedFrame: CGRect?) {
-            guard var frame = selectedFrame else { return }
-            frame.origin.y = bounds.minY
-            frame.size.width = max(0, frame.width - TabBarMetrics.activeIndicatorTrailingInset)
+        /// Positions the active-tab indicator line on the configured edge.
+        ///
+        /// The chrome view is flipped, so `minY` is the top edge and `maxY` the
+        /// bottom. `.top` (and `.hidden`, which is drawn transparent) keep the
+        /// historical top placement; `.bottom` pins the line to the bottom edge.
+        nonisolated static func positionedIndicatorFrame(
+            base: CGRect,
+            in bounds: CGRect,
+            edge: BonsplitConfiguration.Appearance.TabStyle.IndicatorEdge
+        ) -> CGRect {
+            var frame = base
+            frame.size.width = max(0, base.width - TabBarMetrics.activeIndicatorTrailingInset)
             frame.size.height = TabBarMetrics.activeIndicatorHeight
+            frame.origin.y = edge == .bottom
+                ? max(bounds.minY, bounds.maxY - frame.size.height)
+                : bounds.minY
+            return frame
+        }
+
+        private func drawSelectedIndicator(in selectedFrame: CGRect?) {
+            guard let selectedFrame else { return }
+            let frame = Self.positionedIndicatorFrame(
+                base: selectedFrame,
+                in: bounds,
+                edge: indicatorEdge
+            )
 
             let leftFadeFrame = NSRect(
                 x: bounds.minX,
