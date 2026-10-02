@@ -1549,11 +1549,7 @@ struct TabBarView: View {
     private var collapsedSplitButtonMenu: some View {
         Menu {
             ForEach(visibleSplitButtons) { button in
-                Button {
-                    performSplitActionButton(button)
-                } label: {
-                    Text(splitActionButtonTooltip(button, tooltips: appearance.splitButtonTooltips))
-                }
+                splitButtonMenuItem(button)
             }
         } label: {
             Image(systemName: "ellipsis")
@@ -1564,6 +1560,20 @@ struct TabBarView: View {
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "tabBar.moreActions", defaultValue: "More Tab Actions"))
         .accessibilityIdentifier("paneTabBarControl.moreActions")
+    }
+
+    @ViewBuilder
+    private func splitButtonMenuItem(_ button: BonsplitConfiguration.SplitActionButton) -> some View {
+        let item = Button {
+            performSplitActionButton(button)
+        } label: {
+            Text(splitActionButtonTooltip(button, tooltips: appearance.splitButtonTooltips))
+        }
+        if let shortcut = controller.splitButtonShortcuts[button.action] {
+            item.keyboardShortcut(shortcut)
+        } else {
+            item
+        }
     }
 
     @ViewBuilder

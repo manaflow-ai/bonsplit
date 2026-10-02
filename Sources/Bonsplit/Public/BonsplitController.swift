@@ -59,6 +59,10 @@ public final class BonsplitController {
         didSet { internalController.tabShortcutHintsEnabled = tabShortcutHintsEnabled }
     }
 
+    /// Keyboard shortcuts shown beside the collapsed split-button menu actions.
+    /// Hosts provide these so the menu stays in sync with their configurable shortcuts.
+    public var splitButtonShortcuts: [BonsplitConfiguration.SplitActionButton.Action: KeyboardShortcut] = [:]
+
     /// Handler for file/URL drops from external apps (e.g., Finder).
     /// Called when files are dropped onto a pane's content area.
     /// Return `true` if the drop was handled.
