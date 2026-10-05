@@ -8,7 +8,7 @@ public enum TabContextForkConversationAvailability: Sendable {
 }
 
 /// Context menu actions that can be triggered from a tab item.
-public enum TabContextAction: String, CaseIterable, Sendable {
+public enum TabContextAction: String, CaseIterable, Sendable, Hashable {
     case rename
     case clearName
     case copyIdentifiers

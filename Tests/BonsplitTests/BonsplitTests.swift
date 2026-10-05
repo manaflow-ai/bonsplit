@@ -2108,6 +2108,41 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuCanLimitActions() {
+        let state = TabContextMenuState(
+            isPinned: false,
+            isUnread: false,
+            isBrowser: false,
+            isAudioMuted: false,
+            isTerminal: true,
+            hasCustomTitle: false,
+            canCloseToLeft: false,
+            canCloseToRight: false,
+            canCloseOthers: false,
+            canMoveToNewWorkspace: false,
+            canMoveToLeftPane: false,
+            canMoveToRightPane: false,
+            forkConversationDefaultAction: .forkConversationRight,
+            isZoomed: false,
+            hasSplits: false,
+            shortcuts: [:]
+        )
+        let menu = TabContextMenuBuilder.makeMenu(
+            snapshot: TabContextMenuSnapshot(
+                tabId: UUID(),
+                state: state,
+                allowedActions: [.rename],
+                moveDestinationsProvider: { [] },
+                forkConversationAvailabilityProvider: { .hidden }
+            ),
+            target: TabContextMenuActionTarget()
+        )
+
+        XCTAssertEqual(menu.items.map(\.title), ["Rename Tab…"])
+        XCTAssertFalse(menu.items.contains(where: \.isSeparatorItem))
+    }
+
+    @MainActor
     func testBrowserTabContextMenuCreatesAudioMuteToggle() throws {
         let target = TabContextMenuActionTarget()
         var selectedAction: TabContextAction?

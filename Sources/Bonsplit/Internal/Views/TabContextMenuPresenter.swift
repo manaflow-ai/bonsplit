@@ -4,6 +4,7 @@ import SwiftUI
 struct TabContextMenuSnapshot {
     let tabId: UUID
     let state: TabContextMenuState
+    let allowedActions: Set<TabContextAction>?
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
@@ -11,12 +12,14 @@ struct TabContextMenuSnapshot {
     init(
         tabId: UUID,
         state: TabContextMenuState,
+        allowedActions: Set<TabContextAction>? = nil,
         moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
         forkConversationAvailabilityProvider: @escaping () -> TabContextForkConversationAvailability,
         forkConversationAvailabilityRefreshHandler: @escaping @MainActor () async -> Void = {}
     ) {
         self.tabId = tabId
         self.state = state
+        self.allowedActions = allowedActions
         self.moveDestinationsProvider = moveDestinationsProvider
         self.forkConversationAvailabilityProvider = forkConversationAvailabilityProvider
         self.forkConversationAvailabilityRefreshHandler = forkConversationAvailabilityRefreshHandler

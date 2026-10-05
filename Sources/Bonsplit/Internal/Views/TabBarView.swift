@@ -201,9 +201,10 @@ enum TabBarStyling {
     static func splitActionButtonCount(
         isNarrowPane: Bool,
         shouldShowSplitButtons: Bool,
-        visibleButtonCount: Int
+        visibleButtonCount: Int,
+        collapseWhenNarrow: Bool = true
     ) -> Int {
-        isNarrowPane && shouldShowSplitButtons ? 1 : max(0, visibleButtonCount)
+        isNarrowPane && collapseWhenNarrow && shouldShowSplitButtons ? 1 : max(0, visibleButtonCount)
     }
 
     static func minimumVisibleSplitButtonLaneWidth(buttonCount: Int) -> CGFloat {
@@ -961,7 +962,8 @@ struct TabBarView: View {
         let actionButtonCount = TabBarStyling.splitActionButtonCount(
             isNarrowPane: isNarrowPane,
             shouldShowSplitButtons: shouldShowSplitButtons,
-            visibleButtonCount: visibleSplitButtons.count
+            visibleButtonCount: visibleSplitButtons.count,
+            collapseWhenNarrow: appearance.collapseSplitButtonsWhenNarrow
         )
         return TabBarLayout(
             tabBarHeight: appearance.tabBarHeight,
@@ -991,6 +993,10 @@ struct TabBarView: View {
 
     private var isNarrowPane: Bool {
         TabBarStyling.isNarrowPane(width: containerWidth)
+    }
+
+    private var collapsesSplitButtons: Bool {
+        isNarrowPane && appearance.collapseSplitButtonsWhenNarrow
     }
 
     private var shouldRenderSplitButtons: Bool {
@@ -1399,6 +1405,7 @@ struct TabBarView: View {
             allowsClose: controller.configuration.allowCloseTabs,
             middleClickCapture: controller.tabMiddleClickCapture,
             allowsContextMenu: controller.configuration.allowsTabContextMenu,
+            allowedContextMenuActions: controller.configuration.tabContextMenuActions,
             contextMenuState: contextMenuState,
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
@@ -1525,7 +1532,7 @@ struct TabBarView: View {
     private var splitButtonChrome: some View {
         if shouldRenderSplitButtons {
             Group {
-                if isNarrowPane {
+                if collapsesSplitButtons {
                     collapsedSplitButtonMenu
                 } else {
                     splitButtons

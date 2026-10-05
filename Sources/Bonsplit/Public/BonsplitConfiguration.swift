@@ -65,6 +65,10 @@ public struct BonsplitConfiguration: Sendable {
     /// Whether tabs install and present their standard context menu.
     public var allowsTabContextMenu: Bool
 
+    /// The standard context-menu actions that a tab may expose. `nil` keeps the
+    /// complete standard menu; a set limits the menu to the listed actions.
+    public var tabContextMenuActions: Set<TabContextAction>?
+
     /// Whether to automatically close empty panes
     public var autoCloseEmptyPanes: Bool
 
@@ -114,6 +118,7 @@ public struct BonsplitConfiguration: Sendable {
         allowTabReordering: Bool = true,
         allowCrossPaneTabMove: Bool = true,
         allowsTabContextMenu: Bool = true,
+        tabContextMenuActions: Set<TabContextAction>? = nil,
         autoCloseEmptyPanes: Bool = true,
         contentViewLifecycle: ContentViewLifecycle = .recreateOnSwitch,
         newTabPosition: NewTabPosition = .current,
@@ -127,6 +132,7 @@ public struct BonsplitConfiguration: Sendable {
         self.allowTabReordering = allowTabReordering
         self.allowCrossPaneTabMove = allowCrossPaneTabMove
         self.allowsTabContextMenu = allowsTabContextMenu
+        self.tabContextMenuActions = tabContextMenuActions
         self.autoCloseEmptyPanes = autoCloseEmptyPanes
         self.contentViewLifecycle = contentViewLifecycle
         self.newTabPosition = newTabPosition
@@ -589,6 +595,10 @@ extension BonsplitConfiguration {
         /// same way they behave in minimal mode.
         public var splitButtonsOnHover: Bool
 
+        /// Whether a narrow pane replaces its split buttons with one overflow menu.
+        /// Hosts with a small fixed action set can keep those actions directly visible.
+        public var collapseSplitButtonsWhenNarrow: Bool
+
         /// Optional explicit backdrop style for the tab bar's right-side action buttons.
         /// When unset, Bonsplit uses the host app's debug override if one is configured.
         public var splitButtonBackdropStyle: SplitButtonBackdropStyle?
@@ -657,6 +667,7 @@ extension BonsplitConfiguration {
             showSplitButtons: Bool = true,
             splitButtons: [SplitActionButton] = SplitActionButton.defaults,
             splitButtonsOnHover: Bool = false,
+            collapseSplitButtonsWhenNarrow: Bool = true,
             splitButtonBackdropStyle: SplitButtonBackdropStyle? = nil,
             splitButtonBackdropEffect: SplitButtonBackdropEffect? = nil,
             tabBarLeadingInset: CGFloat = 0,
@@ -679,6 +690,7 @@ extension BonsplitConfiguration {
             self.showSplitButtons = showSplitButtons
             self.splitButtons = Self.uniqueSplitButtons(splitButtons)
             self.splitButtonsOnHover = splitButtonsOnHover
+            self.collapseSplitButtonsWhenNarrow = collapseSplitButtonsWhenNarrow
             self.splitButtonBackdropStyle = splitButtonBackdropStyle
             self.splitButtonBackdropEffect = splitButtonBackdropEffect
             self.tabBarLeadingInset = tabBarLeadingInset

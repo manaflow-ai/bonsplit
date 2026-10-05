@@ -334,6 +334,7 @@ struct TabItemView: View {
     let allowsClose: Bool
     let middleClickCapture: ((@escaping () -> Void) -> AnyView)?
     let allowsContextMenu: Bool
+    let allowedContextMenuActions: Set<TabContextAction>?
     let contextMenuState: TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
@@ -408,6 +409,7 @@ struct TabItemView: View {
                     snapshot: TabContextMenuSnapshot(
                         tabId: tab.id,
                         state: contextMenuState,
+                        allowedActions: allowedContextMenuActions,
                         moveDestinationsProvider: moveDestinationsProvider,
                         forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
                         forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
@@ -1681,7 +1683,46 @@ enum TabContextMenuBuilder {
             to: menu
         )
 
+        removeDisallowedActions(from: menu, allowedActions: snapshot.allowedActions)
         return menu
+    }
+
+    private static func removeDisallowedActions(
+        from menu: NSMenu,
+        allowedActions: Set<TabContextAction>?
+    ) {
+        guard let allowedActions else { return }
+
+        for item in menu.items.reversed() {
+            if let submenu = item.submenu {
+                removeDisallowedActions(from: submenu, allowedActions: allowedActions)
+                if submenu.items.allSatisfy(\.isSeparatorItem) {
+                    menu.removeItem(item)
+                }
+                continue
+            }
+            guard let rawAction = item.representedObject as? String,
+                  let action = TabContextAction(rawValue: rawAction),
+                  !allowedActions.contains(action) else {
+                continue
+            }
+            menu.removeItem(item)
+        }
+
+        var previousWasSeparator = true
+        for item in menu.items.reversed() {
+            if item.isSeparatorItem {
+                if previousWasSeparator {
+                    menu.removeItem(item)
+                }
+                previousWasSeparator = true
+            } else {
+                previousWasSeparator = false
+            }
+        }
+        while menu.items.last?.isSeparatorItem == true {
+            menu.removeItem(at: menu.items.count - 1)
+        }
     }
 
     /// Adds the shared-terminal size actions for a tab that has presence:
