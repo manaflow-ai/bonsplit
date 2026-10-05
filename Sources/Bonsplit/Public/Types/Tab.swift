@@ -28,6 +28,10 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let showsRemoteIndicator: Bool
     /// Shared-terminal presence (attached viewers and grid size); nil hides it.
     public let presence: TabPresence?
+    /// Optional accent color for the tab, as a `#RRGGBB` / `#RRGGBBAA` hex string.
+    /// Rendered as a strip along the tab's top edge. `nil` leaves the tab unaccented.
+    /// The meaning of the color is consumer-defined (for example, priority or category).
+    public let colorHex: String?
 
     public init(
         id: TabID = TabID(),
@@ -44,7 +48,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
         showsRemoteIndicator: Bool = false,
-        presence: TabPresence? = nil
+        presence: TabPresence? = nil,
+        colorHex: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -61,6 +66,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
         self.presence = presence
+        self.colorHex = colorHex
     }
 
     internal init(from tabItem: TabItem) {
@@ -79,5 +85,6 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isPinned = tabItem.isPinned
         self.showsRemoteIndicator = tabItem.showsRemoteIndicator
         self.presence = tabItem.presence
+        self.colorHex = tabItem.colorHex
     }
 }

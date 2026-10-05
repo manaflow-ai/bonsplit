@@ -14,6 +14,8 @@ enum TabBarMetrics {
     static let tabMaxWidth: CGFloat = 220
     static let tabCornerRadius: CGFloat = 0
     static let tabHorizontalPadding: CGFloat = 6
+    /// Thickness of the accent strip drawn along a colored tab's top edge.
+    static let tabAccentStripHeight: CGFloat = 2.5
     static let tabSpacing: CGFloat = 0
     static let activeIndicatorHeight: CGFloat = 1.5
     static let activeIndicatorTrailingInset: CGFloat = 1
