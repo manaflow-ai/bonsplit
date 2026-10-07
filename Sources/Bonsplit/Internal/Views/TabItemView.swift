@@ -495,10 +495,9 @@ struct TabItemView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel(presence.accessibilityLabel)
                 .accessibilityHint(
-                    Bundle.module.localizedString(
+                    BonsplitResourceBundle.localizedString(
                         forKey: "tabPresence.toggleSizePanel",
-                        value: "Shows or hides the terminal size panel",
-                        table: nil
+                        defaultValue: "Shows or hides the terminal size panel"
                     )
                 )
                 .accessibilityIdentifier("tabPresenceAccessory")
@@ -691,10 +690,9 @@ struct TabItemView: View {
                 // route. Hidden when the tab is neither playing nor muted.
                 if tab.isAudioMuted || tab.isAudioPlaying {
                     let isMuted = tab.isAudioMuted
-                    let audioLabel = Bundle.module.localizedString(
+                    let audioLabel = BonsplitResourceBundle.localizedString(
                         forKey: isMuted ? "tabContext.unmuteTab" : "tabContext.muteTab",
-                        value: isMuted ? "Unmute Tab" : "Mute Tab",
-                        table: nil
+                        defaultValue: isMuted ? "Unmute Tab" : "Mute Tab"
                     )
                     Button {
                         onContextAction(.toggleAudioMute)
@@ -883,10 +881,9 @@ struct TabItemView: View {
         if !tab.isLoading {
             if tab.isAudioMuted || tab.isAudioPlaying {
                 let isMuted = tab.isAudioMuted
-                let audioLabel = Bundle.module.localizedString(
+                let audioLabel = BonsplitResourceBundle.localizedString(
                     forKey: isMuted ? "tabContext.unmuteTab" : "tabContext.muteTab",
-                    value: isMuted ? "Unmute Tab" : "Mute Tab",
-                    table: nil
+                    defaultValue: isMuted ? "Unmute Tab" : "Mute Tab"
                 )
                 Button {
                     onContextAction(.toggleAudioMute)
@@ -1104,10 +1101,10 @@ struct TabItemView: View {
         if tab.showsNotificationBadge { parts.append("Unread") }
         if tab.isDirty { parts.append("Modified") }
         if tab.isAudioMuted {
-            parts.append(Bundle.module.localizedString(forKey: "tabContext.audioMutedAccessibility", value: "Muted", table: nil))
+            parts.append(BonsplitResourceBundle.localizedString(forKey: "tabContext.audioMutedAccessibility", defaultValue: "Muted"))
         }
         if tab.showsRemoteIndicator {
-            parts.append(Bundle.module.localizedString(forKey: "tabContext.remoteConnectedAccessibility", value: "Connected over SSH", table: nil))
+            parts.append(BonsplitResourceBundle.localizedString(forKey: "tabContext.remoteConnectedAccessibility", defaultValue: "Connected over SSH"))
         }
         if showsZoomIndicator { parts.append("Zoomed") }
         return parts.joined(separator: ", ")
@@ -1148,10 +1145,9 @@ struct TabItemView: View {
     }
 
     private var closeTabAccessibilityName: String {
-        Bundle.module.localizedString(
+        BonsplitResourceBundle.localizedString(
             forKey: "tab.close.accessibilityLabel",
-            value: "Close Tab",
-            table: nil
+            defaultValue: "Close Tab"
         )
     }
 
@@ -1982,7 +1978,7 @@ enum TabContextMenuBuilder {
     }
 
     private static func localized(_ key: String, defaultValue: String) -> String {
-        Bundle.module.localizedString(forKey: key, value: defaultValue, table: nil)
+        BonsplitResourceBundle.localizedString(forKey: key, defaultValue: defaultValue)
     }
 }
 
