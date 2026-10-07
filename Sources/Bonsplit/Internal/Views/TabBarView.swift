@@ -190,6 +190,12 @@ enum TabBarStyling {
             + (CGFloat(max(0, buttonCount - 1)) * splitButtonsSpacing)
     }
 
+    /// A split action button shows its hover fill only while the strip-owned
+    /// bar hover agrees the pointer is in the tab bar.
+    static func splitActionButtonIsHovered(isPointerInside: Bool, isTabBarHovered: Bool) -> Bool {
+        isPointerInside && isTabBarHovered
+    }
+
     static func minimumVisibleSplitButtonLaneWidth(buttonCount: Int) -> CGFloat {
         splitButtonsBackdropWidth(
             buttonCount: min(max(0, buttonCount), minimumFullyVisibleSplitButtonCount)
@@ -1643,7 +1649,11 @@ struct TabBarView: View {
     private var splitButtonRow: some View {
         let tooltips = controller.configuration.appearance.splitButtonTooltips
         let buttons = visibleSplitButtons
-        HStack(spacing: TabBarStyling.splitButtonsSpacing) {
+        // Each button takes half the gap on either side as its own hit and
+        // hover area, so the glyphs sit exactly where the spaced row put them
+        // and there is no dead strip between neighbors.
+        let halfGap = TabBarStyling.splitButtonsSpacing / 2
+        HStack(spacing: 0) {
             ForEach(buttons.indices, id: \.self) { index in
                 let button = buttons[index]
                 splitActionButton(button, tooltips: tooltips)
@@ -1651,8 +1661,8 @@ struct TabBarView: View {
                 .safeHelp(splitActionButtonTooltip(button, tooltips: tooltips))
             }
         }
-        .padding(.leading, TabBarStyling.splitButtonsLeadingPadding)
-        .padding(.trailing, TabBarStyling.splitButtonsTrailingPadding)
+        .padding(.leading, TabBarStyling.splitButtonsLeadingPadding - halfGap)
+        .padding(.trailing, TabBarStyling.splitButtonsTrailingPadding - halfGap)
         .frame(height: tabBarHeight, alignment: .center)
     }
 
@@ -1663,6 +1673,7 @@ struct TabBarView: View {
     ) -> some View {
         if button.activatesOnMouseDown {
             splitActionButtonIcon(button.icon)
+                .padding(.horizontal, TabBarStyling.splitButtonsSpacing / 2)
                 .frame(height: tabBarLayout.splitActionButtonHeight)
                 .contentShape(Rectangle())
                 .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: false))
@@ -1681,7 +1692,12 @@ struct TabBarView: View {
             } label: {
                 splitActionButtonIcon(button.icon)
             }
-            .buttonStyle(SplitActionButtonStyle(appearance: appearance, layout: tabBarLayout))
+            .buttonStyle(SplitActionButtonStyle(
+                appearance: appearance,
+                layout: tabBarLayout,
+                iconScale: controlIconFontScale,
+                isTabBarHovered: isHoveringTabBar
+            ))
             .accessibilityLabel(splitActionButtonTooltip(button, tooltips: tooltips))
         }
     }
@@ -1984,13 +2000,73 @@ private final class SplitActionButtonImageCache {
 private struct SplitActionButtonStyle: ButtonStyle {
     let appearance: BonsplitConfiguration.Appearance
     let layout: TabBarLayout
+    let iconScale: CGFloat
+    let isTabBarHovered: Bool
 
     func makeBody(configuration: Configuration) -> some View {
+        SplitActionButtonStyleBody(
+            configuration: configuration,
+            appearance: appearance,
+            layout: layout,
+            iconScale: iconScale,
+            isTabBarHovered: isTabBarHovered
+        )
+    }
+}
+
+/// A rounded hover and press fill behind the glyph, like a native toolbar
+/// button. It spans the button's own hit area (glyph plus half the gap to
+/// each neighbor) at a fixed height, so it never shifts the glyphs.
+private struct SplitActionButtonStyleBody: View {
+    static let hoverHeight: CGFloat = 18
+    static let hoverCornerRadius: CGFloat = 6
+
+    let configuration: ButtonStyle.Configuration
+    let appearance: BonsplitConfiguration.Appearance
+    let layout: TabBarLayout
+    let iconScale: CGFloat
+    let isTabBarHovered: Bool
+
+    @State private var isPointerInside = false
+
+    /// Gated by the strip-owned bar hover, which resolves from the pointer
+    /// on every move: a fast exit, or a click that splits or moves the pane
+    /// from under a still pointer, can skip this button's own hover exit.
+    private var isHovered: Bool {
+        TabBarStyling.splitActionButtonIsHovered(
+            isPointerInside: isPointerInside,
+            isTabBarHovered: isTabBarHovered
+        )
+    }
+
+    var body: some View {
+        let isPressed = configuration.isPressed
         configuration.label
+            .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: isPressed || isHovered))
+            .opacity(isPressed ? 0.72 : 1.0)
+            .padding(.horizontal, TabBarStyling.splitButtonsSpacing / 2)
             .frame(height: layout.splitActionButtonHeight)
+            .background {
+                RoundedRectangle(cornerRadius: Self.hoverCornerRadius, style: .continuous)
+                    .fill(TabBarColors.splitActionBackground(
+                        for: appearance,
+                        isHovered: isHovered,
+                        isPressed: isPressed
+                    ))
+                    .frame(height: min(Self.hoverHeight * iconScale, layout.splitActionButtonHeight))
+            }
             .contentShape(Rectangle())
-            .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: configuration.isPressed))
-            .opacity(configuration.isPressed ? 0.72 : 1.0)
+            .onHover { hovering in
+                withTransaction(Transaction(animation: nil)) {
+                    isPointerInside = hovering
+                }
+            }
+            .onChange(of: isTabBarHovered) { _, hovering in
+                // Drop a missed exit, so the fill does not come back when the
+                // pointer re-enters the bar somewhere else.
+                if !hovering { isPointerInside = false }
+            }
+            .onDisappear { isPointerInside = false }
             .tabBarButtonAnimationsDisabled()
     }
 }
