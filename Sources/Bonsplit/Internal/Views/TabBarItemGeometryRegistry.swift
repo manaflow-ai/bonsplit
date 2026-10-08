@@ -22,7 +22,7 @@ final class TabBarItemGeometryRegistry {
 
     private enum ScrollIntent: Equatable {
         case leading
-        case revealSelectedTab(UUID)
+        case revealTab(UUID)
     }
 
     private let itemViews = NSMapTable<NSUUID, NSView>.strongToWeakObjects()
@@ -143,7 +143,7 @@ final class TabBarItemGeometryRegistry {
             )
         }
         if let selectedTabId {
-            pendingScrollIntent = .revealSelectedTab(selectedTabId)
+            pendingScrollIntent = .revealTab(selectedTabId)
         }
         invalidateObservers()
         reconcilePendingScrollIntent()
@@ -156,17 +156,20 @@ final class TabBarItemGeometryRegistry {
             lastObservedSelectedTabDocumentFrame = nil
         }
         selectedTabId = tabId
-        pendingScrollIntent = tabId.map(ScrollIntent.revealSelectedTab) ?? .leading
+        pendingScrollIntent = tabId.map(ScrollIntent.revealTab) ?? .leading
         reconcilePendingScrollIntent()
     }
 
     /// Updates the portion of the clip view covered by trailing foreground controls.
+    ///
+    /// When the controls appear because the pointer entered a tab, reveal that
+    /// tab against the new unobscured viewport before the lane can cover it.
     func setTrailingObscuredWidth(_ width: CGFloat, revealTabId: UUID? = nil) {
         let normalizedWidth = max(0, width)
         guard abs(normalizedWidth - trailingObscuredWidth) > 0.5 else { return }
 
         trailingObscuredWidth = normalizedWidth
-        pendingScrollIntent = selectedTabId.map(ScrollIntent.revealSelectedTab) ?? .leading
+        pendingScrollIntent = (revealTabId ?? selectedTabId).map(ScrollIntent.revealTab) ?? .leading
         reconcilePendingScrollIntent()
         invalidateObservers()
     }
@@ -291,7 +294,7 @@ final class TabBarItemGeometryRegistry {
     func geometryDidChange(for tabId: UUID) {
         if tabId == selectedTabId {
             if selectedTabFrameDidChange(tabId) {
-                pendingScrollIntent = .revealSelectedTab(tabId)
+                pendingScrollIntent = .revealTab(tabId)
             }
             reconcilePendingScrollIntent()
         }
@@ -336,7 +339,7 @@ final class TabBarItemGeometryRegistry {
         switch intent {
         case .leading:
             didReconcile = scrollToLeadingEdgeIfReady()
-        case .revealSelectedTab(let tabId):
+        case .revealTab(let tabId):
             didReconcile = revealTabIfClipped(tabId)
         }
 
@@ -361,7 +364,7 @@ final class TabBarItemGeometryRegistry {
     }
 
     private func documentGeometryDidChange() {
-        pendingScrollIntent = selectedTabId.map(ScrollIntent.revealSelectedTab) ?? .leading
+        pendingScrollIntent = selectedTabId.map(ScrollIntent.revealTab) ?? .leading
         viewportLayoutDidChange()
         invalidateObservers()
     }

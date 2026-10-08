@@ -1255,7 +1255,10 @@ struct TabBarView: View {
                     tabItemGeometryRegistry.revealSelection(newTabId)
                 }
                 .onChange(of: trailingTabContentInset) { _, newWidth in
-                    tabItemGeometryRegistry.setTrailingObscuredWidth(newWidth)
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        newWidth,
+                        revealTabId: hoveredTabId
+                    )
                 }
                 .frame(height: tabBarHeight)
                 .mask(combinedMask)

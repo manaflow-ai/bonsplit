@@ -394,8 +394,14 @@ final class TabBarResizeAnchorTests: XCTestCase {
             actionLaneWidth,
             revealTabId: harness.selectedTabId
         )
-
-        let frame = harness.selectedView.convert(harness.selectedView.bounds, to: harness.scrollView.contentView)
+        let frameInDocument = harness.selectedView.convert(
+            harness.selectedView.bounds,
+            to: try XCTUnwrap(harness.scrollView.documentView)
+        )
+        let frame = frameInDocument.offsetBy(
+            dx: -harness.scrollView.contentView.bounds.origin.x,
+            dy: 0
+        )
         XCTAssertLessThanOrEqual(
             frame.maxX,
             harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
