@@ -202,7 +202,7 @@ struct SplitActionButtonMenuTests {
         var reports: [Bool] = []
         var inside = false
         view.onHoverChanged = { _, hovering in reports.append(hovering) }
-        view.isPointerInside = { inside }
+        view.isPointerOverVisibleButton = { inside }
         await drainMainQueue()
         reports.removeAll()
         let event = try mouseEvent(.mouseMoved, in: view, modifiers: [])

@@ -2235,6 +2235,9 @@ private struct SplitActionMenuInteractionOverlay: NSViewRepresentable {
 
     func updateNSView(_ nsView: SplitActionMenuInteractionNSView, context: Context) {
         update(nsView)
+        // Positional ForEach identity can hand this view to another button
+        // after a reorder, so keep the anchor pointing at the current one.
+        onViewReady(nsView)
     }
 
     private func update(_ view: SplitActionMenuInteractionNSView) {
@@ -2372,7 +2375,7 @@ final class SplitActionMenuInteractionNSView: NSView {
         pointerRecheckScheduled = true
         DispatchQueue.main.async { [self] in
             pointerRecheckScheduled = false
-            let inside = window != nil && isPointerInside()
+            let inside = window != nil && isPointerOverVisibleButton()
             if inside != isHovered {
                 setHovered(inside)
             }
@@ -2390,6 +2393,18 @@ final class SplitActionMenuInteractionNSView: NSView {
     lazy var isPointerInside: () -> Bool = { [unowned self] in
         guard let window else { return false }
         return bounds.contains(convert(window.mouseLocationOutsideOfEventStream, from: nil))
+    }
+
+    /// Whether the pointer is over this button in the active app, with no
+    /// other window covering it (the same check the bar's own hover recheck
+    /// makes). Hover rechecks use it. Replaceable for tests.
+    lazy var isPointerOverVisibleButton: () -> Bool = { [unowned self] in
+        guard let window, NSApp.isActive,
+              NSWindow.windowNumber(at: NSEvent.mouseLocation, belowWindowWithWindowNumber: 0)
+                == window.windowNumber else {
+            return false
+        }
+        return isPointerInside()
     }
 
     private func cancelPendingHold() {
