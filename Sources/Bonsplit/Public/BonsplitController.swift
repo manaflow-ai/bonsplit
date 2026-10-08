@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 
@@ -298,6 +299,34 @@ public final class BonsplitController {
     /// Request the delegate to handle a host-defined tab bar action.
     public func requestCustomAction(_ identifier: String, inPane pane: PaneID) {
         delegate?.splitTabBar(self, didRequestCustomAction: identifier, inPane: pane)
+    }
+
+    /// Ask the delegate for the menu of a tab bar action button.
+    public func splitActionMenu(forButton buttonId: String, inPane pane: PaneID) -> NSMenu? {
+        delegate?.splitTabBar(self, menuForSplitActionButton: buttonId, inPane: pane)
+    }
+
+    /// Replace the action buttons shown in one pane's tab bar.
+    ///
+    /// Pass nil to fall back to `configuration.appearance.splitButtons`. The
+    /// override belongs to the pane and is dropped when the pane closes; new
+    /// panes start without one. Setting an equal value is a no-op so hosts can
+    /// call this on every selection change without invalidating the tab bar.
+    public func setSplitButtons(
+        _ buttons: [BonsplitConfiguration.SplitActionButton]?,
+        forPane paneId: PaneID
+    ) {
+        guard let pane = internalController.paneState(for: paneId) else { return }
+        let unique = buttons.map(PaneState.uniqueSplitButtons)
+        guard pane.splitButtonsOverride != unique else { return }
+        pane.splitButtonsOverride = unique
+    }
+
+    /// The action buttons a pane's tab bar shows: its override when set,
+    /// otherwise `configuration.appearance.splitButtons`.
+    public func splitButtons(forPane paneId: PaneID) -> [BonsplitConfiguration.SplitActionButton] {
+        internalController.paneState(for: paneId)?.splitButtonsOverride
+            ?? configuration.appearance.splitButtons
     }
 
     /// Request the delegate to handle a tab context-menu action.
