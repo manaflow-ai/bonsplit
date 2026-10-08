@@ -376,6 +376,33 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    func testShowingHoverActionLaneRevealsHoveredTrailingTab() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        harness.registry.register(harness.selectedView, for: harness.selectedTabId)
+
+        // The extra trailing padding is the visible action lane in the real
+        // tab row. Before that padding is added, the pointer can be over an
+        // unselected trailing tab at the old end of the document.
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 660, height: TabBarMetrics.barHeight)
+        )
+        let actionLaneWidth: CGFloat = 60
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+
+        let frame = harness.selectedView.convert(harness.selectedView.bounds, to: harness.scrollView.contentView)
+        XCTAssertLessThanOrEqual(
+            frame.maxX,
+            harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
+            "Showing hover controls must scroll the hovered trailing tab clear of the button lane."
+        )
+    }
+
     func testViewportResizeKeepsLeadingAnchoredWhenTabStripWasLeadingAligned() throws {
         let harness = try makeTabBarHarness(
             initialSize: NSSize(width: 900, height: TabBarMetrics.barHeight),

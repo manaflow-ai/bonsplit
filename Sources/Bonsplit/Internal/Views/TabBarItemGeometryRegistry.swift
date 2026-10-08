@@ -161,7 +161,7 @@ final class TabBarItemGeometryRegistry {
     }
 
     /// Updates the portion of the clip view covered by trailing foreground controls.
-    func setTrailingObscuredWidth(_ width: CGFloat) {
+    func setTrailingObscuredWidth(_ width: CGFloat, revealTabId: UUID? = nil) {
         let normalizedWidth = max(0, width)
         guard abs(normalizedWidth - trailingObscuredWidth) > 0.5 else { return }
 
