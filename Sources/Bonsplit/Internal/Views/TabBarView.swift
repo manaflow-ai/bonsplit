@@ -1700,11 +1700,13 @@ struct TabBarView: View {
                         onPressChanged: { pressed in
                             pressedSplitActionButtonId = pressed ? button.id : nil
                         },
-                        onHoverChanged: { hovering in
+                        onHoverChanged: { view, hovering in
                             withTransaction(Transaction(animation: nil)) {
                                 if hovering {
                                     hoveredMenuSplitActionButtonId = button.id
-                                } else if hoveredMenuSplitActionButtonId == button.id {
+                                } else if hoveredMenuSplitActionButtonId == button.id,
+                                          splitActionMenuAnchors.view(for: button.id).map({ $0 === view }) ?? true {
+                                    // A replaced view leaving must not clear its successor's hover.
                                     hoveredMenuSplitActionButtonId = nil
                                 }
                             }
@@ -2219,7 +2221,7 @@ private final class SplitActionMouseDownNSView: NSView {
 private struct SplitActionMenuInteractionOverlay: NSViewRepresentable {
     let menuBehavior: BonsplitConfiguration.SplitActionButton.MenuBehavior
     let onPressChanged: (Bool) -> Void
-    let onHoverChanged: (Bool) -> Void
+    let onHoverChanged: (NSView, Bool) -> Void
     let onClick: (Bool) -> Void
     let menuProvider: () -> NSMenu?
     let onViewReady: (NSView) -> Void
@@ -2267,12 +2269,15 @@ final class SplitActionMenuInteractionNSView: NSView {
     var onPressChanged: ((Bool) -> Void)?
     /// Pointer enter and exit, reported here because this view sits on top of
     /// the glyph and owns the pointer, so SwiftUI hover under it is unreliable.
-    var onHoverChanged: ((Bool) -> Void)?
+    /// Enters always report, since the host may have cleared its copy of the
+    /// state (bar hover dropped) while this view still thought it was inside.
+    var onHoverChanged: ((NSView, Bool) -> Void)?
     var onClick: ((Bool) -> Void)?
     var menuProvider: (() -> NSMenu?)?
     private(set) var isTrackingPress = false
     private(set) var isHovered = false
     private var hoverTrackingArea: NSTrackingArea?
+    private var pointerRecheckScheduled = false
 
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -2322,8 +2327,8 @@ final class SplitActionMenuInteractionNSView: NSView {
         if window == nil {
             cancelPendingHold()
             endPress()
-            setHovered(false)
         }
+        schedulePointerRecheck()
     }
 
     override func updateTrackingAreas() {
@@ -2338,6 +2343,10 @@ final class SplitActionMenuInteractionNSView: NSView {
         )
         addTrackingArea(area)
         hoverTrackingArea = area
+        // A replaced tracking area sends no exit, and a new one sends no
+        // enter, when the view moves under a still pointer (a split, a pane
+        // resize). Resolve from the pointer instead.
+        schedulePointerRecheck()
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -2349,9 +2358,25 @@ final class SplitActionMenuInteractionNSView: NSView {
     }
 
     private func setHovered(_ hovering: Bool) {
-        guard isHovered != hovering else { return }
+        guard hovering || isHovered else { return }
         isHovered = hovering
-        onHoverChanged?(hovering)
+        onHoverChanged?(self, hovering)
+    }
+
+    /// Tracking and window changes arrive inside SwiftUI view updates, where
+    /// publishing hover would modify TabBarView state mid-update. Coalesce
+    /// them into one recheck on the next main-queue turn. Holds the view for
+    /// that turn, so a view just removed from its window still reports its exit.
+    private func schedulePointerRecheck() {
+        guard !pointerRecheckScheduled else { return }
+        pointerRecheckScheduled = true
+        DispatchQueue.main.async { [self] in
+            pointerRecheckScheduled = false
+            let inside = window != nil && isPointerInside()
+            if inside != isHovered {
+                setHovered(inside)
+            }
+        }
     }
 
     @objc func holdToOpenMenuDelayElapsed() {

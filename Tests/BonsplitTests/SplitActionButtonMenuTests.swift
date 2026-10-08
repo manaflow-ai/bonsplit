@@ -195,24 +195,45 @@ struct SplitActionButtonMenuTests {
         #expect(clicks == 0)
     }
 
-    @Test("Hover reports each enter and exit once, and leaving the window clears it")
-    func hoverReportsEnterAndExit() throws {
+    @Test("Hover reports every enter, exits only once, and rechecks the pointer off the update")
+    func hoverReportsEnterAndExit() async throws {
         let (window, view) = makeHostedView(menuBehavior: .secondary)
         defer { window.close() }
         var reports: [Bool] = []
-        view.onHoverChanged = { reports.append($0) }
+        var inside = false
+        view.onHoverChanged = { _, hovering in reports.append(hovering) }
+        view.isPointerInside = { inside }
+        await drainMainQueue()
+        reports.removeAll()
         let event = try mouseEvent(.mouseMoved, in: view, modifiers: [])
 
+        // The host may have dropped its copy (bar hover reset) while the view
+        // still thought it was inside, so a repeated enter must reach it.
         view.mouseEntered(with: event)
         view.mouseEntered(with: event)
         view.mouseExited(with: event)
-        #expect(reports == [true, false])
+        view.mouseExited(with: event)
+        #expect(reports == [true, true, false])
+
+        // The view moved under a still pointer: no enter arrives, the recheck
+        // after the tracking area is rebuilt publishes it on the next turn.
+        inside = true
+        view.updateTrackingAreas()
+        #expect(reports == [true, true, false])
+        await drainMainQueue()
+        #expect(reports == [true, true, false, true])
 
         // A pane torn down under a still pointer never sees its exit.
-        view.mouseEntered(with: event)
         view.removeFromSuperview()
-        #expect(reports == [true, false, true, false])
+        await drainMainQueue()
+        #expect(reports == [true, true, false, true, false])
         #expect(!view.isHovered)
+    }
+
+    private func drainMainQueue() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
     }
 
     @Test("Menu anchors hold their views weakly")
