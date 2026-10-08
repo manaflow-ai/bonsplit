@@ -903,6 +903,7 @@ struct TabBarView: View {
     @State private var splitButtonContentWidth: CGFloat = 0
     @State private var splitButtonViewportWidth: CGFloat = 0
     @State private var pressedSplitActionButtonId: String?
+    @State private var hoveredMenuSplitActionButtonId: String?
     @State private var splitActionMenuAnchors = SplitActionMenuAnchors()
     @State private var controlKeyMonitor = TabControlShortcutKeyMonitor()
     @State private var tabItemGeometryRegistry = TabBarItemGeometryRegistry()
@@ -1666,6 +1667,11 @@ struct TabBarView: View {
         .padding(.leading, TabBarStyling.splitButtonsLeadingPadding - halfGap)
         .padding(.trailing, TabBarStyling.splitButtonsTrailingPadding - halfGap)
         .frame(height: tabBarHeight, alignment: .center)
+        .onChange(of: isHoveringTabBar) { _, hovering in
+            // Drop a missed menu button exit, so its fill does not come back
+            // when the pointer re-enters the bar somewhere else.
+            if !hovering { hoveredMenuSplitActionButtonId = nil }
+        }
     }
 
     @ViewBuilder
@@ -1675,17 +1681,33 @@ struct TabBarView: View {
     ) -> some View {
         if button.usesMenuInteraction {
             let isPressed = pressedSplitActionButtonId == button.id
+            let isHovered = TabBarStyling.splitActionButtonIsHovered(
+                isPointerInside: hoveredMenuSplitActionButtonId == button.id,
+                isTabBarHovered: isHoveringTabBar
+            )
             splitActionButtonIcon(button.icon)
-                .frame(height: tabBarLayout.splitActionButtonHeight)
-                .contentShape(Rectangle())
-                .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: isPressed))
-                .opacity(isPressed ? 0.72 : 1.0)
+                .modifier(SplitActionButtonChrome(
+                    appearance: appearance,
+                    layout: tabBarLayout,
+                    iconScale: controlIconFontScale,
+                    isHovered: isHovered,
+                    isPressed: isPressed
+                ))
                 .tabBarButtonAnimationsDisabled()
                 .overlay(
                     SplitActionMenuInteractionOverlay(
                         menuBehavior: button.menuBehavior,
                         onPressChanged: { pressed in
                             pressedSplitActionButtonId = pressed ? button.id : nil
+                        },
+                        onHoverChanged: { hovering in
+                            withTransaction(Transaction(animation: nil)) {
+                                if hovering {
+                                    hoveredMenuSplitActionButtonId = button.id
+                                } else if hoveredMenuSplitActionButtonId == button.id {
+                                    hoveredMenuSplitActionButtonId = nil
+                                }
+                            }
                         },
                         onClick: { optionKeyHeld in
                             performSplitActionButton(button, optionKeyHeld: optionKeyHeld)
@@ -2090,11 +2112,38 @@ private struct SplitActionButtonStyle: ButtonStyle {
 
 /// A rounded hover and press fill behind the glyph, like a native toolbar
 /// button. It spans the button's own hit area (glyph plus half the gap to
-/// each neighbor) at a fixed height, so it never shifts the glyphs.
-private struct SplitActionButtonStyleBody: View {
+/// each neighbor) at a fixed height, so it never shifts the glyphs. Shared by
+/// plain buttons and menu buttons so their spacing and fill stay identical.
+private struct SplitActionButtonChrome: ViewModifier {
     static let hoverHeight: CGFloat = 18
     static let hoverCornerRadius: CGFloat = 6
 
+    let appearance: BonsplitConfiguration.Appearance
+    let layout: TabBarLayout
+    let iconScale: CGFloat
+    let isHovered: Bool
+    let isPressed: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: isPressed || isHovered))
+            .opacity(isPressed ? 0.72 : 1.0)
+            .padding(.horizontal, TabBarStyling.splitButtonsSpacing / 2)
+            .frame(height: layout.splitActionButtonHeight)
+            .background {
+                RoundedRectangle(cornerRadius: Self.hoverCornerRadius, style: .continuous)
+                    .fill(TabBarColors.splitActionBackground(
+                        for: appearance,
+                        isHovered: isHovered,
+                        isPressed: isPressed
+                    ))
+                    .frame(height: min(Self.hoverHeight * iconScale, layout.splitActionButtonHeight))
+            }
+            .contentShape(Rectangle())
+    }
+}
+
+private struct SplitActionButtonStyleBody: View {
     let configuration: ButtonStyle.Configuration
     let appearance: BonsplitConfiguration.Appearance
     let layout: TabBarLayout
@@ -2114,22 +2163,14 @@ private struct SplitActionButtonStyleBody: View {
     }
 
     var body: some View {
-        let isPressed = configuration.isPressed
         configuration.label
-            .foregroundStyle(TabBarColors.splitActionIcon(for: appearance, isPressed: isPressed || isHovered))
-            .opacity(isPressed ? 0.72 : 1.0)
-            .padding(.horizontal, TabBarStyling.splitButtonsSpacing / 2)
-            .frame(height: layout.splitActionButtonHeight)
-            .background {
-                RoundedRectangle(cornerRadius: Self.hoverCornerRadius, style: .continuous)
-                    .fill(TabBarColors.splitActionBackground(
-                        for: appearance,
-                        isHovered: isHovered,
-                        isPressed: isPressed
-                    ))
-                    .frame(height: min(Self.hoverHeight * iconScale, layout.splitActionButtonHeight))
-            }
-            .contentShape(Rectangle())
+            .modifier(SplitActionButtonChrome(
+                appearance: appearance,
+                layout: layout,
+                iconScale: iconScale,
+                isHovered: isHovered,
+                isPressed: configuration.isPressed
+            ))
             .onHover { hovering in
                 withTransaction(Transaction(animation: nil)) {
                     isPointerInside = hovering
@@ -2178,6 +2219,7 @@ private final class SplitActionMouseDownNSView: NSView {
 private struct SplitActionMenuInteractionOverlay: NSViewRepresentable {
     let menuBehavior: BonsplitConfiguration.SplitActionButton.MenuBehavior
     let onPressChanged: (Bool) -> Void
+    let onHoverChanged: (Bool) -> Void
     let onClick: (Bool) -> Void
     let menuProvider: () -> NSMenu?
     let onViewReady: (NSView) -> Void
@@ -2196,6 +2238,7 @@ private struct SplitActionMenuInteractionOverlay: NSViewRepresentable {
     private func update(_ view: SplitActionMenuInteractionNSView) {
         view.menuBehavior = menuBehavior
         view.onPressChanged = onPressChanged
+        view.onHoverChanged = onHoverChanged
         view.onClick = onClick
         view.menuProvider = menuProvider
     }
@@ -2222,9 +2265,14 @@ final class SplitActionMenuInteractionNSView: NSView {
 
     var menuBehavior: BonsplitConfiguration.SplitActionButton.MenuBehavior = .none
     var onPressChanged: ((Bool) -> Void)?
+    /// Pointer enter and exit, reported here because this view sits on top of
+    /// the glyph and owns the pointer, so SwiftUI hover under it is unreliable.
+    var onHoverChanged: ((Bool) -> Void)?
     var onClick: ((Bool) -> Void)?
     var menuProvider: (() -> NSMenu?)?
     private(set) var isTrackingPress = false
+    private(set) var isHovered = false
+    private var hoverTrackingArea: NSTrackingArea?
 
     override var mouseDownCanMoveWindow: Bool { false }
 
@@ -2274,7 +2322,36 @@ final class SplitActionMenuInteractionNSView: NSView {
         if window == nil {
             cancelPendingHold()
             endPress()
+            setHovered(false)
         }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
+        }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        setHovered(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        setHovered(false)
+    }
+
+    private func setHovered(_ hovering: Bool) {
+        guard isHovered != hovering else { return }
+        isHovered = hovering
+        onHoverChanged?(hovering)
     }
 
     @objc func holdToOpenMenuDelayElapsed() {

@@ -195,6 +195,26 @@ struct SplitActionButtonMenuTests {
         #expect(clicks == 0)
     }
 
+    @Test("Hover reports each enter and exit once, and leaving the window clears it")
+    func hoverReportsEnterAndExit() throws {
+        let (window, view) = makeHostedView(menuBehavior: .secondary)
+        defer { window.close() }
+        var reports: [Bool] = []
+        view.onHoverChanged = { reports.append($0) }
+        let event = try mouseEvent(.mouseMoved, in: view, modifiers: [])
+
+        view.mouseEntered(with: event)
+        view.mouseEntered(with: event)
+        view.mouseExited(with: event)
+        #expect(reports == [true, false])
+
+        // A pane torn down under a still pointer never sees its exit.
+        view.mouseEntered(with: event)
+        view.removeFromSuperview()
+        #expect(reports == [true, false, true, false])
+        #expect(!view.isHovered)
+    }
+
     @Test("Menu anchors hold their views weakly")
     func menuAnchorsAreWeak() {
         let anchors = SplitActionMenuAnchors()

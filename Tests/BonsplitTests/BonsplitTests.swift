@@ -1521,8 +1521,10 @@ final class BonsplitTests: XCTestCase {
 
     func testSplitActionHoverNeedsTheStripToAgreeThePointerIsInTheBar() {
         XCTAssertTrue(TabBarStyling.splitActionButtonIsHovered(isPointerInside: true, isTabBarHovered: true))
-        // A missed button-level exit (fast exit, pane moved under the pointer)
-        // must not keep the fill once the strip sees the pointer leave.
+        // The fill needs both the button's own hover and the strip's bar hover,
+        // so a missed button-level exit (fast exit, pane moved under the
+        // pointer) is hidden once the strip sees the pointer leave. Clearing
+        // that stale state for the next entry is the views' onChange reset.
         XCTAssertFalse(TabBarStyling.splitActionButtonIsHovered(isPointerInside: true, isTabBarHovered: false))
         XCTAssertFalse(TabBarStyling.splitActionButtonIsHovered(isPointerInside: false, isTabBarHovered: true))
     }
