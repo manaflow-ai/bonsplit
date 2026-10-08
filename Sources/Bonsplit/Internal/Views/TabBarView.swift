@@ -403,7 +403,10 @@ struct TabBarLayout: Equatable {
     }
 
     var trailingTabContentInset: CGFloat {
-        reservesSplitButtonLane ? visibleSplitButtonLaneWidth : 0
+        // Hover-only controls still cover the trailing part of the tab strip
+        // while visible. Keep that lane in the scroll document for the visible
+        // state, but leave it out while the controls are hidden.
+        (reservesSplitButtonLane || splitButtonLaneVisible) ? visibleSplitButtonLaneWidth : 0
     }
 
     var splitActionButtonHeight: CGFloat {
