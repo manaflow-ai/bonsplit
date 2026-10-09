@@ -47,6 +47,11 @@ public enum BonsplitTabBarHitRegionRegistry {
     }
 }
 
+/// Tab item hit regions are AppKit views queried from `hitTest`, so the
+/// requirement is statically main-actor isolated. A dynamic
+/// `MainActor.assumeIsolated` check here aborted inside the macOS 26.1 Swift
+/// concurrency runtime ("Attempt to use unknown class") during hit testing.
+@MainActor
 public protocol BonsplitTabItemHitRegionProviding: AnyObject {
     func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool
 }
@@ -83,6 +88,11 @@ public enum BonsplitTabItemHitRegionRegistry {
         return true
     }
 
+    /// Main-actor only: it asks AppKit views for their hit regions. Callers
+    /// are AppKit hit-test and event paths that already run on the main
+    /// thread; `@preconcurrency` keeps existing Swift 5 mode callers that are
+    /// not annotated yet source compatible.
+    @preconcurrency @MainActor
     public static func containsWindowPoint(_ windowPoint: CGPoint, in window: NSWindow) -> Bool {
         for view in snapshot() {
             guard view.window === window,
@@ -2556,14 +2566,12 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
             }
         }
 
-        nonisolated func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
-            MainActor.assumeIsolated {
-                BonsplitTabItemHitTesting.containsTabLaneHit(
-                    localPoint: localPoint,
-                    tabFrames: tabItemFrames(for: liveTabIds).values.map { $0 },
-                    bounds: bounds
-                )
-            }
+        func containsBonsplitTabItemHit(localPoint: NSPoint) -> Bool {
+            BonsplitTabItemHitTesting.containsTabLaneHit(
+                localPoint: localPoint,
+                tabFrames: tabItemFrames(for: liveTabIds).values.map { $0 },
+                bounds: bounds
+            )
         }
 
         private var liveTabIds: [UUID] {
