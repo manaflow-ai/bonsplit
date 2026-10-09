@@ -1498,6 +1498,37 @@ final class BonsplitTests: XCTestCase {
         XCTAssertGreaterThan(pressedAlpha, idleAlpha)
     }
 
+    func testSplitActionBackgroundIsClearAtRestAndStrongerWhenPressed() {
+        let appearance = BonsplitConfiguration.Appearance(
+            chromeColors: .init(backgroundHex: "#272822")
+        )
+
+        func alpha(isHovered: Bool, isPressed: Bool) -> CGFloat {
+            let color = TabBarColors.nsColorSplitActionBackground(
+                for: appearance,
+                isHovered: isHovered,
+                isPressed: isPressed
+            ).usingColorSpace(.sRGB)!
+            var alpha: CGFloat = 0
+            color.getRed(nil, green: nil, blue: nil, alpha: &alpha)
+            return alpha
+        }
+
+        XCTAssertEqual(alpha(isHovered: false, isPressed: false), 0, accuracy: 0.0001)
+        XCTAssertGreaterThan(alpha(isHovered: true, isPressed: false), 0)
+        XCTAssertGreaterThan(alpha(isHovered: true, isPressed: true), alpha(isHovered: true, isPressed: false))
+    }
+
+    func testSplitActionHoverNeedsTheStripToAgreeThePointerIsInTheBar() {
+        XCTAssertTrue(TabBarStyling.splitActionButtonIsHovered(isPointerInside: true, isTabBarHovered: true))
+        // The fill needs both the button's own hover and the strip's bar hover,
+        // so a missed button-level exit (fast exit, pane moved under the
+        // pointer) is hidden once the strip sees the pointer leave. Clearing
+        // that stale state for the next entry is the views' onChange reset.
+        XCTAssertFalse(TabBarStyling.splitActionButtonIsHovered(isPointerInside: true, isTabBarHovered: false))
+        XCTAssertFalse(TabBarStyling.splitActionButtonIsHovered(isPointerInside: false, isTabBarHovered: true))
+    }
+
     @MainActor
     func testMoveTabNoopAfterItself() {
         let t0 = TabItem(title: "0")
