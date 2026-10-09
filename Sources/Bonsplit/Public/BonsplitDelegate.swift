@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 /// Protocol for receiving callbacks about tab bar events
@@ -63,6 +64,12 @@ public protocol BonsplitDelegate: AnyObject {
     /// Called when the user clicks a host-defined action in the tab bar.
     func splitTabBar(_ controller: BonsplitController, didRequestCustomAction identifier: String, inPane pane: PaneID)
 
+    /// Called when the user opens the menu of a tab bar action button whose
+    /// ``BonsplitConfiguration/SplitActionButton/menuBehavior`` is not `.none`.
+    /// Return the menu to show, or nil to show nothing. Bonsplit pops the menu
+    /// up below the button.
+    func splitTabBar(_ controller: BonsplitController, menuForSplitActionButton buttonId: String, inPane pane: PaneID) -> NSMenu?
+
     /// Called when the user triggers an action from a tab's context menu.
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID)
 
@@ -108,6 +115,7 @@ public extension BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController, didFocusPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestNewTab kind: String, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestCustomAction identifier: String, inPane pane: PaneID) {}
+    func splitTabBar(_ controller: BonsplitController, menuForSplitActionButton buttonId: String, inPane pane: PaneID) -> NSMenu? { nil }
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestTabMoveToDestination destinationId: String, for tab: Tab, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {}

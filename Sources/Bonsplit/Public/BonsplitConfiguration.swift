@@ -290,11 +290,36 @@ extension BonsplitConfiguration {
             }
         }
 
+        /// How a button exposes a host-provided menu.
+        ///
+        /// The menu itself comes from
+        /// ``BonsplitDelegate/splitTabBar(_:menuForSplitActionButton:inPane:)``.
+        public enum MenuBehavior: String, Sendable, Codable, Hashable {
+            /// No menu. Click performs ``SplitActionButton/action``.
+            case none
+            /// Click performs the action; right-click or press-and-hold opens the menu.
+            case secondary
+            /// Click opens the menu; the action is not performed by a click.
+            case primary
+        }
+
         public var id: String
         public var icon: Icon
         public var tooltip: String?
         public var action: Action
+        /// Performs the action on mouse down. Ignored when the button has a
+        /// menu or an alternate action, which act on mouse up.
         public var activatesOnMouseDown: Bool
+        /// Action performed when the button is clicked with the Option key held.
+        /// When nil, Option-click performs ``action``.
+        public var alternateAction: Action?
+        /// Whether and how the button opens a host-provided menu.
+        public var menuBehavior: MenuBehavior
+        /// Marks a button whose menu offers a new terminal even though its
+        /// click action is something else. Double-clicking empty tab bar space
+        /// creates a terminal when a `.newTerminal` button or a button with
+        /// this flag is shown.
+        public var offersNewTerminal: Bool
 
         private enum CodingKeys: String, CodingKey {
             case id
@@ -302,6 +327,23 @@ extension BonsplitConfiguration {
             case tooltip
             case action
             case activatesOnMouseDown
+            case alternateAction
+            case menuBehavior
+            case offersNewTerminal
+        }
+
+        /// Whether this button uses the menu-aware interaction path
+        /// (right-click / press-and-hold menu, or Option-click alternate).
+        public var usesMenuInteraction: Bool {
+            menuBehavior != .none || alternateAction != nil
+        }
+
+        /// The action a click performs, given whether Option was held.
+        public func resolvedAction(optionKeyHeld: Bool) -> Action {
+            if optionKeyHeld, let alternateAction {
+                return alternateAction
+            }
+            return action
         }
 
         public var systemImage: String {
@@ -316,14 +358,20 @@ extension BonsplitConfiguration {
             systemImage: String,
             tooltip: String? = nil,
             action: Action,
-            activatesOnMouseDown: Bool = false
+            activatesOnMouseDown: Bool = false,
+            alternateAction: Action? = nil,
+            menuBehavior: MenuBehavior = .none,
+            offersNewTerminal: Bool = false
         ) {
             self.init(
                 id: id,
                 icon: .systemImage(systemImage),
                 tooltip: tooltip,
                 action: action,
-                activatesOnMouseDown: activatesOnMouseDown
+                activatesOnMouseDown: activatesOnMouseDown,
+                alternateAction: alternateAction,
+                menuBehavior: menuBehavior,
+                offersNewTerminal: offersNewTerminal
             )
         }
 
@@ -332,13 +380,19 @@ extension BonsplitConfiguration {
             icon: Icon,
             tooltip: String? = nil,
             action: Action,
-            activatesOnMouseDown: Bool = false
+            activatesOnMouseDown: Bool = false,
+            alternateAction: Action? = nil,
+            menuBehavior: MenuBehavior = .none,
+            offersNewTerminal: Bool = false
         ) {
             self.id = id
             self.icon = icon
             self.tooltip = tooltip
             self.action = action
             self.activatesOnMouseDown = activatesOnMouseDown
+            self.alternateAction = alternateAction
+            self.menuBehavior = menuBehavior
+            self.offersNewTerminal = offersNewTerminal
         }
 
         public init(from decoder: Decoder) throws {
@@ -348,6 +402,9 @@ extension BonsplitConfiguration {
             tooltip = try container.decodeIfPresent(String.self, forKey: .tooltip)
             action = try container.decode(Action.self, forKey: .action)
             activatesOnMouseDown = try container.decodeIfPresent(Bool.self, forKey: .activatesOnMouseDown) ?? false
+            alternateAction = try container.decodeIfPresent(Action.self, forKey: .alternateAction)
+            menuBehavior = try container.decodeIfPresent(MenuBehavior.self, forKey: .menuBehavior) ?? .none
+            offersNewTerminal = try container.decodeIfPresent(Bool.self, forKey: .offersNewTerminal) ?? false
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -358,6 +415,13 @@ extension BonsplitConfiguration {
             try container.encode(action, forKey: .action)
             if activatesOnMouseDown {
                 try container.encode(activatesOnMouseDown, forKey: .activatesOnMouseDown)
+            }
+            try container.encodeIfPresent(alternateAction, forKey: .alternateAction)
+            if menuBehavior != .none {
+                try container.encode(menuBehavior, forKey: .menuBehavior)
+            }
+            if offersNewTerminal {
+                try container.encode(offersNewTerminal, forKey: .offersNewTerminal)
             }
         }
 
