@@ -37,9 +37,23 @@ struct TabBarHoverRevealTests {
         harness.registry.geometryDidChange(for: harness.selectedTabId)
 
         harness.registry.setTrailingObscuredWidth(60, revealTabId: harness.hoveredTabId)
+        harness.selectedView.frame.origin.x = 80
         harness.registry.geometryDidChange(for: harness.selectedTabId)
 
         #expect(harness.hoveredFrame.maxX <= 140.5)
+    }
+
+    @Test("Hover exit clears the deferred reveal before a later document resize")
+    func hoverExitClearsReveal() throws {
+        let harness = try Harness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.setTrailingObscuredWidth(60, revealTabId: harness.hoveredTabId)
+        harness.registry.setTrailingObscuredWidth(60, revealTabId: nil)
+        harness.documentView.setFrameSize(NSSize(width: 660, height: 28))
+
+        #expect(harness.scrollView.contentView.bounds.origin.x <= 40.5)
+        #expect(harness.hoveredFrame.minX >= 459.5)
     }
 
     @Test("Revealing a clipped tab keeps it under the stationary pointer")

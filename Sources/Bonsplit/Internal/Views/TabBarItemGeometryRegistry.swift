@@ -23,6 +23,7 @@ final class TabBarItemGeometryRegistry {
     private enum ScrollIntent: Equatable {
         case leading
         case revealTab(UUID)
+        case revealHoveredTab(UUID)
     }
 
     private let itemViews = NSMapTable<NSUUID, NSView>.strongToWeakObjects()
@@ -36,10 +37,9 @@ final class TabBarItemGeometryRegistry {
     private var selectedTabId: UUID?
     private var lastObservedSelectedTabDocumentFrame: CGRect?
     private var pendingScrollIntent: ScrollIntent?
-    /// A hover reveal may run before SwiftUI applies the trailing padding that
-    /// expands the document. Keep that tab as the next geometry intent so the
-    /// document resize does not replace it with the selected tab's intent.
-    private var deferredTrailingRevealTabId: UUID?
+    /// Keep hover intent through every geometry callback from a lane layout.
+    /// A selection, user scroll, or hover exit supersedes that intent.
+    private var trailingRevealTabId: UUID?
     private var expectedProgrammaticOffset: CGFloat?
     private(set) var trailingObscuredWidth: CGFloat = 0
 
@@ -156,6 +156,7 @@ final class TabBarItemGeometryRegistry {
 
     /// Records the selected tab as a viewport intent until live AppKit geometry can satisfy it.
     func revealSelection(_ tabId: UUID?) {
+        trailingRevealTabId = nil
         if selectedTabId != tabId {
             lastObservedSelectedTabDocumentFrame = nil
         }
@@ -171,11 +172,18 @@ final class TabBarItemGeometryRegistry {
     func setTrailingObscuredWidth(_ width: CGFloat, revealTabId: UUID? = nil) {
         let normalizedWidth = max(0, width)
         let widthChanged = abs(normalizedWidth - trailingObscuredWidth) > 0.5
-        guard widthChanged || revealTabId != nil else { return }
+        let hoverChanged = trailingRevealTabId != revealTabId
+        guard widthChanged || hoverChanged || revealTabId != nil else { return }
 
         trailingObscuredWidth = normalizedWidth
-        deferredTrailingRevealTabId = widthChanged ? revealTabId : nil
-        pendingScrollIntent = (revealTabId ?? selectedTabId).map(ScrollIntent.revealTab) ?? .leading
+        trailingRevealTabId = normalizedWidth > 0 ? revealTabId : nil
+        if let trailingRevealTabId {
+            pendingScrollIntent = .revealHoveredTab(trailingRevealTabId)
+        } else if widthChanged {
+            pendingScrollIntent = selectedTabId.map(ScrollIntent.revealTab) ?? .leading
+        } else if case .revealHoveredTab = pendingScrollIntent {
+            pendingScrollIntent = nil
+        }
         reconcilePendingScrollIntent()
         if widthChanged {
             invalidateObservers()
@@ -301,7 +309,7 @@ final class TabBarItemGeometryRegistry {
 
     func geometryDidChange(for tabId: UUID) {
         if tabId == selectedTabId {
-            if selectedTabFrameDidChange(tabId) {
+            if selectedTabFrameDidChange(tabId), trailingRevealTabId == nil {
                 pendingScrollIntent = .revealTab(tabId)
             }
             reconcilePendingScrollIntent()
@@ -321,6 +329,7 @@ final class TabBarItemGeometryRegistry {
     private func userWillScroll() {
         expectedProgrammaticOffset = nil
         pendingScrollIntent = nil
+        trailingRevealTabId = nil
     }
 
     private func selectedTabFrameDidChange(_ tabId: UUID) -> Bool {
@@ -349,6 +358,8 @@ final class TabBarItemGeometryRegistry {
             didReconcile = scrollToLeadingEdgeIfReady()
         case .revealTab(let tabId):
             didReconcile = revealTabIfClipped(tabId)
+        case .revealHoveredTab(let tabId):
+            didReconcile = revealTabIfClipped(tabId, preservingPointer: true)
         }
 
         if didReconcile, pendingScrollIntent == intent {
@@ -372,8 +383,8 @@ final class TabBarItemGeometryRegistry {
     }
 
     private func documentGeometryDidChange() {
-        pendingScrollIntent = (deferredTrailingRevealTabId ?? selectedTabId).map(ScrollIntent.revealTab) ?? .leading
-        deferredTrailingRevealTabId = nil
+        pendingScrollIntent = trailingRevealTabId.map(ScrollIntent.revealHoveredTab)
+            ?? selectedTabId.map(ScrollIntent.revealTab) ?? .leading
         viewportLayoutDidChange()
         reconcilePendingScrollIntent()
         invalidateObservers()
@@ -387,7 +398,7 @@ final class TabBarItemGeometryRegistry {
     }
 
     @discardableResult
-    private func revealTabIfClipped(_ tabId: UUID) -> Bool {
+    private func revealTabIfClipped(_ tabId: UUID, preservingPointer: Bool = false) -> Bool {
         guard let itemView = itemViews.object(forKey: tabId as NSUUID),
               isVisibleInHierarchy(itemView) else {
             return false
@@ -415,7 +426,9 @@ final class TabBarItemGeometryRegistry {
               itemFrame.maxX <= metrics.documentWidth + 0.5 else {
             return false
         }
-        lastObservedSelectedTabDocumentFrame = itemFrame
+        if tabId == selectedTabId {
+            lastObservedSelectedTabDocumentFrame = itemFrame
+        }
 
         if TabBarStyling.shouldKeepLeadingAligned(
             contentWidth: metrics.documentWidth,
@@ -433,8 +446,22 @@ final class TabBarItemGeometryRegistry {
         }
 
         let maximumOffset = max(0, metrics.documentWidth - metrics.viewportWidth)
-        let centeredOffset = itemFrame.midX - (metrics.unobscuredViewportWidth / 2)
-        let targetOffset = min(max(centeredOffset, 0), maximumOffset)
+        let revealOffset: CGFloat
+        if itemFrame.width > metrics.unobscuredViewportWidth {
+            // A narrow strip cannot show the whole tab. Expose its trailing
+            // close affordance instead of centering it under the action lane.
+            revealOffset = itemFrame.maxX - metrics.unobscuredViewportWidth
+        } else if preservingPointer {
+            // Moving only the clipped edge keeps a pointer in the uncovered
+            // viewport over the same tab. Centering can move a different tab
+            // under that stationary pointer and trigger another hover reveal.
+            revealOffset = itemFrame.minX < visibleRange.lowerBound
+                ? itemFrame.minX
+                : itemFrame.maxX - metrics.unobscuredViewportWidth
+        } else {
+            revealOffset = itemFrame.midX - (metrics.unobscuredViewportWidth / 2)
+        }
+        let targetOffset = min(max(revealOffset, 0), maximumOffset)
         setHorizontalOffset(targetOffset, metrics: metrics)
         return true
     }
