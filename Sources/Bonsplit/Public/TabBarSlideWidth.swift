@@ -44,8 +44,8 @@ struct TabBarSlideLaneWidthKey: PreferenceKey {
 }
 
 /// Gives its tab bar the model; only the two small modifiers below observe
-/// the width, so a new width re-lays out the tabs without re-evaluating
-/// the tab bar's body.
+/// the width. The tab row still measures its new width, so changing the
+/// width every frame costs a tab bar body pass per frame; hold it steady.
 struct TabBarSlideWidthContainer<Content: View>: View {
     @State private var model = TabBarSlideWidthModel()
     @ViewBuilder let content: () -> Content
