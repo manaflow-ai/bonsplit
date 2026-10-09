@@ -171,11 +171,13 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             if tabBarVisibility.showsTabBar(tabCount: pane.tabs.count) {
-                TabBarView(
-                    pane: pane,
-                    isFocused: isFocused,
-                    showSplitButtons: showSplitButtons
-                )
+                TabBarSlideWidthContainer {
+                    TabBarView(
+                        pane: pane,
+                        isFocused: isFocused,
+                        showSplitButtons: showSplitButtons
+                    )
+                }
             }
 
             // Content area with drop zones
