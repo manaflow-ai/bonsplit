@@ -1323,9 +1323,15 @@ struct TabBarView: View {
             }
         }
         .onAppear {
+            controlKeyMonitor.setSurfaceNumberShortcutModifier(
+                splitViewController.surfaceNumberShortcutModifier
+            )
             if splitViewController.tabShortcutHintsEnabled {
                 controlKeyMonitor.start()
             }
+        }
+        .onChange(of: splitViewController.surfaceNumberShortcutModifier) { _, modifier in
+            controlKeyMonitor.setSurfaceNumberShortcutModifier(modifier)
         }
         .onChange(of: splitViewController.tabShortcutHintsEnabled) { _, enabled in
             if enabled {
@@ -1379,7 +1385,8 @@ struct TabBarView: View {
                 ? TabBarMetrics.selectedTabLeftSeparatorBottomInset
                 : 0,
             controlShortcutDigit: tabControlShortcutDigit(for: index, tabCount: pane.tabs.count),
-            tabShortcutHintsEnabled: splitViewController.tabShortcutHintsEnabled,
+            tabShortcutHintsEnabled: splitViewController.tabShortcutHintsEnabled
+                && splitViewController.surfaceNumberShortcutModifier != nil,
             isFocused: isFocused,
             showsControlShortcutHint: showsControlShortcutHints,
             shortcutModifierSymbol: controlKeyMonitor.shortcutModifierSymbol,
@@ -3342,70 +3349,6 @@ struct TabBarDragZoneView: NSViewRepresentable {
     }
 }
 
-private struct TabControlShortcutStoredShortcut: Decodable {
-    let key: String
-    let command: Bool
-    let shift: Bool
-    let option: Bool
-    let control: Bool
-
-    init(
-        key: String,
-        command: Bool,
-        shift: Bool,
-        option: Bool,
-        control: Bool
-    ) {
-        self.key = key
-        self.command = command
-        self.shift = shift
-        self.option = option
-        self.control = control
-    }
-
-    var modifierFlags: NSEvent.ModifierFlags {
-        var flags: NSEvent.ModifierFlags = []
-        if command { flags.insert(.command) }
-        if shift { flags.insert(.shift) }
-        if option { flags.insert(.option) }
-        if control { flags.insert(.control) }
-        return flags
-    }
-
-    var modifierSymbol: String {
-        var parts: [String] = []
-        if control { parts.append("⌃") }
-        if option { parts.append("⌥") }
-        if shift { parts.append("⇧") }
-        if command { parts.append("⌘") }
-        return parts.joined()
-    }
-}
-
-private enum TabControlShortcutSettings {
-    static let surfaceByNumberKey = "shortcut.selectSurfaceByNumber"
-    static let defaultShortcut = TabControlShortcutStoredShortcut(
-        key: "1",
-        command: false,
-        shift: false,
-        option: false,
-        control: true
-    )
-
-    static func surfaceByNumberShortcut(defaults: UserDefaults = .standard) -> TabControlShortcutStoredShortcut {
-        guard let data = defaults.data(forKey: surfaceByNumberKey),
-              let shortcut = try? JSONDecoder().decode(TabControlShortcutStoredShortcut.self, from: data) else {
-            return defaultShortcut
-        }
-        return shortcut
-    }
-}
-
-struct TabControlShortcutModifier: Equatable {
-    let modifierFlags: NSEvent.ModifierFlags
-    let symbol: String
-}
-
 enum TabControlShortcutHintPolicy {
     static let intentionalHoldDelay: TimeInterval = 0.30
     static let showHintsOnCommandHoldKey = "shortcutHintShowOnCommandHold"
@@ -3427,8 +3370,10 @@ enum TabControlShortcutHintPolicy {
         return defaults.bool(forKey: showHintsOnControlHoldKey)
     }
 
-    static func configuredShortcutModifierSymbol(defaults: UserDefaults = .standard) -> String {
-        TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
+    static func configuredShortcutModifierSymbol(
+        _ shortcutModifier: TabControlShortcutModifier? = .control
+    ) -> String {
+        shortcutModifier?.symbol ?? ""
     }
 
     private static func triggerAllowsHintReveal(
@@ -3449,14 +3394,11 @@ enum TabControlShortcutHintPolicy {
 
     static func hintModifier(
         for modifierFlags: NSEvent.ModifierFlags,
+        shortcutModifier: TabControlShortcutModifier? = .control,
         defaults: UserDefaults = .standard
     ) -> TabControlShortcutModifier? {
         guard triggerAllowsHintReveal(for: modifierFlags, defaults: defaults) else { return nil }
-        let shortcut = TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults)
-        return TabControlShortcutModifier(
-            modifierFlags: shortcut.modifierFlags,
-            symbol: shortcut.modifierSymbol
-        )
+        return shortcutModifier
     }
 
     static func isCurrentWindow(
@@ -3524,6 +3466,7 @@ private struct TabBarHostWindowReader: NSViewRepresentable {
 @Observable
 private final class TabControlShortcutKeyMonitor {
     private(set) var isShortcutHintVisible = false
+    private var surfaceNumberShortcutModifier: TabControlShortcutModifier? = .control
     private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
 
     @ObservationIgnored private weak var hostWindow: NSWindow?
@@ -3564,6 +3507,13 @@ private final class TabControlShortcutKeyMonitor {
             }
         }
 
+        update(from: NSEvent.modifierFlags, eventWindow: nil)
+    }
+
+    func setSurfaceNumberShortcutModifier(_ modifier: TabControlShortcutModifier?) {
+        guard surfaceNumberShortcutModifier != modifier else { return }
+        surfaceNumberShortcutModifier = modifier
+        shortcutModifierSymbol = modifier?.symbol ?? ""
         update(from: NSEvent.modifierFlags, eventWindow: nil)
     }
 
@@ -3624,7 +3574,7 @@ private final class TabControlShortcutKeyMonitor {
     }
 
     private func update(from modifierFlags: NSEvent.ModifierFlags, eventWindow: NSWindow?) {
-        guard TabControlShortcutHintPolicy.shouldShowHints(
+        guard flagsMonitor != nil, TabControlShortcutHintPolicy.shouldShowHints(
             for: modifierFlags,
             hostWindowNumber: hostWindow?.windowNumber,
             hostWindowIsKey: hostWindow?.isKeyWindow ?? false,
@@ -3635,7 +3585,10 @@ private final class TabControlShortcutKeyMonitor {
             return
         }
 
-        guard let modifier = TabControlShortcutHintPolicy.hintModifier(for: modifierFlags) else {
+        guard let modifier = TabControlShortcutHintPolicy.hintModifier(
+            for: modifierFlags,
+            shortcutModifier: surfaceNumberShortcutModifier
+        ) else {
             cancelPendingHintShow(resetVisible: true)
             return
         }
@@ -3668,7 +3621,10 @@ private final class TabControlShortcutKeyMonitor {
                 eventWindowNumber: nil,
                 keyWindowNumber: NSApp.keyWindow?.windowNumber
             ) else { return }
-            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(for: NSEvent.modifierFlags) else { return }
+            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(
+                for: NSEvent.modifierFlags,
+                shortcutModifier: self.surfaceNumberShortcutModifier
+            ) else { return }
             self.shortcutModifierSymbol = currentModifier.symbol
             withAnimation(TabControlShortcutHintAnimation.visibility) {
                 self.isShortcutHintVisible = true
@@ -3681,7 +3637,9 @@ private final class TabControlShortcutKeyMonitor {
         pendingShowTask = nil
         pendingModifier = nil
         if resetVisible {
-            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
+            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
+                surfaceNumberShortcutModifier
+            )
             withAnimation(TabControlShortcutHintAnimation.visibility) {
                 isShortcutHintVisible = false
             }
