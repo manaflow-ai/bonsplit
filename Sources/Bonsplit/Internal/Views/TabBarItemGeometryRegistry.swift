@@ -36,6 +36,10 @@ final class TabBarItemGeometryRegistry {
     private var selectedTabId: UUID?
     private var lastObservedSelectedTabDocumentFrame: CGRect?
     private var pendingScrollIntent: ScrollIntent?
+    /// A hover reveal may run before SwiftUI applies the trailing padding that
+    /// expands the document. Keep that tab as the next geometry intent so the
+    /// document resize does not replace it with the selected tab's intent.
+    private var deferredTrailingRevealTabId: UUID?
     private var expectedProgrammaticOffset: CGFloat?
     private(set) var trailingObscuredWidth: CGFloat = 0
 
@@ -166,12 +170,16 @@ final class TabBarItemGeometryRegistry {
     /// tab against the new unobscured viewport before the lane can cover it.
     func setTrailingObscuredWidth(_ width: CGFloat, revealTabId: UUID? = nil) {
         let normalizedWidth = max(0, width)
-        guard abs(normalizedWidth - trailingObscuredWidth) > 0.5 else { return }
+        let widthChanged = abs(normalizedWidth - trailingObscuredWidth) > 0.5
+        guard widthChanged || revealTabId != nil else { return }
 
         trailingObscuredWidth = normalizedWidth
+        deferredTrailingRevealTabId = widthChanged ? revealTabId : nil
         pendingScrollIntent = (revealTabId ?? selectedTabId).map(ScrollIntent.revealTab) ?? .leading
         reconcilePendingScrollIntent()
-        invalidateObservers()
+        if widthChanged {
+            invalidateObservers()
+        }
     }
 
     /// Preserves a resize's current anchor while keeping the clip view inside its valid range.
@@ -364,8 +372,10 @@ final class TabBarItemGeometryRegistry {
     }
 
     private func documentGeometryDidChange() {
-        pendingScrollIntent = selectedTabId.map(ScrollIntent.revealTab) ?? .leading
+        pendingScrollIntent = (deferredTrailingRevealTabId ?? selectedTabId).map(ScrollIntent.revealTab) ?? .leading
+        deferredTrailingRevealTabId = nil
         viewportLayoutDidChange()
+        reconcilePendingScrollIntent()
         invalidateObservers()
     }
 

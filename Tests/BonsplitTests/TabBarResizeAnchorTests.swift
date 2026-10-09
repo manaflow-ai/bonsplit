@@ -448,6 +448,53 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    func testHoveringAnotherTabWhileLaneStaysVisibleRevealsIt() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        harness.registry.register(harness.selectedView, for: harness.selectedTabId)
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 660, height: TabBarMetrics.barHeight)
+        )
+
+        let actionLaneWidth: CGFloat = 60
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+        XCTAssertGreaterThan(harness.scrollView.contentView.bounds.origin.x, 0)
+
+        // Moving to another tab does not change the visible lane width. The
+        // same-width reveal path must still run so the new tab's close button
+        // can be brought out from under that lane.
+        harness.scrollView.contentView.scroll(to: .zero)
+        harness.scrollView.reflectScrolledClipView(harness.scrollView.contentView)
+        NotificationCenter.default.post(
+            name: NSScrollView.willStartLiveScrollNotification,
+            object: harness.scrollView
+        )
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+
+        let documentView = try XCTUnwrap(harness.scrollView.documentView)
+        let frameInDocument = harness.selectedView.convert(
+            harness.selectedView.bounds,
+            to: documentView
+        )
+        let frame = frameInDocument.offsetBy(
+            dx: -harness.scrollView.contentView.bounds.origin.x,
+            dy: 0
+        )
+        XCTAssertLessThanOrEqual(
+            frame.maxX,
+            harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
+            "A new hovered tab must be revealed even when the visible action lane width is unchanged."
+        )
+    }
+
     func testViewportResizeKeepsLeadingAnchoredWhenTabStripWasLeadingAligned() throws {
         let harness = try makeTabBarHarness(
             initialSize: NSSize(width: 900, height: TabBarMetrics.barHeight),

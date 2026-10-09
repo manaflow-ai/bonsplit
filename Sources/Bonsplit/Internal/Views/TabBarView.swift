@@ -1260,6 +1260,17 @@ struct TabBarView: View {
                         revealTabId: hoveredTabId
                     )
                 }
+                .onChange(of: hoveredTabId) { _, newTabId in
+                    // The lane can stay visible while the pointer moves from
+                    // one tab to another. Re-run the reveal for each hovered
+                    // tab so its close affordance remains clickable even when
+                    // the lane width itself did not change.
+                    guard trailingTabContentInset > 0, let newTabId else { return }
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        trailingTabContentInset,
+                        revealTabId: newTabId
+                    )
+                }
                 .frame(height: tabBarHeight)
                 .mask(combinedMask)
             }
