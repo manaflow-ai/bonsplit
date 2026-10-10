@@ -9,6 +9,7 @@
 "tabContext.closeTabsToLeft" = "Close Tabs to Left";
 "tabContext.closeTabsToRight" = "Close Tabs to Right";
 "tabContext.closeOtherTabs" = "Close Other Tabs";
+"tabContext.closeAllBrowserTabs" = "Close All Browser Tabs";
 "tabContext.newTerminalTabToRight" = "New Terminal Tab to Right";
 "tabContext.newBrowserTabToRight" = "New Browser Tab to Right";
 "tabContext.reloadTab" = "Reload Tab";
