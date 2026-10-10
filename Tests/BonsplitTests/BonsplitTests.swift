@@ -633,6 +633,24 @@ final class BonsplitTests: XCTestCase {
         )
     }
 
+    func testTabBarLayoutAccountsForVisibleHoverOnlySplitButtonLane() {
+        let laneWidth = TabBarStyling.splitButtonsBackdropWidth(buttonCount: 4)
+        let layout = TabBarLayout(
+            tabBarHeight: 28,
+            availableWidth: 240,
+            splitButtonCount: 4,
+            splitButtonLaneVisible: true,
+            reservesSplitButtonLane: false,
+            measuredSplitButtonLaneWidth: laneWidth
+        )
+
+        XCTAssertEqual(
+            layout.trailingTabContentInset,
+            laneWidth,
+            "A visible hover-only button lane must extend the scroll document so trailing tabs can clear it."
+        )
+    }
+
     func testTabBarLayoutExpandsForMeasuredSplitButtonLaneWidth() {
         let layout = TabBarLayout(
             tabBarHeight: 28,

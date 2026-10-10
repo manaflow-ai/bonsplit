@@ -413,7 +413,10 @@ struct TabBarLayout: Equatable {
     }
 
     var trailingTabContentInset: CGFloat {
-        reservesSplitButtonLane ? visibleSplitButtonLaneWidth : 0
+        // Hover-only controls still cover the trailing part of the tab strip
+        // while visible. Keep that lane in the scroll document for the visible
+        // state, but leave it out while the controls are hidden.
+        (reservesSplitButtonLane || splitButtonLaneVisible) ? visibleSplitButtonLaneWidth : 0
     }
 
     var splitActionButtonHeight: CGFloat {
@@ -1264,7 +1267,21 @@ struct TabBarView: View {
                     tabItemGeometryRegistry.revealSelection(newTabId)
                 }
                 .onChange(of: trailingTabContentInset) { _, newWidth in
-                    tabItemGeometryRegistry.setTrailingObscuredWidth(newWidth)
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        newWidth,
+                        revealTabId: hoveredTabId
+                    )
+                }
+                .onChange(of: hoveredTabId) { _, newTabId in
+                    // The lane can stay visible while the pointer moves from
+                    // one tab to another. Re-run the reveal for each hovered
+                    // tab so its close affordance remains clickable even when
+                    // the lane width itself did not change.
+                    guard trailingTabContentInset > 0 else { return }
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        trailingTabContentInset,
+                        revealTabId: newTabId
+                    )
                 }
                 .frame(height: tabBarHeight)
                 .mask(combinedMask)
