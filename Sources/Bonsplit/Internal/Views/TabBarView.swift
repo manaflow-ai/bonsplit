@@ -154,6 +154,44 @@ enum BonsplitTabItemHitTesting {
     }
 }
 
+enum TabBarDragZoneHitTesting {
+    static func shouldCaptureLeadingChrome(
+        at point: NSPoint,
+        bounds: NSRect,
+        tabFrames: [CGRect],
+        hasTabs: Bool,
+        tabFramesReady: Bool? = nil
+    ) -> Bool {
+        guard bounds.contains(point) else { return false }
+        let geometryReady = tabFramesReady ?? (!hasTabs || !tabFrames.isEmpty)
+        guard geometryReady else { return false }
+        let paddedFrames = tabFrames.map {
+            $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+        }
+        guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
+        return true
+    }
+
+    static func shouldCaptureTrailingEmptyChrome(
+        at point: NSPoint,
+        bounds: NSRect,
+        tabFrames: [CGRect],
+        reservedTrailingWidth: CGFloat,
+        tabFramesReady: Bool = true
+    ) -> Bool {
+        guard bounds.contains(point) else { return false }
+        guard tabFramesReady else { return false }
+        let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
+        guard point.x < trailingLimit else { return false }
+        let paddedFrames = tabFrames.map {
+            $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+        }
+        guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
+        let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
+        return point.x >= startX
+    }
+}
+
 private struct SplitButtonLaneWidthPreferenceKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
 
@@ -413,7 +451,10 @@ struct TabBarLayout: Equatable {
     }
 
     var trailingTabContentInset: CGFloat {
-        reservesSplitButtonLane ? visibleSplitButtonLaneWidth : 0
+        // Hover-only controls still cover the trailing part of the tab strip
+        // while visible. Keep that lane in the scroll document for the visible
+        // state, but leave it out while the controls are hidden.
+        (reservesSplitButtonLane || splitButtonLaneVisible) ? visibleSplitButtonLaneWidth : 0
     }
 
     var splitActionButtonHeight: CGFloat {
@@ -1213,6 +1254,10 @@ struct TabBarView: View {
         HStack(spacing: 0) {
             if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
                 TabBarDragZoneView(
+                    hitRegion: .leadingChrome(
+                        geometryRegistry: tabItemGeometryRegistry,
+                        tabIds: tabIds
+                    ),
                     isMinimalMode: isMinimalMode,
                     isFocusedPane: isFocused,
                     onSingleClick: focusPaneFromTabBarChrome
@@ -1241,6 +1286,11 @@ struct TabBarView: View {
                         let trailing = max(0, containerGeo.size.width - contentWidth)
                         if trailing >= 1 {
                             TabBarDragZoneView(
+                                hitRegion: .registeredTrailingEmptyChrome(
+                                    geometryRegistry: tabItemGeometryRegistry,
+                                    tabIds: tabIds,
+                                    reservedTrailingWidth: 0
+                                ),
                                 isMinimalMode: isMinimalMode,
                                 isFocusedPane: isFocused,
                                 onSingleClick: focusPaneFromTabBarChrome
@@ -1264,7 +1314,21 @@ struct TabBarView: View {
                     tabItemGeometryRegistry.revealSelection(newTabId)
                 }
                 .onChange(of: trailingTabContentInset) { _, newWidth in
-                    tabItemGeometryRegistry.setTrailingObscuredWidth(newWidth)
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        newWidth,
+                        revealTabId: hoveredTabId
+                    )
+                }
+                .onChange(of: hoveredTabId) { _, newTabId in
+                    // The lane can stay visible while the pointer moves from
+                    // one tab to another. Re-run the reveal for each hovered
+                    // tab so its close affordance remains clickable even when
+                    // the lane width itself did not change.
+                    guard trailingTabContentInset > 0 else { return }
+                    tabItemGeometryRegistry.setTrailingObscuredWidth(
+                        trailingTabContentInset,
+                        revealTabId: newTabId
+                    )
                 }
                 .frame(height: tabBarHeight)
                 .mask(combinedMask)
@@ -1483,6 +1547,11 @@ struct TabBarView: View {
     @ViewBuilder
     private var dropZoneAfterTabs: some View {
         TabBarDragZoneView(
+            hitRegion: .registeredTrailingEmptyChrome(
+                geometryRegistry: tabItemGeometryRegistry,
+                tabIds: tabIds,
+                reservedTrailingWidth: 0
+            ),
             isMinimalMode: isMinimalMode,
             isFocusedPane: isFocused,
             onSingleClick: focusPaneFromTabBarChrome
@@ -3013,6 +3082,10 @@ struct TabBarDragAndHoverView: NSViewRepresentable {
 struct TabBarDragZoneView: NSViewRepresentable {
     enum HitRegion {
         case entireBounds
+        case leadingChrome(
+            geometryRegistry: TabBarItemGeometryRegistry,
+            tabIds: [UUID]
+        )
         case trailingEmptyChrome(tabFrames: [CGRect], reservedTrailingWidth: CGFloat)
         case registeredTrailingEmptyChrome(
             geometryRegistry: TabBarItemGeometryRegistry,
@@ -3103,7 +3176,13 @@ struct TabBarDragZoneView: NSViewRepresentable {
         }
 
         override func hitTest(_ point: NSPoint) -> NSView? {
-            guard shouldCaptureHit(at: point) else { return nil }
+            // AppKit supplies hitTest(_:) with a point in the receiver's
+            // superview coordinate space. The hit-region calculations below
+            // are local to this drag zone, so translate before evaluating
+            // bounds or tab geometry. This matters for the trailing overlay,
+            // whose frame starts after the tab viewport.
+            let localPoint = superview.map { convert(point, from: $0) } ?? point
+            guard shouldCaptureHit(at: localPoint) else { return nil }
             return self
         }
 
@@ -3186,19 +3265,38 @@ struct TabBarDragZoneView: NSViewRepresentable {
             switch hitRegion {
             case .entireBounds:
                 return true
+            case .leadingChrome(let geometryRegistry, let tabIds):
+                guard isMouseDownOrDragCandidate else { return false }
+                let resolved = resolvedTabFrames(
+                    geometryRegistry: geometryRegistry,
+                    tabIds: tabIds
+                )
+                return TabBarDragZoneHitTesting.shouldCaptureLeadingChrome(
+                    at: point,
+                    bounds: bounds,
+                    tabFrames: resolved.frames,
+                    hasTabs: !tabIds.isEmpty,
+                    tabFramesReady: resolved.isComplete
+                )
             case .trailingEmptyChrome(let tabFrames, let reservedTrailingWidth):
                 guard isMouseDownOrDragCandidate else { return false }
                 return shouldCaptureTrailingEmptyChrome(
                     at: point,
                     tabFrames: tabFrames,
-                    reservedTrailingWidth: reservedTrailingWidth
+                    reservedTrailingWidth: reservedTrailingWidth,
+                    tabFramesReady: true
                 )
             case .registeredTrailingEmptyChrome(let geometryRegistry, let tabIds, let reservedTrailingWidth):
                 guard isMouseDownOrDragCandidate else { return false }
+                let resolved = resolvedTabFrames(
+                    geometryRegistry: geometryRegistry,
+                    tabIds: tabIds
+                )
                 return shouldCaptureTrailingEmptyChrome(
                     at: point,
-                    tabFrames: geometryRegistry.frames(for: tabIds, in: self).values.map { $0 },
-                    reservedTrailingWidth: reservedTrailingWidth
+                    tabFrames: resolved.frames,
+                    reservedTrailingWidth: reservedTrailingWidth,
+                    tabFramesReady: resolved.isComplete
                 )
             }
         }
@@ -3206,16 +3304,33 @@ struct TabBarDragZoneView: NSViewRepresentable {
         private func shouldCaptureTrailingEmptyChrome(
             at point: NSPoint,
             tabFrames: [CGRect],
-            reservedTrailingWidth: CGFloat
+            reservedTrailingWidth: CGFloat,
+            tabFramesReady: Bool
         ) -> Bool {
-            let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
-            guard point.x < trailingLimit else { return false }
-            let paddedFrames = tabFrames.map {
-                $0.insetBy(dx: -BonsplitTabItemHitTesting.horizontalSlop, dy: -2)
+            TabBarDragZoneHitTesting.shouldCaptureTrailingEmptyChrome(
+                at: point,
+                bounds: bounds,
+                tabFrames: tabFrames,
+                reservedTrailingWidth: reservedTrailingWidth,
+                tabFramesReady: tabFramesReady
+            )
+        }
+
+        private func resolvedTabFrames(
+            geometryRegistry: TabBarItemGeometryRegistry,
+            tabIds: [UUID]
+        ) -> (frames: [CGRect], isComplete: Bool) {
+            guard !tabIds.isEmpty else { return ([], true) }
+            var framesById = geometryRegistry.frames(for: tabIds, in: self)
+            let missingIds = tabIds.filter { framesById[$0] == nil }
+            if !missingIds.isEmpty {
+                let laidOut = BonsplitTabItemHitRegionRegistry.laidOutFrames(
+                    for: missingIds,
+                    in: self
+                )
+                framesById.merge(laidOut) { registered, _ in registered }
             }
-            guard !paddedFrames.contains(where: { $0.contains(point) }) else { return false }
-            let startX = paddedFrames.map(\.maxX).max() ?? bounds.minX
-            return point.x >= startX
+            return (tabIds.compactMap { framesById[$0] }, framesById.count == tabIds.count)
         }
 
         func windowDragCursorRectsForCurrentState() -> [NSRect] {
@@ -3224,23 +3339,37 @@ struct TabBarDragZoneView: NSViewRepresentable {
             switch hitRegion {
             case .entireBounds:
                 return [bounds]
+            case .leadingChrome(let geometryRegistry, let tabIds):
+                let resolved = resolvedTabFrames(
+                    geometryRegistry: geometryRegistry,
+                    tabIds: tabIds
+                )
+                guard resolved.isComplete else { return [] }
+                return [bounds]
             case .trailingEmptyChrome(let tabFrames, let reservedTrailingWidth):
                 return trailingEmptyChromeCursorRects(
                     tabFrames: tabFrames,
                     reservedTrailingWidth: reservedTrailingWidth
                 )
             case .registeredTrailingEmptyChrome(let geometryRegistry, let tabIds, let reservedTrailingWidth):
+                let resolved = resolvedTabFrames(
+                    geometryRegistry: geometryRegistry,
+                    tabIds: tabIds
+                )
                 return trailingEmptyChromeCursorRects(
-                    tabFrames: geometryRegistry.frames(for: tabIds, in: self).values.map { $0 },
-                    reservedTrailingWidth: reservedTrailingWidth
+                    tabFrames: resolved.frames,
+                    reservedTrailingWidth: reservedTrailingWidth,
+                    tabFramesReady: resolved.isComplete
                 )
             }
         }
 
         private func trailingEmptyChromeCursorRects(
             tabFrames: [CGRect],
-            reservedTrailingWidth: CGFloat
+            reservedTrailingWidth: CGFloat,
+            tabFramesReady: Bool = true
         ) -> [NSRect] {
+            guard tabFramesReady else { return [] }
             let trailingLimit = bounds.maxX - max(0, reservedTrailingWidth)
             guard trailingLimit > bounds.minX else { return [] }
 

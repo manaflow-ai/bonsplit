@@ -376,6 +376,125 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    func testShowingHoverActionLaneRevealsHoveredTrailingTab() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        harness.registry.register(harness.selectedView, for: harness.selectedTabId)
+
+        // The extra trailing padding is the visible action lane in the real
+        // tab row. Before that padding is added, the pointer can be over an
+        // unselected trailing tab at the old end of the document.
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 660, height: TabBarMetrics.barHeight)
+        )
+        let actionLaneWidth: CGFloat = 60
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+        let frameInDocument = harness.selectedView.convert(
+            harness.selectedView.bounds,
+            to: try XCTUnwrap(harness.scrollView.documentView)
+        )
+        let frame = frameInDocument.offsetBy(
+            dx: -harness.scrollView.contentView.bounds.origin.x,
+            dy: 0
+        )
+        XCTAssertLessThanOrEqual(
+            frame.maxX,
+            harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
+            "Showing hover controls must scroll the hovered trailing tab clear of the button lane."
+        )
+    }
+
+    func testShowingHoverActionLaneKeepsUnselectedHoveredTabRevealedAfterDocumentResize() throws {
+        let harness = try makeHoveredGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        harness.registry.register(harness.selectedView, for: harness.selectedTabId)
+        harness.registry.register(harness.hoveredView, for: harness.hoveredTabId)
+        harness.registry.revealSelection(harness.selectedTabId)
+
+        // SwiftUI changes the trailing padding after the hover state is set,
+        // so the registry sees the old document width when the lane first
+        // appears. The hovered tab is intentionally not the selected tab:
+        // document geometry must preserve this reveal intent after padding
+        // expands the document.
+        let actionLaneWidth: CGFloat = 60
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.hoveredTabId
+        )
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 660, height: TabBarMetrics.barHeight)
+        )
+
+        let documentView = try XCTUnwrap(harness.scrollView.documentView)
+        let frameInDocument = harness.hoveredView.convert(
+            harness.hoveredView.bounds,
+            to: documentView
+        )
+        let frame = frameInDocument.offsetBy(
+            dx: -harness.scrollView.contentView.bounds.origin.x,
+            dy: 0
+        )
+        XCTAssertLessThanOrEqual(
+            frame.maxX,
+            harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
+            "A document resize after lane appearance must keep the unselected hovered tab clear of the button lane."
+        )
+    }
+
+    func testHoveringAnotherTabWhileLaneStaysVisibleRevealsIt() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        harness.registry.register(harness.selectedView, for: harness.selectedTabId)
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 660, height: TabBarMetrics.barHeight)
+        )
+
+        let actionLaneWidth: CGFloat = 60
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+        XCTAssertGreaterThan(harness.scrollView.contentView.bounds.origin.x, 0)
+
+        // Moving to another tab does not change the visible lane width. The
+        // same-width reveal path must still run so the new tab's close button
+        // can be brought out from under that lane.
+        harness.scrollView.contentView.scroll(to: .zero)
+        harness.scrollView.reflectScrolledClipView(harness.scrollView.contentView)
+        NotificationCenter.default.post(
+            name: NSScrollView.willStartLiveScrollNotification,
+            object: harness.scrollView
+        )
+        harness.registry.setTrailingObscuredWidth(
+            actionLaneWidth,
+            revealTabId: harness.selectedTabId
+        )
+
+        let documentView = try XCTUnwrap(harness.scrollView.documentView)
+        let frameInDocument = harness.selectedView.convert(
+            harness.selectedView.bounds,
+            to: documentView
+        )
+        let frame = frameInDocument.offsetBy(
+            dx: -harness.scrollView.contentView.bounds.origin.x,
+            dy: 0
+        )
+        XCTAssertLessThanOrEqual(
+            frame.maxX,
+            harness.scrollView.contentView.bounds.width - actionLaneWidth + 0.5,
+            "A new hovered tab must be revealed even when the visible action lane width is unchanged."
+        )
+    }
+
     func testViewportResizeKeepsLeadingAnchoredWhenTabStripWasLeadingAligned() throws {
         let harness = try makeTabBarHarness(
             initialSize: NSSize(width: 900, height: TabBarMetrics.barHeight),
@@ -527,6 +646,16 @@ final class TabBarResizeAnchorTests: XCTestCase {
         let registry: TabBarItemGeometryRegistry
     }
 
+    private struct HoveredGeometryRegistryHarness {
+        let window: NSWindow
+        let scrollView: NSScrollView
+        let selectedView: NSView
+        let hoveredView: NSView
+        let selectedTabId: UUID
+        let hoveredTabId: UUID
+        let registry: TabBarItemGeometryRegistry
+    }
+
     private func makeGeometryRegistryHarness() throws -> GeometryRegistryHarness {
         let viewportSize = NSSize(width: 200, height: TabBarMetrics.barHeight)
         let window = NSWindow(
@@ -556,6 +685,46 @@ final class TabBarResizeAnchorTests: XCTestCase {
             scrollView: scrollView,
             selectedView: selectedView,
             selectedTabId: selectedTabId,
+            registry: registry
+        )
+    }
+
+    private func makeHoveredGeometryRegistryHarness() throws -> HoveredGeometryRegistryHarness {
+        let viewportSize = NSSize(width: 200, height: TabBarMetrics.barHeight)
+        let window = NSWindow(
+            contentRect: NSRect(origin: .zero, size: viewportSize),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        let contentView = try XCTUnwrap(window.contentView)
+        let scrollView = NSScrollView(frame: NSRect(origin: .zero, size: viewportSize))
+        let documentView = NSView(
+            frame: NSRect(x: 0, y: 0, width: 600, height: viewportSize.height)
+        )
+        let selectedView = NSView(
+            frame: NSRect(x: 40, y: 0, width: 100, height: viewportSize.height)
+        )
+        let hoveredView = NSView(
+            frame: NSRect(x: 480, y: 0, width: 100, height: viewportSize.height)
+        )
+        let selectedTabId = UUID()
+        let hoveredTabId = UUID()
+        let registry = TabBarItemGeometryRegistry()
+
+        documentView.addSubview(selectedView)
+        documentView.addSubview(hoveredView)
+        scrollView.documentView = documentView
+        contentView.addSubview(scrollView)
+        window.makeKeyAndOrderFront(nil)
+
+        return HoveredGeometryRegistryHarness(
+            window: window,
+            scrollView: scrollView,
+            selectedView: selectedView,
+            hoveredView: hoveredView,
+            selectedTabId: selectedTabId,
+            hoveredTabId: hoveredTabId,
             registry: registry
         )
     }
