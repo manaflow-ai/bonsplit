@@ -245,6 +245,26 @@ enum TabBarColors {
         isPressed ? nsColorActiveText(for: appearance) : nsColorInactiveText(for: appearance)
     }
 
+    static func splitActionBackground(
+        for appearance: BonsplitConfiguration.Appearance,
+        isHovered: Bool,
+        isPressed: Bool
+    ) -> Color {
+        Color(nsColor: nsColorSplitActionBackground(for: appearance, isHovered: isHovered, isPressed: isPressed))
+    }
+
+    /// The faint label-colored fill behind a hovered or pressed action button,
+    /// the same strengths as the host's sidebar icon buttons. Derived from the
+    /// tab text color so it reads on custom and themed tab bars.
+    static func nsColorSplitActionBackground(
+        for appearance: BonsplitConfiguration.Appearance,
+        isHovered: Bool,
+        isPressed: Bool
+    ) -> NSColor {
+        let alpha: CGFloat = isPressed ? 0.16 : (isHovered ? 0.08 : 0)
+        return nsColorActiveText(for: appearance).withAlphaComponent(alpha)
+    }
+
     // MARK: - Borders & Indicators
 
     static var separator: Color {
