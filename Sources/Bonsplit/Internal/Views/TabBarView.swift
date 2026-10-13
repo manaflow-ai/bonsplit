@@ -1208,6 +1208,10 @@ struct TabBarView: View {
     }
 
     var body: some View {
+        let _ = controller.internalController.recordTabBarRender(
+            paneId: pane.id,
+            tabCount: pane.tabs.count
+        )
         HStack(spacing: 0) {
             if appearance.tabBarLeadingInset > 0 && controller.internalController.rootNode.allPaneIds.first == pane.id {
                 TabBarDragZoneView(
@@ -1361,7 +1365,6 @@ struct TabBarView: View {
         fillsWidth: Bool? = nil
     ) -> some View {
         let tabFillsWidth = fillsWidth ?? fillsTabsToWidth
-        let contextMenuState = contextMenuState(for: tab, at: index)
         let showsZoomIndicator = splitViewController.zoomedPaneId == pane.id && pane.selectedTabId == tab.id
         let isImmediatelyBeforeSelected = pane.tabs.indices.contains(index + 1)
             && pane.tabs[index + 1].id == pane.selectedTabId
@@ -1386,7 +1389,15 @@ struct TabBarView: View {
             allowsClose: controller.configuration.allowCloseTabs,
             middleClickCapture: controller.tabMiddleClickCapture,
             allowsContextMenu: controller.configuration.allowsTabContextMenu,
-            contextMenuState: contextMenuState,
+            contextMenuStateProvider: { [pane, controller, splitViewController] in
+                TabContextMenuState(
+                    tab: tab,
+                    index: index,
+                    pane: pane,
+                    controller: controller,
+                    splitViewController: splitViewController
+                )
+            },
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },
@@ -1446,16 +1457,6 @@ struct TabBarView: View {
                     .saturation(tabBarSaturation)
             }
         }
-    }
-
-    private func contextMenuState(for tab: TabItem, at index: Int) -> TabContextMenuState {
-        return TabContextMenuState(
-            tab: tab,
-            index: index,
-            pane: pane,
-            controller: controller,
-            splitViewController: splitViewController
-        )
     }
 
     private func tabControlShortcutDigit(for index: Int, tabCount: Int) -> Int? {
@@ -3313,7 +3314,11 @@ private struct TabBarHostWindowReader: NSViewRepresentable {
 @Observable
 private final class TabControlShortcutKeyMonitor {
     private(set) var isShortcutHintVisible = false
-    private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
+    /// `start()` resolves the configured symbol. The initial value is a
+    /// constant because `@State` evaluates it on every `TabBarView` init and
+    /// discards it after the first; reading user defaults here ran a defaults
+    /// lookup and JSON decode for every pane on every tab-bar rebuild.
+    private(set) var shortcutModifierSymbol = TabControlShortcutSettings.defaultShortcut.modifierSymbol
 
     @ObservationIgnored private weak var hostWindow: NSWindow?
     @ObservationIgnored private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
@@ -3357,6 +3362,11 @@ private final class TabControlShortcutKeyMonitor {
     }
 
     func start() {
+        // Resolve the configured symbol before the first update: one that
+        // queues a hint while the modifier is already held keeps the symbol.
+        if !isShortcutHintVisible {
+            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
+        }
         guard flagsMonitor == nil else {
             update(from: NSEvent.modifierFlags, eventWindow: nil)
             return
