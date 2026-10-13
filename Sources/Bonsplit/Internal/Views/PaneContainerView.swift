@@ -169,6 +169,7 @@ struct PaneContainerView<Content: View, EmptyContent: View>: View {
     }
 
     var body: some View {
+        let _ = { ProbeCounters.paneBody += 1 }()
         VStack(spacing: 0) {
             if tabBarVisibility.showsTabBar(tabCount: pane.tabs.count) {
                 TabBarView(
