@@ -910,6 +910,7 @@ struct TabBarView: View {
     @State private var splitActionMenuAnchors = SplitActionMenuAnchors()
     @State private var controlKeyMonitor = TabControlShortcutKeyMonitor()
     @State private var tabItemGeometryRegistry = TabBarItemGeometryRegistry()
+    @Environment(\.tabBarSlideWidthModel) private var slideWidthModel
 
     private var canScrollLeft: Bool {
         scrollOffset > 1
@@ -1273,13 +1274,15 @@ struct TabBarView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: tabBarHeight)
         .coordinateSpace(name: "tabBar")
-        .background(tabBarSurface)
         .overlay(alignment: .trailing) {
             splitButtonBackdropChrome
                 .opacity(shouldShowSplitButtons ? 1 : 0)
                 .allowsHitTesting(false)
                 .tabBarButtonAnimationsDisabled()
         }
+        .modifier(TabBarSlideWidthFrame(model: slideWidthModel))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tabBarSurface)
         .overlay(selectionChrome)
         .overlay(trailingEmptyChromeDragZone)
         .overlay(alignment: .trailing) {
@@ -1290,7 +1293,9 @@ struct TabBarView: View {
                         .frame(width: splitButtonsBackdropWidth, height: tabBarHeight)
                 }
                 .clipped()
+                .modifier(TabBarSlideLaneHidden(model: slideWidthModel))
         }
+        .preference(key: TabBarSlideLaneWidthKey.self, value: shouldShowSplitButtons ? splitButtonsBackdropWidth : 0)
         .background(dragAndHoverBackground)
         .overlay(
             TabBarHoverTrackingView(
