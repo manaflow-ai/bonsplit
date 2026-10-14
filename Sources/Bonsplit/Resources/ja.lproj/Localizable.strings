@@ -9,6 +9,7 @@
 "tabContext.closeTabsToLeft" = "左側のタブを閉じる";
 "tabContext.closeTabsToRight" = "右側のタブを閉じる";
 "tabContext.closeOtherTabs" = "他のタブを閉じる";
+"tabContext.closeAllBrowserTabs" = "すべてのブラウザタブを閉じる";
 "tabContext.newTerminalTabToRight" = "右側に新しいターミナルタブ";
 "tabContext.newBrowserTabToRight" = "右側に新しいブラウザータブ";
 "tabContext.reloadTab" = "タブを再読み込み";

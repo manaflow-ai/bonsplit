@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Close All Browser Tabs in the tab context menu. It appears when the pane has a browser tab and
+  sends `TabContextAction.closeBrowserTabs` to the delegate; the host closes the pane's unpinned
+  browser tabs. Bonsplit doesn't close them itself, so the item does nothing until the host handles it.
 - `BonsplitController.addPaneWithAutoLayout(from:withTab:)` adds a pane and retiles all panes in
   Zellij's default layout: the right column fills to four panes before a new column opens.
 - Pane focus memory. `navigateFocus(direction:)` and `adjacentPane(to:direction:)` return the most

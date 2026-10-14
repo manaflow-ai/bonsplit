@@ -2073,6 +2073,112 @@ final class BonsplitTests: XCTestCase {
     }
 
     @MainActor
+    func testTabContextMenuStateTracksClosableBrowserTabsInPane() throws {
+        let controller = BonsplitController()
+        let terminalId = try XCTUnwrap(controller.createTab(title: "Shell", kind: "terminal"))
+        let pinnedBrowserId = try XCTUnwrap(controller.createTab(title: "Docs", kind: "browser", isPinned: true))
+        let paneId = try XCTUnwrap(controller.focusedPaneId)
+        let splitViewController = controller.internalController
+        let pane = try XCTUnwrap(splitViewController.rootNode.findPane(paneId))
+
+        func state(for tabId: TabID) throws -> TabContextMenuState {
+            let index = try XCTUnwrap(pane.tabs.firstIndex { $0.id == tabId.id })
+            return TabContextMenuState(
+                tab: pane.tabs[index],
+                index: index,
+                pane: pane,
+                controller: controller,
+                splitViewController: splitViewController
+            )
+        }
+
+        // Only a pinned browser: the item shows but has nothing to close.
+        XCTAssertTrue(try state(for: terminalId).hasBrowserTabs)
+        XCTAssertFalse(try state(for: terminalId).canCloseBrowserTabs)
+
+        _ = try XCTUnwrap(controller.createTab(title: "Site", kind: "browser"))
+        XCTAssertTrue(try state(for: terminalId).canCloseBrowserTabs)
+        XCTAssertTrue(try state(for: pinnedBrowserId).canCloseBrowserTabs)
+
+        controller.configuration.allowCloseTabs = false
+        XCTAssertFalse(try state(for: terminalId).canCloseBrowserTabs)
+    }
+
+    @MainActor
+    func testTabContextMenuStateHidesCloseBrowserTabsWithoutBrowserTabs() throws {
+        let controller = BonsplitController()
+        let terminalId = try XCTUnwrap(controller.createTab(title: "Shell", kind: "terminal"))
+        let paneId = try XCTUnwrap(controller.focusedPaneId)
+        let splitViewController = controller.internalController
+        let pane = try XCTUnwrap(splitViewController.rootNode.findPane(paneId))
+        let index = try XCTUnwrap(pane.tabs.firstIndex { $0.id == terminalId.id })
+
+        let state = TabContextMenuState(
+            tab: pane.tabs[index],
+            index: index,
+            pane: pane,
+            controller: controller,
+            splitViewController: splitViewController
+        )
+
+        XCTAssertFalse(state.hasBrowserTabs)
+        XCTAssertFalse(state.canCloseBrowserTabs)
+    }
+
+    @MainActor
+    func testTabContextMenuCloseAllBrowserTabsItemFollowsState() throws {
+        func makeMenu(hasBrowserTabs: Bool, canCloseBrowserTabs: Bool, target: TabContextMenuActionTarget) -> TabContextMenu {
+            TabContextMenuBuilder.makeMenu(
+                snapshot: TabContextMenuSnapshot(
+                    tabId: UUID(),
+                    state: TabContextMenuState(
+                        isPinned: false,
+                        isUnread: false,
+                        isBrowser: false,
+                        isAudioMuted: false,
+                        isTerminal: true,
+                        hasCustomTitle: false,
+                        canCloseToLeft: false,
+                        canCloseToRight: false,
+                        canCloseOthers: true,
+                        hasBrowserTabs: hasBrowserTabs,
+                        canCloseBrowserTabs: canCloseBrowserTabs,
+                        canMoveToNewWorkspace: false,
+                        canMoveToLeftPane: false,
+                        canMoveToRightPane: false,
+                        forkConversationDefaultAction: .forkConversationRight,
+                        isZoomed: false,
+                        hasSplits: false,
+                        shortcuts: [:]
+                    ),
+                    moveDestinationsProvider: { [] },
+                    forkConversationAvailabilityProvider: { .hidden }
+                ),
+                target: target
+            )
+        }
+        let title = "Close All Browser Tabs"
+        let target = TabContextMenuActionTarget()
+        var selectedAction: TabContextAction?
+        target.onContextAction = { selectedAction = $0 }
+
+        XCTAssertNil(makeMenu(hasBrowserTabs: false, canCloseBrowserTabs: false, target: target).items.first { $0.title == title })
+
+        let disabledItem = try XCTUnwrap(
+            makeMenu(hasBrowserTabs: true, canCloseBrowserTabs: false, target: target).items.first { $0.title == title }
+        )
+        XCTAssertFalse(disabledItem.isEnabled)
+
+        let menu = makeMenu(hasBrowserTabs: true, canCloseBrowserTabs: true, target: target)
+        let titles = menu.items.map(\.title)
+        let item = try XCTUnwrap(menu.items.first { $0.title == title })
+        XCTAssertTrue(item.isEnabled)
+        XCTAssertEqual(titles.firstIndex(of: title), titles.firstIndex(of: "Close Other Tabs").map { $0 + 1 })
+        target.performContextAction(item)
+        XCTAssertEqual(selectedAction, .closeBrowserTabs)
+    }
+
+    @MainActor
     func testTabContextMenuDisablesCloseTabWhenClosingIsDisabled() throws {
         let state = TabContextMenuState(
             isPinned: false,

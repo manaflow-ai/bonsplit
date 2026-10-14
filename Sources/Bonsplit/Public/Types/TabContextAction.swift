@@ -16,6 +16,8 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case closeToLeft
     case closeToRight
     case closeOthers
+    /// Closes every unpinned browser tab in the pane, leaving other tabs open.
+    case closeBrowserTabs
     case move
     case moveToNewWorkspace
     case moveToLeftPane

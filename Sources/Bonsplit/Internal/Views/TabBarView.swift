@@ -769,6 +769,10 @@ struct TabContextMenuState {
     let canCloseToLeft: Bool
     let canCloseToRight: Bool
     let canCloseOthers: Bool
+    /// Whether the pane has any browser tab, which shows Close All Browser Tabs.
+    let hasBrowserTabs: Bool
+    /// Whether the pane has an unpinned browser tab to close.
+    let canCloseBrowserTabs: Bool
     let canMoveToNewWorkspace: Bool
     let canMoveToLeftPane: Bool
     let canMoveToRightPane: Bool
@@ -800,6 +804,8 @@ struct TabContextMenuState {
         canCloseToLeft: Bool,
         canCloseToRight: Bool,
         canCloseOthers: Bool,
+        hasBrowserTabs: Bool = false,
+        canCloseBrowserTabs: Bool = false,
         canMoveToNewWorkspace: Bool,
         canMoveToLeftPane: Bool,
         canMoveToRightPane: Bool,
@@ -821,6 +827,8 @@ struct TabContextMenuState {
         self.canCloseToLeft = canCloseToLeft
         self.canCloseToRight = canCloseToRight
         self.canCloseOthers = canCloseOthers
+        self.hasBrowserTabs = hasBrowserTabs
+        self.canCloseBrowserTabs = canCloseBrowserTabs
         self.canMoveToNewWorkspace = canMoveToNewWorkspace
         self.canMoveToLeftPane = canMoveToLeftPane
         self.canMoveToRightPane = canMoveToRightPane
@@ -854,6 +862,8 @@ struct TabContextMenuState {
             && pane.tabs.enumerated().contains { itemIndex, item in
                 itemIndex != index && !item.isPinned
             }
+        let browserTabs = pane.tabs.filter { $0.kind == TabItemStyling.browserTabKind }
+        let canCloseBrowserTabs = allowsCloseTabs && browserTabs.contains(where: { !$0.isPinned })
         self.init(
             isPinned: tab.isPinned,
             canCloseTab: allowsCloseTabs && !tab.isPinned,
@@ -865,6 +875,8 @@ struct TabContextMenuState {
             canCloseToLeft: canCloseToLeft,
             canCloseToRight: canCloseToRight,
             canCloseOthers: canCloseOthers,
+            hasBrowserTabs: !browserTabs.isEmpty,
+            canCloseBrowserTabs: canCloseBrowserTabs,
             canMoveToNewWorkspace: controller.allTabIds.count > 1,
             canMoveToLeftPane: controller.adjacentPane(to: pane.id, direction: .left) != nil,
             canMoveToRightPane: controller.adjacentPane(to: pane.id, direction: .right) != nil,
