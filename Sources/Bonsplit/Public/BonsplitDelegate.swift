@@ -38,6 +38,16 @@ public protocol BonsplitDelegate: AnyObject {
     /// Return `false` to prevent the split.
     func splitTabBar(_ controller: BonsplitController, shouldSplitPane pane: PaneID, orientation: SplitOrientation) -> Bool
 
+    /// Called before a tab is moved into a newly split pane.
+    ///
+    /// The tab is still in its source pane, so a delegate can inspect the
+    /// moving tab and the source's current contents before a split mutates the
+    /// tree. This overload is used instead of
+    /// ``splitTabBar(_:shouldSplitPane:orientation:)`` for moving-tab splits;
+    /// its default implementation forwards to that existing callback. Return
+    /// `false` to prevent the split.
+    func splitTabBar(_ controller: BonsplitController, shouldSplitPane pane: PaneID, orientation: SplitOrientation, movingTab: Tab) -> Bool
+
     /// Called when a pane is about to be closed.
     /// Return `false` to prevent closing.
     func splitTabBar(_ controller: BonsplitController, shouldClosePane pane: PaneID) -> Bool
@@ -109,6 +119,9 @@ public extension BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController, didMoveTab tab: Tab, fromPane source: PaneID, toPane destination: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didReorderTabsInPane pane: PaneID, orderedTabIds: [TabID]) {}
     func splitTabBar(_ controller: BonsplitController, shouldSplitPane pane: PaneID, orientation: SplitOrientation) -> Bool { true }
+    func splitTabBar(_ controller: BonsplitController, shouldSplitPane pane: PaneID, orientation: SplitOrientation, movingTab: Tab) -> Bool {
+        splitTabBar(controller, shouldSplitPane: pane, orientation: orientation)
+    }
     func splitTabBar(_ controller: BonsplitController, shouldClosePane pane: PaneID) -> Bool { true }
     func splitTabBar(_ controller: BonsplitController, didSplitPane originalPane: PaneID, newPane: PaneID, orientation: SplitOrientation) {}
     func splitTabBar(_ controller: BonsplitController, didClosePane paneId: PaneID) {}
