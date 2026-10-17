@@ -1,6 +1,8 @@
 "command.copyIdentifiers.title" = "Copy IDs";
 "command.moveTabToNewWorkspace.title" = "Move Tab to New Workspace";
 "tabContext.moveTab" = "Move Tab";
+"tabContext.tabColor" = "Tab Color";
+"tabContext.clearTabColor" = "Clear Color";
 "command.moveTabToLeftPane.title" = "Move to Left Pane";
 "command.moveTabToRightPane.title" = "Move to Right Pane";
 "tabContext.renameTab" = "Rename Tab…";
