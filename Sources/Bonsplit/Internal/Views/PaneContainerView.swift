@@ -397,6 +397,13 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             }
         }
 
+        // SwiftUI sends no dropExited after performDrop. Reset hover state on
+        // every outcome, or a rejected drop leaves the zone overlay on screen.
+        defer {
+            dropLifecycle = .idle
+            activeDropZone = nil
+        }
+
         let zone = effectiveZone(for: info)
 #if DEBUG
         dlog(
@@ -417,12 +424,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             hasFileURL: hasFileURL,
             permitsTabTransfer: tabTransferPermitted
         ) {
-            let handled = performFileDrop(info: info, zone: zone)
-            if handled {
-                dropLifecycle = .idle
-                activeDropZone = nil
-            }
-            return handled
+            return performFileDrop(info: info, zone: zone)
         }
         guard !hasTabTransfer || tabTransferPermitted else { return false }
 
@@ -434,8 +436,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             hasLocalTabDrag: controller.tabDragSession != nil
         ),
            let dragSession = controller.tabDragSession {
-            dropLifecycle = .idle
-            activeDropZone = nil
             return performLocalTabDrop(dragSession, zone: zone)
         }
 
@@ -452,8 +452,6 @@ struct UnifiedPaneDropDelegate: DropDelegate {
             )
             let handled = bonsplitController.onExternalTabDrop?(request) ?? false
             if handled {
-                dropLifecycle = .idle
-                activeDropZone = nil
                 // Revoke destination routing without releasing the native
                 // source; its `endedAt` callback owns terminal cleanup.
                 controller.tabDragTransferRegistry.finish(from: NSPasteboard(name: .drag))
@@ -462,12 +460,7 @@ struct UnifiedPaneDropDelegate: DropDelegate {
         }
 
         guard info.hasItemsConforming(to: [.fileURL]) else { return false }
-        let handled = performFileDrop(info: info, zone: zone)
-        if handled {
-            dropLifecycle = .idle
-            activeDropZone = nil
-        }
-        return handled
+        return performFileDrop(info: info, zone: zone)
     }
 
     /// Applies a live in-controller tab drop and completes its native source.
