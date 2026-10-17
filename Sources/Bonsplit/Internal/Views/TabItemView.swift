@@ -335,6 +335,7 @@ struct TabItemView: View {
     let middleClickCapture: ((@escaping () -> Void) -> AnyView)?
     let allowsContextMenu: Bool
     let contextMenuState: TabContextMenuState
+    var additionalMenuItemsProvider: @MainActor () -> [NSMenuItem] = { [] }
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
@@ -408,6 +409,7 @@ struct TabItemView: View {
                     snapshot: TabContextMenuSnapshot(
                         tabId: tab.id,
                         state: contextMenuState,
+                        additionalMenuItemsProvider: additionalMenuItemsProvider,
                         moveDestinationsProvider: moveDestinationsProvider,
                         forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
                         forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
@@ -1600,6 +1602,12 @@ enum TabContextMenuBuilder {
                 target: target,
                 to: menu
             )
+        }
+
+        let additionalItems = snapshot.additionalMenuItemsProvider()
+        if !additionalItems.isEmpty {
+            menu.addItem(.separator())
+            for item in additionalItems { menu.addItem(item) }
         }
 
         if state.canDisconnectRemote {

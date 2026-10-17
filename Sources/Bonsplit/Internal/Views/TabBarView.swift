@@ -1389,6 +1389,9 @@ struct TabBarView: View {
             middleClickCapture: controller.tabMiddleClickCapture,
             allowsContextMenu: controller.configuration.allowsTabContextMenu,
             contextMenuState: contextMenuState,
+            additionalMenuItemsProvider: {
+                controller.tabContextMenuItemsProvider?(TabID(id: tab.id), pane.id) ?? []
+            },
             moveDestinationsProvider: {
                 controller.tabContextMoveDestinationsProvider?(TabID(id: tab.id), pane.id) ?? []
             },
