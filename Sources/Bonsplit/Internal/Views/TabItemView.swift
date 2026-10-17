@@ -1435,6 +1435,7 @@ private struct FaviconIconView: NSViewRepresentable {
 
 @MainActor
 enum TabContextMenuBuilder {
+    static let moveSubmenuIdentifier = NSUserInterfaceItemIdentifier("Bonsplit.TabContextMenu.MoveSubmenu")
     private static let forkConversationSeparatorIdentifier = NSUserInterfaceItemIdentifier(
         "Bonsplit.TabContextMenu.ForkConversationSeparator"
     )
@@ -1772,6 +1773,7 @@ enum TabContextMenuBuilder {
             action: nil,
             keyEquivalent: ""
         )
+        item.identifier = moveSubmenuIdentifier
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         addAction(
