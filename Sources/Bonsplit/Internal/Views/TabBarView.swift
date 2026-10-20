@@ -1323,9 +1323,13 @@ struct TabBarView: View {
             }
         }
         .onAppear {
+            controlKeyMonitor.setModifierFlagsOverride(splitViewController.tabShortcutModifierFlags)
             if splitViewController.tabShortcutHintsEnabled {
                 controlKeyMonitor.start()
             }
+        }
+        .onChange(of: splitViewController.tabShortcutModifierFlags) { _, flags in
+            controlKeyMonitor.setModifierFlagsOverride(flags)
         }
         .onChange(of: splitViewController.tabShortcutHintsEnabled) { _, enabled in
             if enabled {
@@ -3376,11 +3380,15 @@ private struct TabControlShortcutStoredShortcut: Decodable {
     }
 
     var modifierSymbol: String {
+        TabControlShortcutStoredShortcut.modifierSymbol(for: modifierFlags)
+    }
+
+    static func modifierSymbol(for flags: NSEvent.ModifierFlags) -> String {
         var parts: [String] = []
-        if control { parts.append("⌃") }
-        if option { parts.append("⌥") }
-        if shift { parts.append("⇧") }
-        if command { parts.append("⌘") }
+        if flags.contains(.control) { parts.append("⌃") }
+        if flags.contains(.option) { parts.append("⌥") }
+        if flags.contains(.shift) { parts.append("⇧") }
+        if flags.contains(.command) { parts.append("⌘") }
         return parts.joined()
     }
 }
@@ -3430,8 +3438,17 @@ enum TabControlShortcutHintPolicy {
         return defaults.bool(forKey: showHintsOnControlHoldKey)
     }
 
-    static func configuredShortcutModifierSymbol(defaults: UserDefaults = .standard) -> String {
-        TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
+    /// `overrideFlags` is the host-resolved modifier for the select-surface
+    /// shortcut. Hosts that store shortcuts outside UserDefaults pass it so
+    /// the hint matches the binding; nil falls back to UserDefaults.
+    static func configuredShortcutModifierSymbol(
+        defaults: UserDefaults = .standard,
+        overrideFlags: NSEvent.ModifierFlags? = nil
+    ) -> String {
+        if let overrideFlags {
+            return TabControlShortcutStoredShortcut.modifierSymbol(for: overrideFlags)
+        }
+        return TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
     }
 
     private static func triggerAllowsHintReveal(
@@ -3452,9 +3469,16 @@ enum TabControlShortcutHintPolicy {
 
     static func hintModifier(
         for modifierFlags: NSEvent.ModifierFlags,
-        defaults: UserDefaults = .standard
+        defaults: UserDefaults = .standard,
+        overrideFlags: NSEvent.ModifierFlags? = nil
     ) -> TabControlShortcutModifier? {
         guard triggerAllowsHintReveal(for: modifierFlags, defaults: defaults) else { return nil }
+        if let overrideFlags {
+            return TabControlShortcutModifier(
+                modifierFlags: overrideFlags,
+                symbol: TabControlShortcutStoredShortcut.modifierSymbol(for: overrideFlags)
+            )
+        }
         let shortcut = TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults)
         return TabControlShortcutModifier(
             modifierFlags: shortcut.modifierFlags,
@@ -3529,6 +3553,8 @@ private final class TabControlShortcutKeyMonitor {
     private(set) var isShortcutHintVisible = false
     private(set) var shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
 
+    /// Host-resolved select-surface modifier; nil reads UserDefaults.
+    @ObservationIgnored private var modifierFlagsOverride: NSEvent.ModifierFlags?
     @ObservationIgnored private weak var hostWindow: NSWindow?
     @ObservationIgnored private var hostWindowDidBecomeKeyObserver: NSObjectProtocol?
     @ObservationIgnored private var hostWindowDidResignKeyObserver: NSObjectProtocol?
@@ -3568,6 +3594,14 @@ private final class TabControlShortcutKeyMonitor {
         }
 
         update(from: NSEvent.modifierFlags, eventWindow: nil)
+    }
+
+    func setModifierFlagsOverride(_ flags: NSEvent.ModifierFlags?) {
+        guard modifierFlagsOverride != flags else { return }
+        modifierFlagsOverride = flags
+        shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
+            overrideFlags: flags
+        )
     }
 
     func start() {
@@ -3638,7 +3672,10 @@ private final class TabControlShortcutKeyMonitor {
             return
         }
 
-        guard let modifier = TabControlShortcutHintPolicy.hintModifier(for: modifierFlags) else {
+        guard let modifier = TabControlShortcutHintPolicy.hintModifier(
+            for: modifierFlags,
+            overrideFlags: modifierFlagsOverride
+        ) else {
             cancelPendingHintShow(resetVisible: true)
             return
         }
@@ -3671,7 +3708,10 @@ private final class TabControlShortcutKeyMonitor {
                 eventWindowNumber: nil,
                 keyWindowNumber: NSApp.keyWindow?.windowNumber
             ) else { return }
-            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(for: NSEvent.modifierFlags) else { return }
+            guard let currentModifier = TabControlShortcutHintPolicy.hintModifier(
+                for: NSEvent.modifierFlags,
+                overrideFlags: self.modifierFlagsOverride
+            ) else { return }
             self.shortcutModifierSymbol = currentModifier.symbol
             withAnimation(TabControlShortcutHintAnimation.visibility) {
                 self.isShortcutHintVisible = true
@@ -3684,7 +3724,9 @@ private final class TabControlShortcutKeyMonitor {
         pendingShowTask = nil
         pendingModifier = nil
         if resetVisible {
-            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol()
+            shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
+                overrideFlags: modifierFlagsOverride
+            )
             withAnimation(TabControlShortcutHintAnimation.visibility) {
                 isShortcutHintVisible = false
             }
