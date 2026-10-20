@@ -2993,6 +2993,37 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    func testTabControlShortcutHintPolicyPrefersHostProvidedModifier() {
+        withShortcutHintDefaultsSuite { defaults in
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
+
+            // Hosts can store the shortcut outside UserDefaults (e.g. a
+            // settings file), so a host-provided modifier wins over defaults.
+            let custom = TabControlShortcutHintPolicy.hintModifier(
+                for: [.command],
+                defaults: defaults,
+                overrideFlags: [.command]
+            )
+            XCTAssertEqual(custom?.symbol, "⌘")
+            XCTAssertEqual(custom?.modifierFlags, [.command])
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
+                    defaults: defaults,
+                    overrideFlags: [.command]
+                ),
+                "⌘"
+            )
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
+                    defaults: defaults,
+                    overrideFlags: nil
+                ),
+                "⌃"
+            )
+        }
+    }
+
     func testTabControlShortcutHintPolicyCanDisableCommandAndControlHoldHintsIndependently() {
         withShortcutHintDefaultsSuite { defaults in
             defaults.set(false, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
