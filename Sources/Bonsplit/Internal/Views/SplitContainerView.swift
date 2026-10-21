@@ -300,7 +300,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             Self.observeNestedSplits(of: splitState)
         } onChange: { [weak coordinator] in
             DispatchQueue.main.async {
-                coordinator?.renderTree?()
+                guard let coordinator else { return }
+                coordinator.observedTreeRenderCount += 1
+                coordinator.renderTree?()
             }
         }
     }
@@ -864,6 +866,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// Renders the tree again after a change observed anywhere in it.
         /// Installed by the root's `updateNSView`.
         var renderTree: (() -> Void)?
+        /// Tree renders triggered by an observed change, for tests.
+        var observedTreeRenderCount = 0
 
         init(
             splitState: SplitState,
