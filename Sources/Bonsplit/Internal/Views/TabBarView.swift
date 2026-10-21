@@ -3629,6 +3629,9 @@ private final class TabControlShortcutKeyMonitor {
         shortcutModifierSymbol = TabControlShortcutHintPolicy.configuredShortcutModifierSymbol(
             overrideFlags: flags
         )
+        // A hint shown or queued under the old override must not outlive it.
+        guard flagsMonitor != nil else { return }
+        update(from: NSEvent.modifierFlags, eventWindow: nil)
     }
 
     func start() {
