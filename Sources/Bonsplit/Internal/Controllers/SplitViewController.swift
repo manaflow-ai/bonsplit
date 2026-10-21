@@ -67,6 +67,10 @@ final class SplitViewController {
     /// Bonsplit while the selected pane remains unchanged.
     var tabShortcutHintsEnabled: Bool = true
 
+    /// Host-resolved modifier for the select-surface-by-number shortcut.
+    /// Nil falls back to the shortcut stored in UserDefaults.
+    var tabShortcutModifierFlags: NSEvent.ModifierFlags?
+
     /// Handler for file/URL drops from external apps (e.g. Finder).
     /// Receives the dropped URLs and the pane ID where the drop occurred.
     @ObservationIgnored var onFileDrop: ((_ urls: [URL], _ paneId: PaneID) -> Bool)?

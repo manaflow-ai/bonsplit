@@ -60,6 +60,13 @@ public final class BonsplitController {
         didSet { internalController.tabShortcutHintsEnabled = tabShortcutHintsEnabled }
     }
 
+    /// Modifier keys of the host's select-tab-by-number shortcut, shown in
+    /// pane tab shortcut hints. Set this when the host stores shortcuts
+    /// outside UserDefaults; nil reads `shortcut.selectSurfaceByNumber`.
+    public var tabShortcutModifierFlags: NSEvent.ModifierFlags? {
+        didSet { internalController.tabShortcutModifierFlags = tabShortcutModifierFlags }
+    }
+
     /// Handler for file/URL drops from external apps (e.g., Finder).
     /// Called when files are dropped onto a pane's content area.
     /// Return `true` if the drop was handled.
