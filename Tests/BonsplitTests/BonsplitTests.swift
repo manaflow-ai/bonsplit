@@ -3024,6 +3024,48 @@ final class BonsplitTests: XCTestCase {
         }
     }
 
+    func testTabControlShortcutHintPolicyRevealsHintsForHostOverrideModifiers() {
+        withShortcutHintDefaultsSuite { defaults in
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
+            defaults.set(true, forKey: TabControlShortcutHintPolicy.showHintsOnControlHoldKey)
+
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.option], defaults: defaults, overrideFlags: [.option]
+                )?.symbol,
+                "⌥"
+            )
+            XCTAssertEqual(
+                TabControlShortcutHintPolicy.hintModifier(
+                    for: [.option, .control], defaults: defaults, overrideFlags: [.option, .control]
+                )?.modifierFlags,
+                [.option, .control]
+            )
+            // Held modifiers must match the override exactly.
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(
+                for: [.command], defaults: defaults, overrideFlags: [.option]
+            ))
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(
+                for: [.option], defaults: defaults, overrideFlags: [.option, .control]
+            ))
+            XCTAssertTrue(TabControlShortcutHintPolicy.shouldShowHints(
+                for: [.option],
+                overrideFlags: [.option],
+                hostWindowNumber: 1,
+                hostWindowIsKey: true,
+                eventWindowNumber: 1,
+                keyWindowNumber: 1,
+                defaults: defaults
+            ))
+
+            // Command and Control hold preferences still apply.
+            defaults.set(false, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)
+            XCTAssertNil(TabControlShortcutHintPolicy.hintModifier(
+                for: [.command], defaults: defaults, overrideFlags: [.command]
+            ))
+        }
+    }
+
     func testTabControlShortcutHintPolicyCanDisableCommandAndControlHoldHintsIndependently() {
         withShortcutHintDefaultsSuite { defaults in
             defaults.set(false, forKey: TabControlShortcutHintPolicy.showHintsOnCommandHoldKey)

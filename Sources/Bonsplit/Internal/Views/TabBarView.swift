@@ -3451,12 +3451,30 @@ enum TabControlShortcutHintPolicy {
         return TabControlShortcutSettings.surfaceByNumberShortcut(defaults: defaults).modifierSymbol
     }
 
+    private static func normalizedHintFlags(_ flags: NSEvent.ModifierFlags) -> NSEvent.ModifierFlags {
+        flags.intersection(.deviceIndependentFlagsMask)
+            .subtracting([.numericPad, .function, .capsLock])
+    }
+
+    /// With `overrideFlags`, the held modifiers must match the host-resolved
+    /// shortcut modifier; Command and Control keep their hold preferences.
     private static func triggerAllowsHintReveal(
         for modifierFlags: NSEvent.ModifierFlags,
+        overrideFlags: NSEvent.ModifierFlags? = nil,
         defaults: UserDefaults = .standard
     ) -> Bool {
-        let flags = modifierFlags.intersection(.deviceIndependentFlagsMask)
-            .subtracting([.numericPad, .function, .capsLock])
+        let flags = normalizedHintFlags(modifierFlags)
+        if let overrideFlags {
+            guard flags == normalizedHintFlags(overrideFlags) else { return false }
+            switch flags {
+            case [.command]:
+                return showHintsOnCommandHoldEnabled(defaults: defaults)
+            case [.control]:
+                return showHintsOnControlHoldEnabled(defaults: defaults)
+            default:
+                return true
+            }
+        }
         switch flags {
         case [.command]:
             return showHintsOnCommandHoldEnabled(defaults: defaults)
@@ -3472,7 +3490,11 @@ enum TabControlShortcutHintPolicy {
         defaults: UserDefaults = .standard,
         overrideFlags: NSEvent.ModifierFlags? = nil
     ) -> TabControlShortcutModifier? {
-        guard triggerAllowsHintReveal(for: modifierFlags, defaults: defaults) else { return nil }
+        guard triggerAllowsHintReveal(
+            for: modifierFlags,
+            overrideFlags: overrideFlags,
+            defaults: defaults
+        ) else { return nil }
         if let overrideFlags {
             return TabControlShortcutModifier(
                 modifierFlags: overrideFlags,
@@ -3501,13 +3523,18 @@ enum TabControlShortcutHintPolicy {
 
     static func shouldShowHints(
         for modifierFlags: NSEvent.ModifierFlags,
+        overrideFlags: NSEvent.ModifierFlags? = nil,
         hostWindowNumber: Int?,
         hostWindowIsKey: Bool,
         eventWindowNumber: Int?,
         keyWindowNumber: Int?,
         defaults: UserDefaults = .standard
     ) -> Bool {
-        triggerAllowsHintReveal(for: modifierFlags, defaults: defaults) &&
+        triggerAllowsHintReveal(
+            for: modifierFlags,
+            overrideFlags: overrideFlags,
+            defaults: defaults
+        ) &&
             isCurrentWindow(
                 hostWindowNumber: hostWindowNumber,
                 hostWindowIsKey: hostWindowIsKey,
@@ -3663,6 +3690,7 @@ private final class TabControlShortcutKeyMonitor {
     private func update(from modifierFlags: NSEvent.ModifierFlags, eventWindow: NSWindow?) {
         guard TabControlShortcutHintPolicy.shouldShowHints(
             for: modifierFlags,
+            overrideFlags: modifierFlagsOverride,
             hostWindowNumber: hostWindow?.windowNumber,
             hostWindowIsKey: hostWindow?.isKeyWindow ?? false,
             eventWindowNumber: eventWindow?.windowNumber,
@@ -3703,6 +3731,7 @@ private final class TabControlShortcutKeyMonitor {
             self.pendingModifier = nil
             guard TabControlShortcutHintPolicy.shouldShowHints(
                 for: NSEvent.modifierFlags,
+                overrideFlags: self.modifierFlagsOverride,
                 hostWindowNumber: self.hostWindow?.windowNumber,
                 hostWindowIsKey: self.hostWindow?.isKeyWindow ?? false,
                 eventWindowNumber: nil,
