@@ -43,7 +43,7 @@ public struct PaneGeometry: Codable, Sendable, Equatable {
 
 // MARK: - Layout Snapshot
 
-/// Full tree snapshot with pixel coordinates
+/// Rendered layout snapshot with pixel coordinates (only the zoomed pane while zoomed)
 public struct LayoutSnapshot: Codable, Sendable, Equatable {
     public let containerFrame: PixelRect
     public let panes: [PaneGeometry]
