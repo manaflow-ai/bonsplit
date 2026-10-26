@@ -88,6 +88,66 @@ final class SplitViewController {
     /// Callback for geometry changes
     var onGeometryChange: (() -> Void)?
 
+    @ObservationIgnored private var tabBarRenderWindowStart: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowLastRender: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowRenderCount = 0
+    @ObservationIgnored private var tabBarRenderWindowTabCount = 0
+    @ObservationIgnored private var tabBarRenderWindowPanes: Set<PaneID> = []
+    @ObservationIgnored private var tabBarRenderWindowReported = false
+
+    /// Records a tab-bar body evaluation and emits one diagnostic for a sustained
+    /// render window. This is intentionally inactive unless the host installs a
+    /// diagnostic handler. Hosts that install the handler pay the small counter
+    /// cost needed to identify a sustained render storm.
+    func recordTabBarRender(
+        paneId: PaneID,
+        tabCount: Int,
+        now: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
+        guard let handler = publicController?.onTabBarRenderDiagnostic else {
+            resetTabBarRenderWindow()
+            return
+        }
+
+        if tabBarRenderWindowStart == 0
+            || now - tabBarRenderWindowLastRender > 0.1
+            || now - tabBarRenderWindowStart > 2 {
+            resetTabBarRenderWindow()
+            tabBarRenderWindowStart = now
+        }
+
+        tabBarRenderWindowLastRender = now
+        tabBarRenderWindowRenderCount += 1
+        tabBarRenderWindowTabCount += tabCount
+        tabBarRenderWindowPanes.insert(paneId)
+
+        let elapsed = now - tabBarRenderWindowStart
+        guard !tabBarRenderWindowReported,
+              elapsed >= 0.5,
+              tabBarRenderWindowRenderCount >= 32 else {
+            return
+        }
+
+        tabBarRenderWindowReported = true
+        handler(
+            TabBarRenderDiagnostic(
+                elapsed: elapsed,
+                renderCount: tabBarRenderWindowRenderCount,
+                tabCount: tabBarRenderWindowTabCount,
+                paneCount: tabBarRenderWindowPanes.count
+            )
+        )
+    }
+
+    private func resetTabBarRenderWindow() {
+        tabBarRenderWindowStart = 0
+        tabBarRenderWindowLastRender = 0
+        tabBarRenderWindowRenderCount = 0
+        tabBarRenderWindowTabCount = 0
+        tabBarRenderWindowPanes.removeAll(keepingCapacity: true)
+        tabBarRenderWindowReported = false
+    }
+
     /// Live divider drag sessions across every split in this tree (0 or 1 in
     /// practice — AppKit tracks one divider at a time). Sessions bracket the
     /// divider's mouse-tracking lifecycle, so external sizing can consult
