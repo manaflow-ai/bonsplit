@@ -817,10 +817,18 @@ struct TabItemView: View {
             ? TabBarColors.nsColorActiveText(for: appearance)
             : TabBarColors.nsColorInactiveText(for: appearance)
         let iconTint = Color(nsColor: iconTintColor)
-        let faviconImage = renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) }
+        let iconAnimation = tab.iconAnimation
+        let faviconImage = iconAnimation == nil
+            ? (renderedFaviconImage ?? tab.iconImageData.flatMap { NSImage(data: $0) })
+            : nil
 
         Group {
-            if tab.isLoading {
+            if let iconAnimation {
+                AnimatedTabIconView(animation: iconAnimation)
+                    .frame(width: iconSlotSize, height: iconSlotSize)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+            } else if tab.isLoading {
                 // Slightly smaller than the icon slot so it reads cleaner at tab scale.
                 TabLoadingSpinner(size: iconSlotSize * 0.86, color: iconTintColor)
             } else if let image = faviconImage {
@@ -847,7 +855,7 @@ struct TabItemView: View {
             }
         }
         // Keep downloaded favicon bitmaps in full color even for inactive tab bars.
-        .saturation(TabItemStyling.iconSaturation(hasRasterIcon: faviconImage != nil, tabSaturation: saturation))
+        .saturation(TabItemStyling.iconSaturation(hasRasterIcon: iconAnimation != nil || faviconImage != nil, tabSaturation: saturation))
         .transaction { tx in
             // Prevent incidental parent animations from briefly fading icon content.
             tx.animation = nil

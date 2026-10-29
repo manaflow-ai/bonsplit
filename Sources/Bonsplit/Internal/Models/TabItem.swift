@@ -33,6 +33,7 @@ final class TabItem: Identifiable, Hashable, Codable {
     var icon: String?
     var iconImageData: Data?
     var iconAsset: String?
+    var iconAnimation: TabIconAnimation?
     var kind: String?
     var isDirty: Bool
     var showsNotificationBadge: Bool
@@ -52,6 +53,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        iconAnimation: TabIconAnimation? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -68,6 +70,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         self.icon = icon
         self.iconImageData = iconImageData
         self.iconAsset = iconAsset
+        self.iconAnimation = iconAnimation
         self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
@@ -94,6 +97,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         case icon
         case iconImageData
         case iconAsset
+        case iconAnimation
         case kind
         case isDirty
         case showsNotificationBadge
@@ -113,6 +117,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         self.icon = try c.decodeIfPresent(String.self, forKey: .icon)
         self.iconImageData = try c.decodeIfPresent(Data.self, forKey: .iconImageData)
         self.iconAsset = try c.decodeIfPresent(String.self, forKey: .iconAsset)
+        self.iconAnimation = try c.decodeIfPresent(TabIconAnimation.self, forKey: .iconAnimation)
         self.kind = try c.decodeIfPresent(String.self, forKey: .kind)
         self.isDirty = try c.decodeIfPresent(Bool.self, forKey: .isDirty) ?? false
         self.showsNotificationBadge = try c.decodeIfPresent(Bool.self, forKey: .showsNotificationBadge) ?? false
@@ -132,6 +137,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         try c.encodeIfPresent(icon, forKey: .icon)
         try c.encodeIfPresent(iconImageData, forKey: .iconImageData)
         try c.encodeIfPresent(iconAsset, forKey: .iconAsset)
+        try c.encodeIfPresent(iconAnimation, forKey: .iconAnimation)
         try c.encodeIfPresent(kind, forKey: .kind)
         try c.encode(isDirty, forKey: .isDirty)
         try c.encode(showsNotificationBadge, forKey: .showsNotificationBadge)
