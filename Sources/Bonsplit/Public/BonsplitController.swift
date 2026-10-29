@@ -198,6 +198,7 @@ public final class BonsplitController {
     ///   - icon: Optional SF Symbol name for the tab icon
     ///   - iconImageData: Optional image data (PNG recommended) for the tab icon. When present, takes precedence over `icon`.
     ///   - iconAsset: Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
+    ///   - iconAnimation: Optional animation overriding loading and ordinary icons; nil uses the ordinary icon.
     ///   - kind: Consumer-defined tab kind identifier (e.g. "terminal", "browser")
     ///   - hasCustomTitle: Whether the tab title came from a custom user override
     ///   - isDirty: Whether the tab shows a dirty indicator
@@ -214,6 +215,7 @@ public final class BonsplitController {
         icon: String? = "doc.text",
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        iconAnimation: TabIconAnimation? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -232,6 +234,7 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            iconAnimation: iconAnimation,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -273,6 +276,7 @@ public final class BonsplitController {
             icon: icon,
             iconImageData: iconImageData,
             iconAsset: iconAsset,
+            iconAnimation: iconAnimation,
             kind: kind,
             isDirty: isDirty,
             showsNotificationBadge: showsNotificationBadge,
@@ -353,6 +357,7 @@ public final class BonsplitController {
     ///   - icon: New icon (pass nil to keep current, pass .some(nil) to remove icon)
     ///   - iconImageData: New icon image data (pass nil to keep current, pass .some(nil) to remove)
     ///   - iconAsset: New asset-catalog icon name (pass nil to keep current, pass .some(nil) to remove)
+    ///   - iconAnimation: New animated icon (nil keeps current; .some(nil) removes it). Reuse the ID to preserve playback.
     ///   - kind: New tab kind (pass nil to keep current, pass .some(nil) to clear)
     ///   - hasCustomTitle: New custom-title state (pass nil to keep current)
     ///   - isDirty: New dirty state (pass nil to keep current)
@@ -368,6 +373,7 @@ public final class BonsplitController {
         icon: String?? = nil,
         iconImageData: Data?? = nil,
         iconAsset: String?? = nil,
+        iconAnimation: TabIconAnimation?? = nil,
         kind: String?? = nil,
         hasCustomTitle: Bool? = nil,
         isDirty: Bool? = nil,
@@ -386,6 +392,7 @@ public final class BonsplitController {
             icon.map { currentTab.icon != $0 } ?? false ||
             iconImageData.map { currentTab.iconImageData != $0 } ?? false ||
             iconAsset.map { currentTab.iconAsset != $0 } ?? false ||
+            iconAnimation.map { currentTab.iconAnimation != $0 } ?? false ||
             kind.map { currentTab.kind != $0 } ?? false ||
             hasCustomTitle.map { currentTab.hasCustomTitle != $0 } ?? false ||
             isDirty.map { currentTab.isDirty != $0 } ?? false ||
@@ -404,6 +411,9 @@ public final class BonsplitController {
             currentTab.iconImageData = iconImageData
         }
         if let iconAsset, currentTab.iconAsset != iconAsset { currentTab.iconAsset = iconAsset }
+        if let iconAnimation, currentTab.iconAnimation != iconAnimation {
+            currentTab.iconAnimation = iconAnimation
+        }
         if let kind, currentTab.kind != kind { currentTab.kind = kind }
         if let hasCustomTitle, currentTab.hasCustomTitle != hasCustomTitle {
             currentTab.hasCustomTitle = hasCustomTitle
@@ -593,6 +603,7 @@ public final class BonsplitController {
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
+            iconAnimation: tab.iconAnimation,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,
@@ -646,6 +657,7 @@ public final class BonsplitController {
                 icon: tab.icon,
                 iconImageData: tab.iconImageData,
                 iconAsset: tab.iconAsset,
+                iconAnimation: tab.iconAnimation,
                 kind: tab.kind,
                 isDirty: tab.isDirty,
                 showsNotificationBadge: tab.showsNotificationBadge,
@@ -716,6 +728,7 @@ public final class BonsplitController {
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
+            iconAnimation: tab.iconAnimation,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,
@@ -778,6 +791,7 @@ public final class BonsplitController {
             icon: tab.icon,
             iconImageData: tab.iconImageData,
             iconAsset: tab.iconAsset,
+            iconAnimation: tab.iconAnimation,
             kind: tab.kind,
             isDirty: tab.isDirty,
             showsNotificationBadge: tab.showsNotificationBadge,

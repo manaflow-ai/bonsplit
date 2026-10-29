@@ -10,6 +10,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let iconImageData: Data?
     /// Optional asset-catalog image name for the tab icon. Resolved in the host app bundle.
     public let iconAsset: String?
+    /// Optional animated leading icon, taking precedence over loading and ordinary icons.
+    public let iconAnimation: TabIconAnimation?
     /// Consumer-defined tab kind identifier (for example, "terminal" or "browser").
     public let kind: String?
     public let isDirty: Bool
@@ -36,6 +38,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         icon: String? = nil,
         iconImageData: Data? = nil,
         iconAsset: String? = nil,
+        iconAnimation: TabIconAnimation? = nil,
         kind: String? = nil,
         isDirty: Bool = false,
         showsNotificationBadge: Bool = false,
@@ -52,6 +55,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.icon = icon
         self.iconImageData = iconImageData
         self.iconAsset = iconAsset
+        self.iconAnimation = iconAnimation
         self.kind = kind
         self.isDirty = isDirty
         self.showsNotificationBadge = showsNotificationBadge
@@ -70,6 +74,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.icon = tabItem.icon
         self.iconImageData = tabItem.iconImageData
         self.iconAsset = tabItem.iconAsset
+        self.iconAnimation = tabItem.iconAnimation
         self.kind = tabItem.kind
         self.isDirty = tabItem.isDirty
         self.showsNotificationBadge = tabItem.showsNotificationBadge
