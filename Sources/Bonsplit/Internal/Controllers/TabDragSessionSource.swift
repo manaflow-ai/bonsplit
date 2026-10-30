@@ -8,6 +8,7 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
     private let transferRegistry: TabDragTransferRegistry
     private weak var controller: SplitViewController?
     private var didFinish = false
+    private let beganAt = ProcessInfo.processInfo.systemUptime
     // Keep the source view owned until `endedAt`; AppKit owns the session and
     // retains this source while its native drag is active.
     // AppKit's drag manager may outlive the SwiftUI tab view that initiated the
@@ -52,11 +53,21 @@ final class TabDragSessionSource: NSObject, NSDraggingSource {
         endedAt screenPoint: NSPoint,
         operation: NSDragOperation
     ) {
-        finishDrag()
+        completeNativeDrag(at: screenPoint, operation: operation)
         // The system drag pasteboard advertises this session's transfer type
         // until another drag replaces it, which keeps host drop-capture
         // hit-testing armed forever and blocks the next tab drag from starting.
         transferRegistration.clearResidualCapability(from: session.draggingPasteboard)
+    }
+
+    /// Takes the capability once, before cleanup, then reports the completed source.
+    func completeNativeDrag(at screenPoint: NSPoint, operation: NSDragOperation) {
+        guard !didFinish else { return }
+        let transfer = transferRegistry.liveTransfer(for: transferRegistration)
+        finishDrag()
+        if let transfer {
+            transferRegistry.onUnhandledNativeDragEnd?(transfer, screenPoint, operation, beganAt)
+        }
     }
 
     func finishDrag() {

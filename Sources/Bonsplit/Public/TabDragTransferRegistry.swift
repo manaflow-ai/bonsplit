@@ -20,6 +20,11 @@ public final class TabDragTransferRegistry {
         }
     }
 
+    /// Handles an unconsumed native source after its drag lifecycle has ended.
+    /// The transfer is captured from this registry before revocation; accepted or stale
+    /// capabilities never reach this callback. Coordinates use AppKit screen space.
+    public var onUnhandledNativeDragEnd: ((TabDragTransfer, NSPoint, NSDragOperation, TimeInterval) -> Void)?
+
     private var transfers: [UUID: Entry] = [:]
     private var nativeDragEndObservers: [UUID: () -> Void] = [:]
 
@@ -82,6 +87,12 @@ public final class TabDragTransferRegistry {
             transfers[token] = nil
             return nil
         }
+        return entry.transfer
+    }
+
+    /// Captures a still-live native source before terminal cleanup.
+    func liveTransfer(for registration: TabDragTransferRegistration) -> TabDragTransfer? {
+        guard let entry = transfers[registration.token], entry.lifetime != nil else { return nil }
         return entry.transfer
     }
 

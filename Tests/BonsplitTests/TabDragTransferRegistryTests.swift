@@ -6,6 +6,66 @@ import Testing
 @Suite("Native tab drag capabilities")
 @MainActor
 struct TabDragTransferRegistryTests {
+    @Test("A reversible close keeps the original split until commit")
+    func reversibleCloseKeepsEmptySourcePane() throws {
+        let controller = makeController()
+        let first = try #require(controller.allPaneIds.first)
+        let second = try #require(controller.splitPane(first, orientation: .horizontal, withTab: Tab(title: "Detached")))
+        let tab = try #require(controller.tabs(inPane: second).first)
+        #expect(controller.closeTab(tab.id, preservingEmptyPane: true))
+        #expect(controller.allPaneIds.contains(second))
+        #expect(controller.tabs(inPane: second).isEmpty)
+        let restored = try #require(controller.createTab(title: tab.title, inPane: second))
+        #expect(controller.tabs(inPane: second).map(\.id) == [restored])
+        #expect(controller.closeTab(restored))
+        #expect(!controller.allPaneIds.contains(second))
+    }
+
+    @Test("Native completion reports the same live source once, after cleanup")
+    func nativeCompletionIsCapabilityGatedAndIdempotent() throws {
+        let registry = TabDragTransferRegistry()
+        let controller = makeController(registry: registry)
+        let pane = try #require(controller.internalController.focusedPane)
+        let tab = try #require(pane.selectedTab)
+        let registration = try #require(registry.register(TabDragTransfer(tab: Tab(from: tab), sourcePaneId: pane.id)))
+        let board = makePasteboard(item: registration.pasteboardItem)
+        let generation = controller.internalController.beginTabDrag(tab, from: pane.id)
+        let source = TabDragSessionSource(generation: generation, transferRegistration: registration,
+                                         transferRegistry: registry, controller: controller.internalController)
+        var calls = 0
+        registry.onUnhandledNativeDragEnd = { transfer, point, operation, beganAt in
+            calls += 1
+            #expect(transfer.tab.id == TabID(id: tab.id))
+            #expect(point == NSPoint(x: -300, y: 700))
+            #expect(operation.isEmpty)
+            #expect(beganAt <= ProcessInfo.processInfo.systemUptime)
+            #expect(registry.resolve(from: board) == nil)
+            #expect(controller.internalController.tabDragSession == nil)
+        }
+        source.completeNativeDrag(at: NSPoint(x: -300, y: 700), operation: [])
+        source.completeNativeDrag(at: NSPoint(x: -300, y: 700), operation: [])
+        #expect(calls == 1)
+    }
+
+    @Test("An accepted or superseded native source cannot tear off")
+    func revokedCompletionDoesNotNotifyHost() throws {
+        let registry = TabDragTransferRegistry()
+        let controller = makeController(registry: registry)
+        let pane = try #require(controller.internalController.focusedPane)
+        let tab = try #require(pane.selectedTab)
+        let registration = try #require(registry.register(TabDragTransfer(tab: Tab(from: tab), sourcePaneId: pane.id)))
+        let board = makePasteboard(item: registration.pasteboardItem)
+        let generation = controller.internalController.beginTabDrag(tab, from: pane.id)
+        let source = TabDragSessionSource(generation: generation, transferRegistration: registration,
+                                         transferRegistry: registry, controller: controller.internalController)
+        var calls = 0
+        registry.onUnhandledNativeDragEnd = { _, _, _, _ in calls += 1 }
+        registry.finish(from: board)
+        source.completeNativeDrag(at: .zero, operation: [])
+        #expect(calls == 0)
+        #expect(controller.internalController.tabDragSession == nil)
+    }
+
     @Test("Pasteboard payload keeps tab titles private")
     func pasteboardDoesNotExposeSerializedTabMetadata() throws {
         let registry = TabDragTransferRegistry()

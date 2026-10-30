@@ -712,12 +712,12 @@ final class SplitViewController {
     }
 
     /// Close a tab in a specific pane
-    func closeTab(_ tabId: UUID, inPane paneId: PaneID) {
+    func closeTab(_ tabId: UUID, inPane paneId: PaneID, preservingEmptyPane: Bool = false) {
         guard let pane = paneStatesById[paneId],
               removeTab(tabId, fromPane: paneId) != nil else { return }
 
-        // If pane is now empty and not the only pane, close it
-        if pane.tabs.isEmpty && paneStatesById.count > 1 {
+        // Keep the original split available until a reversible transfer commits.
+        if !preservingEmptyPane && pane.tabs.isEmpty && paneStatesById.count > 1 {
             closePane(paneId)
         }
     }
