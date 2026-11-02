@@ -1127,6 +1127,15 @@ struct TabItemView: View {
                 Color.clear
             }
 
+            // Host-chosen marking color: a light tint plus a strip on the top edge.
+            if let color = tab.color?.color {
+                Rectangle()
+                    .fill(color.opacity(isSelected ? 0.22 : 0.14))
+                Rectangle()
+                    .fill(color)
+                    .frame(height: 2)
+            }
+
             // Right border separator
             HStack {
                 Spacer()
