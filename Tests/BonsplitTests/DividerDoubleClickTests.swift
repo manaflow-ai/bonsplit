@@ -63,9 +63,9 @@ struct DividerDoubleClickTests {
         let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero,
             modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber, context: nil,
             eventNumber: 1, clickCount: 2, pressure: 1))
-        splitView.pointerEvent = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: .zero,
+        splitView.queuedEvents = [try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: .zero,
             modifierFlags: [], timestamp: 1.1, windowNumber: window.windowNumber, context: nil,
-            eventNumber: 2, clickCount: 2, pressure: 0))
+            eventNumber: 2, clickCount: 2, pressure: 0))]
         splitView.mouseDown(with: down)
         #expect(splitView.window == nil)
         #expect(splitView.consumedCount == 1)
@@ -73,23 +73,96 @@ struct DividerDoubleClickTests {
         #expect(splitView.dequeueWindows.first.map { $0 === window } == true)
     }
 
+    /// A host callback can run a nested event loop (an alert, a menu), which would
+    /// consume a release still in the queue. Reading it afterward would then wait
+    /// until `.distantFuture` for a release that already happened, hanging the app.
+    @Test func hostCallbackThatDrainsTheQueueDoesNotStrandTheDivider() throws {
+        let fixture = try makeDoubleClickFixture()
+        fixture.delegate.onDoubleClick = { [weak splitView = fixture.splitView] in
+            splitView?.queuedEvents.removeAll()
+        }
+        fixture.splitView.mouseDown(with: fixture.down)
+        #expect(fixture.delegate.events == ["begin", "end", "doubleClick"])
+        #expect(fixture.splitView.readsOfEmptyQueue == 0)
+        #expect(fixture.splitView.consumedCount == 1)
+        #expect(fixture.splitView.nativeTrackingCount == 0)
+    }
+
+    @Test func releaseLeavesTheQueueBeforeTheHostCallback() throws {
+        let fixture = try makeDoubleClickFixture()
+        var queuedAtCallback: Int?
+        fixture.delegate.onDoubleClick = { [weak splitView = fixture.splitView] in
+            queuedAtCallback = splitView?.queuedEvents.count
+        }
+        fixture.splitView.mouseDown(with: fixture.down)
+        #expect(queuedAtCallback == 0)
+    }
+
+    private struct DoubleClickFixture {
+        let controller: BonsplitController
+        let delegate: Delegate
+        let splitView: PointerSplitView
+        let down: NSEvent
+        let release: NSEvent
+    }
+
+    private func makeDoubleClickFixture() throws -> DoubleClickFixture {
+        let controller = BonsplitController()
+        let delegate = Delegate()
+        controller.delegate = delegate
+        let pane = try #require(controller.focusedPaneId)
+        _ = try #require(controller.splitPane(pane, orientation: .horizontal))
+        guard case .split(let state) = controller.internalController.rootNode else {
+            throw FixtureError.expectedSplit
+        }
+        let splitView = PointerSplitView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        splitView.isVertical = true
+        splitView.addArrangedSubview(NSView())
+        splitView.addArrangedSubview(NSView())
+        splitView.stampedInternalController = controller.internalController
+        splitView.stampedSplitId = state.id
+        splitView.onDividerDragSession = { active in
+            controller.internalController.noteDividerDragSession(active)
+        }
+        let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero,
+            modifierFlags: [], timestamp: 1, windowNumber: 0, context: nil,
+            eventNumber: 1, clickCount: 2, pressure: 1))
+        let release = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: .zero,
+            modifierFlags: [], timestamp: 1.1, windowNumber: 0, context: nil,
+            eventNumber: 2, clickCount: 2, pressure: 0))
+        splitView.queuedEvents = [release]
+        return DoubleClickFixture(controller: controller, delegate: delegate, splitView: splitView, down: down, release: release)
+    }
+
+    private enum FixtureError: Error { case expectedSplit }
+
     @Test func staleDividerAfterSessionEndIsUnhandled() throws {
         try exercise(orientation: .horizontal, clickCount: 2, drag: false, handled: true, stale: true)
     }
 
     private final class PointerSplitView: ThemedSplitView {
-        var pointerEvent: NSEvent?
+        /// Models the window's event queue, so a host callback can drain it the
+        /// way a nested event loop would.
+        var queuedEvents: [NSEvent] = []
         var nativeTrackingCount = 0
         var consumedCount = 0
         var dequeueWindows: [NSWindow?] = []
+        /// Counts reads of an empty queue. The real read waits until
+        /// `.distantFuture`, so outside a test each of these is a stuck main thread.
+        var readsOfEmptyQueue = 0
 
         override func trackDivider(with event: NSEvent) { nativeTrackingCount += 1 }
         override func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
+            guard let head = queuedEvents.first else {
+                readsOfEmptyQueue += 1
+                return nil
+            }
             if dequeue {
                 consumedCount += 1
                 dequeueWindows.append(window)
+                queuedEvents.removeFirst()
             }
-            return pointerEvent
+            return head
         }
     }
 
@@ -117,10 +190,10 @@ struct DividerDoubleClickTests {
         let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero,
             modifierFlags: [], timestamp: 1, windowNumber: 0, context: nil,
             eventNumber: 1, clickCount: clickCount, pressure: 1))
-        splitView.pointerEvent = try #require(NSEvent.mouseEvent(
+        splitView.queuedEvents = [try #require(NSEvent.mouseEvent(
             with: drag ? .leftMouseDragged : .leftMouseUp, location: .zero,
             modifierFlags: [], timestamp: 1.1, windowNumber: 0, context: nil,
-            eventNumber: 2, clickCount: clickCount, pressure: 0))
+            eventNumber: 2, clickCount: clickCount, pressure: 0))]
         splitView.mouseDown(with: down)
         let dispatch = clickCount == 2 && !drag && !stale
         #expect(delegate.splitIds == (dispatch ? [state.id] : []))
