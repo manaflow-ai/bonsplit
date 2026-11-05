@@ -132,6 +132,63 @@ struct DividerDoubleClickTests {
         #expect(next?.eventNumber == 7)
     }
 
+    /// The whole decline path with nothing stubbed: a real window queue and
+    /// NSSplitView's own tracking loop must take the reposted release and return.
+    /// The timer posts a second release, so a loop that ignores the first one fails
+    /// here instead of hanging the test run.
+    @Test func declinedDoubleClickEndsRealSplitViewTracking() throws {
+        _ = NSApplication.shared
+        let controller = BonsplitController()
+        let delegate = Delegate()
+        delegate.handled = false
+        controller.delegate = delegate
+        let pane = try #require(controller.focusedPaneId)
+        _ = try #require(controller.splitPane(pane, orientation: .horizontal))
+        guard case .split(let state) = controller.internalController.rootNode else {
+            Issue.record("Expected a split")
+            return
+        }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        let splitView = ThemedSplitView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        splitView.isVertical = true
+        splitView.addArrangedSubview(NSView())
+        splitView.addArrangedSubview(NSView())
+        splitView.stampedInternalController = controller.internalController
+        splitView.stampedSplitId = state.id
+        window.contentView?.addSubview(splitView)
+        window.orderFront(nil)
+        splitView.adjustSubviews()
+        splitView.layoutSubtreeIfNeeded()
+        let dividerX = splitView.arrangedSubviews[0].frame.maxX + splitView.dividerThickness / 2
+        let location = splitView.convert(NSPoint(x: dividerX, y: 300), to: nil)
+        func mouseEvent(_ type: NSEvent.EventType, number: Int) throws -> NSEvent {
+            try #require(NSEvent.mouseEvent(with: type, location: location, modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                context: nil, eventNumber: number, clickCount: 2, pressure: type == .leftMouseDown ? 1 : 0))
+        }
+        let rescue = try mouseEvent(.leftMouseUp, number: 3)
+        final class Flag { var fired = false }
+        let rescued = Flag()
+        let timer = Timer(timeInterval: 3, repeats: false) { _ in
+            MainActor.assumeIsolated {
+                rescued.fired = true
+                window.postEvent(rescue, atStart: false)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .eventTracking)
+        RunLoop.main.add(timer, forMode: .default)
+        defer { timer.invalidate() }
+
+        window.postEvent(try mouseEvent(.leftMouseUp, number: 2), atStart: false)
+        splitView.mouseDown(with: try mouseEvent(.leftMouseDown, number: 1))
+
+        #expect(delegate.events.contains("doubleClick"))
+        #expect(!rescued.fired, "Native tracking must take the release the host declined")
+    }
+
     private struct DoubleClickFixture {
         let controller: BonsplitController
         let delegate: Delegate
