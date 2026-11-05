@@ -3,7 +3,7 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
+class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     var customDividerColor: NSColor? {
         didSet {
             guard oldValue != customDividerColor else { return }
@@ -130,11 +130,56 @@ private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
         }
 #endif
         if inDivider { onDividerDragSession?(true) }
+        // Leave a pending drag in the queue for AppKit's native tracking.
+        // A released double-click can be offered to the host after ending
+        // the resize session, so its geometry mutation is not drag-owned.
+        // Capture the window first: the host's geometry change can detach this
+        // view. Take the release out of the queue before calling anyone: a nested
+        // event loop in a callback would consume it, and reading it afterward
+        // would wait until `.distantFuture` for a release that already happened.
+        let trackingWindow = window
+        if inDivider, event.clickCount == 2,
+           let splitId = stampedSplitId,
+           let trackingController = stampedInternalController,
+           let peeked = nextDividerEvent(in: trackingWindow, dequeue: false),
+           peeked.type == .leftMouseUp,
+           peeked.windowNumber == event.windowNumber,
+           let release = nextDividerEvent(in: trackingWindow, dequeue: true) {
+            onDividerDragSession?(false)
+            if stampedInternalController === trackingController,
+               stampedSplitId == splitId,
+               trackingController.findSplit(splitId) != nil,
+               let controller = trackingController.publicController,
+               controller.delegate?.splitTabBar(controller, didDoubleClickDivider: splitId) == true {
+                return
+            }
+            // Native double-click behavior remains available to hosts that
+            // decline the callback: its tracking loop reads this same release.
+            requeueDividerEvent(release, in: trackingWindow)
+            trackDivider(with: event)
+            return
+        }
         // For a divider hit, super runs AppKit's tracking loop and returns
         // only after the mouse is released — the session end below is the
         // guaranteed drag-end signal.
         defer { if inDivider { onDividerDragSession?(false) } }
+        trackDivider(with: event)
+    }
+
+    /// Native tracking seam, also used by pointer dispatch tests without a GUI session.
+    func trackDivider(with event: NSEvent) {
         super.mouseDown(with: event)
+    }
+
+    /// Peeks without removing events so a drag can enter native tracking unchanged.
+    func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
+        window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture,
+                          inMode: .eventTracking, dequeue: dequeue)
+    }
+
+    /// Puts a release taken by `nextDividerEvent` back at the head of the queue.
+    func requeueDividerEvent(_ event: NSEvent, in window: NSWindow?) {
+        window?.postEvent(event, atStart: true)
     }
 }
 
@@ -256,14 +301,28 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     /// and renders the tree again on the next turn when one changes. Only
     /// split state is read in the observation scope: pane content observes
     /// itself inside its own host.
+    ///
+    /// `withObservationTracking` registrations are one-shot and cannot be
+    /// cancelled, so the root keeps at most one armed at a time. Arming one
+    /// on every `updateNSView` left a registration behind per SwiftUI update:
+    /// over a long session the split registrars grew without bound, every
+    /// tracked change re-rendered the whole tree once per leftover
+    /// registration, and SwiftUI's own tracking of the same properties slowed
+    /// with them (Sentry CMUXTERM-MACOS-3ZVC).
     private func updateTrackingNestedSplits(_ splitView: NSSplitView, coordinator: Coordinator) {
         updateSplitView(splitView, coordinator: coordinator)
+        let scope = [ObjectIdentifier(controller), ObjectIdentifier(splitState)]
+        guard let generation = coordinator.treeObservation.armIfNeeded(scope: scope) else { return }
         withObservationTracking {
             _ = controller.isInteractive
             Self.observeNestedSplits(of: splitState)
         } onChange: { [weak coordinator] in
             DispatchQueue.main.async {
-                coordinator?.renderTree?()
+                guard let coordinator, coordinator.treeObservation.consume(generation) else { return }
+#if DEBUG
+                coordinator.observedTreeRenderCount += 1
+#endif
+                coordinator.renderTree?()
             }
         }
     }
@@ -827,6 +886,12 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// Renders the tree again after a change observed anywhere in it.
         /// Installed by the root's `updateNSView`.
         var renderTree: (() -> Void)?
+        /// The root's single armed observation of the split tree.
+        let treeObservation = SplitTreeObservationGate()
+        /// Tree renders triggered by an observed change, for tests.
+#if DEBUG
+        var observedTreeRenderCount = 0
+#endif
 
         init(
             splitState: SplitState,
@@ -1603,5 +1668,34 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             let maxCoordinate = max(minimumPaneSize, availableSize - minimumPaneSize)
             return min(proposedMaximumPosition, maxCoordinate)
         }
+    }
+}
+
+/// Keeps a split tree's root to one live `withObservationTracking`
+/// registration. A registration stays armed until the change it observes
+/// fires; re-rendering for any other reason reuses it. A new scope (another
+/// root state or controller) arms a fresh one and retires the old by
+/// generation, so a late fire from it does nothing. Used on the main thread.
+final class SplitTreeObservationGate {
+    private var armedGeneration: Int?
+    private var armedScope: [ObjectIdentifier] = []
+    private var nextGeneration = 0
+
+    /// Returns the generation to arm, or nil while a registration for the
+    /// same scope is still live.
+    func armIfNeeded(scope: [ObjectIdentifier]) -> Int? {
+        if armedGeneration != nil, armedScope == scope { return nil }
+        nextGeneration += 1
+        armedGeneration = nextGeneration
+        armedScope = scope
+        return nextGeneration
+    }
+
+    /// Marks the registration for `generation` as fired. Returns false for a
+    /// retired generation, whose change the current registration covers.
+    func consume(_ generation: Int) -> Bool {
+        guard armedGeneration == generation else { return false }
+        armedGeneration = nil
+        return true
     }
 }
