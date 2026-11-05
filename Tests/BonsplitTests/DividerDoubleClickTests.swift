@@ -152,15 +152,16 @@ struct DividerDoubleClickTests {
                               styleMask: [.titled], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         defer { window.orderOut(nil) }
-        let splitView = ThemedSplitView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
+        let splitView = QueueObservingSplitView(frame: NSRect(x: 0, y: 0, width: 800, height: 600))
         splitView.isVertical = true
-        splitView.addArrangedSubview(NSView())
-        splitView.addArrangedSubview(NSView())
+        splitView.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 600)))
+        splitView.addArrangedSubview(NSView(frame: NSRect(x: 400, y: 0, width: 400, height: 600)))
         splitView.stampedInternalController = controller.internalController
         splitView.stampedSplitId = state.id
         window.contentView?.addSubview(splitView)
         window.orderFront(nil)
         splitView.adjustSubviews()
+        splitView.setPosition(400, ofDividerAt: 0)
         splitView.layoutSubtreeIfNeeded()
         let dividerX = splitView.arrangedSubviews[0].frame.maxX + splitView.dividerThickness / 2
         let location = splitView.convert(NSPoint(x: dividerX, y: 300), to: nil)
@@ -187,6 +188,26 @@ struct DividerDoubleClickTests {
 
         #expect(delegate.events.contains("doubleClick"))
         #expect(!rescued.fired, "Native tracking must take the release the host declined")
+        #expect(splitView.releaseBeforeTracking?.eventNumber == 2,
+                "Native tracking must start with the same release back in the queue")
+        #expect(splitView.releaseAfterTracking == nil,
+                "Only AppKit's tracking loop can have consumed it, so a click that missed the divider fails here")
+    }
+
+    /// Leaves the event queue and AppKit's tracking real and only looks at the queue around it.
+    private final class QueueObservingSplitView: ThemedSplitView {
+        var releaseBeforeTracking: NSEvent?
+        var releaseAfterTracking: NSEvent?
+
+        private func queuedRelease() -> NSEvent? {
+            window?.nextEvent(matching: [.leftMouseUp], until: .distantPast, inMode: .eventTracking, dequeue: false)
+        }
+
+        override func trackDivider(with event: NSEvent) {
+            releaseBeforeTracking = queuedRelease()
+            super.trackDivider(with: event)
+            releaseAfterTracking = queuedRelease()
+        }
     }
 
     private struct DoubleClickFixture {
