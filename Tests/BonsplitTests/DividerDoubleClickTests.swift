@@ -98,6 +98,40 @@ struct DividerDoubleClickTests {
         #expect(queuedAtCallback == 0)
     }
 
+    /// A host can drain the queue and still decline. Native tracking must then
+    /// get that same release back, or it would wait for a mouse-up that happened.
+    @Test func declinedDoubleClickHandsTheSameReleaseToNativeTracking() throws {
+        let fixture = try makeDoubleClickFixture()
+        fixture.delegate.handled = false
+        fixture.delegate.onDoubleClick = { [weak splitView = fixture.splitView] in
+            splitView?.queuedEvents.removeAll()
+        }
+        fixture.splitView.mouseDown(with: fixture.down)
+        #expect(fixture.splitView.nativeTrackingCount == 1)
+        #expect(fixture.splitView.queuedAtNativeTracking.count == 1)
+        #expect(fixture.splitView.queuedAtNativeTracking.first === fixture.release)
+        #expect(fixture.splitView.readsOfEmptyQueue == 0)
+    }
+
+    /// The real seam, not the test double: AppKit must return the requeued release
+    /// to the next reader, which is what native tracking relies on.
+    @Test func requeuedReleaseIsTheNextEventAppKitDelivers() throws {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 200),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.orderOut(nil) }
+        let release = try #require(NSEvent.mouseEvent(with: .leftMouseUp, location: .zero,
+            modifierFlags: [], timestamp: 1.1, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 7, clickCount: 2, pressure: 0))
+        ThemedSplitView().requeueDividerEvent(release, in: window)
+        let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp],
+                                    until: Date(timeIntervalSinceNow: 2),
+                                    inMode: .eventTracking, dequeue: true)
+        #expect(next?.type == .leftMouseUp)
+        #expect(next?.eventNumber == 7)
+    }
+
     private struct DoubleClickFixture {
         let controller: BonsplitController
         let delegate: Delegate
@@ -150,8 +184,15 @@ struct DividerDoubleClickTests {
         /// Counts reads of an empty queue. The real read waits until
         /// `.distantFuture`, so outside a test each of these is a stuck main thread.
         var readsOfEmptyQueue = 0
+        var queuedAtNativeTracking: [NSEvent] = []
 
-        override func trackDivider(with event: NSEvent) { nativeTrackingCount += 1 }
+        override func trackDivider(with event: NSEvent) {
+            nativeTrackingCount += 1
+            queuedAtNativeTracking = queuedEvents
+        }
+        override func requeueDividerEvent(_ event: NSEvent, in window: NSWindow?) {
+            queuedEvents.insert(event, at: 0)
+        }
         override func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
             guard let head = queuedEvents.first else {
                 readsOfEmptyQueue += 1
@@ -199,7 +240,12 @@ struct DividerDoubleClickTests {
         #expect(delegate.splitIds == (dispatch ? [state.id] : []))
         #expect(delegate.events == (dispatch ? ["begin", "end", "doubleClick"] : ["begin", "end"]))
         #expect(splitView.nativeTrackingCount == (dispatch && handled ? 0 : 1))
-        #expect(splitView.consumedCount == (dispatch && handled ? 1 : 0))
+        let releaseWasOffered = clickCount == 2 && !drag
+        #expect(splitView.consumedCount == (releaseWasOffered ? 1 : 0))
+        if splitView.nativeTrackingCount == 1 {
+            #expect(splitView.queuedAtNativeTracking.count == 1,
+                    "Native tracking must still find the event in the queue")
+        }
         #expect(controller.internalController.activeDividerDragSessions == 0)
         #expect(controller.allPaneIds.count == 2)
     }

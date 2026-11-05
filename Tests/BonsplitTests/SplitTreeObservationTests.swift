@@ -89,6 +89,31 @@ struct SplitTreeObservationTests {
         #expect(!splitView.isHidden)
     }
 
+    @Test("A live registration blocks another for the same scope until it fires")
+    func gateKeepsOneRegistrationPerScope() throws {
+        let gate = SplitTreeObservationGate()
+        let scope = [ObjectIdentifier(Tick())]
+        let first = try #require(gate.armIfNeeded(scope: scope))
+        #expect(gate.armIfNeeded(scope: scope) == nil)
+        #expect(gate.consume(first))
+        #expect(!gate.consume(first), "A generation fires once")
+        #expect(gate.armIfNeeded(scope: scope) != nil)
+    }
+
+    @Test("A scope change retires the old registration without losing the new one")
+    func gateRetiresGenerationOnScopeChange() throws {
+        let gate = SplitTreeObservationGate()
+        let oldOwner = Tick()
+        let newOwner = Tick()
+        let old = try #require(gate.armIfNeeded(scope: [ObjectIdentifier(oldOwner)]))
+        let new = try #require(gate.armIfNeeded(scope: [ObjectIdentifier(newOwner)]))
+        #expect(old != new)
+        #expect(!gate.consume(old), "A retired registration must not re-render the tree")
+        #expect(gate.armIfNeeded(scope: [ObjectIdentifier(newOwner)]) == nil,
+                "The retired firing must not disarm the current registration")
+        #expect(gate.consume(new))
+    }
+
     /// The root posts each observed re-render with `DispatchQueue.main.async`.
     /// This test runs as a main-queue job, so that block can run only while
     /// the test is suspended; queue behind it before reading the counts.

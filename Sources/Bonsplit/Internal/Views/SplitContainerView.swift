@@ -134,25 +134,28 @@ class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
         // A released double-click can be offered to the host after ending
         // the resize session, so its geometry mutation is not drag-owned.
         // Capture the window first: the host's geometry change can detach this
-        // view before the release is dequeued, which would leave it queued.
+        // view. Take the release out of the queue before calling anyone: a nested
+        // event loop in a callback would consume it, and reading it afterward
+        // would wait until `.distantFuture` for a release that already happened.
         let trackingWindow = window
         if inDivider, event.clickCount == 2,
            let splitId = stampedSplitId,
            let trackingController = stampedInternalController,
-           let release = nextDividerEvent(in: trackingWindow, dequeue: false),
-           release.type == .leftMouseUp,
-           release.windowNumber == event.windowNumber {
+           let peeked = nextDividerEvent(in: trackingWindow, dequeue: false),
+           peeked.type == .leftMouseUp,
+           peeked.windowNumber == event.windowNumber,
+           let release = nextDividerEvent(in: trackingWindow, dequeue: true) {
             onDividerDragSession?(false)
             if stampedInternalController === trackingController,
                stampedSplitId == splitId,
                trackingController.findSplit(splitId) != nil,
                let controller = trackingController.publicController,
                controller.delegate?.splitTabBar(controller, didDoubleClickDivider: splitId) == true {
-                _ = nextDividerEvent(in: trackingWindow, dequeue: true)
                 return
             }
-            // The queued release is untouched. Native double-click behavior
-            // remains available to hosts that decline the callback.
+            // Native double-click behavior remains available to hosts that
+            // decline the callback: its tracking loop reads this same release.
+            requeueDividerEvent(release, in: trackingWindow)
             trackDivider(with: event)
             return
         }
@@ -172,6 +175,11 @@ class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
     func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
         window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture,
                           inMode: .eventTracking, dequeue: dequeue)
+    }
+
+    /// Puts a release taken by `nextDividerEvent` back at the head of the queue.
+    func requeueDividerEvent(_ event: NSEvent, in window: NSWindow?) {
+        window?.postEvent(event, atStart: true)
     }
 }
 
@@ -311,7 +319,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         } onChange: { [weak coordinator] in
             DispatchQueue.main.async {
                 guard let coordinator, coordinator.treeObservation.consume(generation) else { return }
+#if DEBUG
                 coordinator.observedTreeRenderCount += 1
+#endif
                 coordinator.renderTree?()
             }
         }
@@ -879,7 +889,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// The root's single armed observation of the split tree.
         let treeObservation = SplitTreeObservationGate()
         /// Tree renders triggered by an observed change, for tests.
+#if DEBUG
         var observedTreeRenderCount = 0
+#endif
 
         init(
             splitState: SplitState,
