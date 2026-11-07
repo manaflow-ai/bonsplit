@@ -648,6 +648,15 @@ struct TabItemView: View {
             HStack(spacing: scaledContentSpacing) {
                 leadingIcon
 
+                if let status = tab.statusIndicator {
+                    TabStatusIndicatorView(
+                        indicator: status,
+                        fallbackColor: TabBarColors.inactiveText(for: appearance),
+                        fontSize: accessoryFontSize
+                    )
+                    .saturation(saturation)
+                }
+
                 Text(tab.title)
                     .font(.system(size: appearance.tabTitleFontSize))
                     .lineLimit(1)
@@ -1100,6 +1109,7 @@ struct TabItemView: View {
         var parts: [String] = []
         if tab.isLoading { parts.append("Loading") }
         if tab.isPinned { parts.append("Pinned") }
+        if let status = tab.statusIndicator, !status.accessibilityLabel.isEmpty { parts.append(status.accessibilityLabel) }
         if tab.showsNotificationBadge { parts.append("Unread") }
         if tab.isDirty { parts.append("Modified") }
         if tab.isAudioMuted {

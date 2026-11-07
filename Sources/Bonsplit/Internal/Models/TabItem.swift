@@ -44,6 +44,8 @@ final class TabItem: Identifiable, Hashable, Codable {
     var isPinned: Bool
     var showsRemoteIndicator: Bool
     var presence: TabPresence?
+    /// Transient host-driven status glyph; deliberately not encoded.
+    var statusIndicator: TabStatusIndicator?
 
     init(
         id: UUID = UUID(),
@@ -60,7 +62,8 @@ final class TabItem: Identifiable, Hashable, Codable {
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
         showsRemoteIndicator: Bool = false,
-        presence: TabPresence? = nil
+        presence: TabPresence? = nil,
+        statusIndicator: TabStatusIndicator? = nil
     ) {
         self.id = id
         self.title = title
@@ -77,6 +80,7 @@ final class TabItem: Identifiable, Hashable, Codable {
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
         self.presence = presence
+        self.statusIndicator = statusIndicator
     }
 
     func hash(into hasher: inout Hasher) {
