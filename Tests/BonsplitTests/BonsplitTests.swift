@@ -6020,3 +6020,27 @@ final class BonsplitTests: XCTestCase {
         XCTAssertEqual(configured.tabWidthMode, .fill)
     }
 }
+
+final class TabStatusIndicatorTests: XCTestCase {
+    @MainActor
+    func testStatusIndicatorRoundTripsAndSurvivesTabMove() {
+        let controller = BonsplitController()
+        let tabId = controller.createTab(title: "Agent", icon: "terminal")!
+        XCTAssertNil(controller.tab(tabId)?.statusIndicator)
+
+        let waiting = TabStatusIndicator(symbolName: "hourglass", color: .gray, accessibilityLabel: "Waiting")
+        controller.updateTab(tabId, statusIndicator: .some(waiting))
+        XCTAssertEqual(controller.tab(tabId)?.statusIndicator, waiting)
+
+        // nil keeps the current value; .some(nil) clears it.
+        controller.updateTab(tabId, title: "Agent 2")
+        XCTAssertEqual(controller.tab(tabId)?.statusIndicator, waiting)
+        controller.updateTab(tabId, statusIndicator: .some(nil))
+        XCTAssertNil(controller.tab(tabId)?.statusIndicator)
+
+        let running = TabStatusIndicator(pulses: true)
+        let split = Bonsplit.Tab(title: "Split", statusIndicator: running)
+        let newPane = controller.splitPane(orientation: .horizontal, withTab: split)!
+        XCTAssertEqual(controller.tabs(inPane: newPane).first?.statusIndicator, running)
+    }
+}
