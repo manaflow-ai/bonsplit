@@ -28,6 +28,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let showsRemoteIndicator: Bool
     /// Shared-terminal presence (attached viewers and grid size); nil hides it.
     public let presence: TabPresence?
+    /// Host-driven status glyph drawn before the title; nil hides it.
+    public let statusIndicator: TabStatusIndicator?
 
     public init(
         id: TabID = TabID(),
@@ -44,7 +46,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
         showsRemoteIndicator: Bool = false,
-        presence: TabPresence? = nil
+        presence: TabPresence? = nil,
+        statusIndicator: TabStatusIndicator? = nil
     ) {
         self.id = id
         self.title = title
@@ -61,6 +64,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
         self.presence = presence
+        self.statusIndicator = statusIndicator
     }
 
     internal init(from tabItem: TabItem) {
@@ -79,5 +83,6 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isPinned = tabItem.isPinned
         self.showsRemoteIndicator = tabItem.showsRemoteIndicator
         self.presence = tabItem.presence
+        self.statusIndicator = tabItem.statusIndicator
     }
 }

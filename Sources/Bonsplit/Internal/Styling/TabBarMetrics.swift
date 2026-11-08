@@ -27,6 +27,7 @@ enum TabBarMetrics {
     static let closeIconSize: CGFloat = 9
     static let dirtyIndicatorSize: CGFloat = 8
     static let notificationBadgeSize: CGFloat = 6
+    static let statusDotSize: CGFloat = 7
     static let contentSpacing: CGFloat = 6
 
     // MARK: - Drop Indicator
