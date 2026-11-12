@@ -26,6 +26,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
     public let isPinned: Bool
     /// Whether the tab should show a remote-connection indicator (library consumer-defined meaning, e.g. SSH).
     public let showsRemoteIndicator: Bool
+    /// Shared-terminal presence (attached viewers and grid size); nil hides it.
+    public let presence: TabPresence?
 
     public init(
         id: TabID = TabID(),
@@ -41,7 +43,8 @@ public struct Tab: Identifiable, Hashable, Sendable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
-        showsRemoteIndicator: Bool = false
+        showsRemoteIndicator: Bool = false,
+        presence: TabPresence? = nil
     ) {
         self.id = id
         self.title = title
@@ -57,6 +60,7 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
+        self.presence = presence
     }
 
     internal init(from tabItem: TabItem) {
@@ -74,5 +78,6 @@ public struct Tab: Identifiable, Hashable, Sendable {
         self.isAudioPlaying = tabItem.isAudioPlaying
         self.isPinned = tabItem.isPinned
         self.showsRemoteIndicator = tabItem.showsRemoteIndicator
+        self.presence = tabItem.presence
     }
 }

@@ -71,6 +71,11 @@ public protocol BonsplitDelegate: AnyObject {
 
     // MARK: - Geometry
 
+    /// Called after a divider double-click is released without dragging.
+    /// Return `true` to consume the click, or `false` to retain native handling.
+    /// The split UUID identifies the divider, independent of pane focus.
+    func splitTabBar(_ controller: BonsplitController, didDoubleClickDivider splitId: UUID) -> Bool
+
     /// Called when any pane geometry changes (resize, split, close)
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot)
 
@@ -110,6 +115,7 @@ public extension BonsplitDelegate {
     func splitTabBar(_ controller: BonsplitController, didRequestCustomAction identifier: String, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestTabContextAction action: TabContextAction, for tab: Tab, inPane pane: PaneID) {}
     func splitTabBar(_ controller: BonsplitController, didRequestTabMoveToDestination destinationId: String, for tab: Tab, inPane pane: PaneID) {}
+    func splitTabBar(_ controller: BonsplitController, didDoubleClickDivider splitId: UUID) -> Bool { false }
     func splitTabBar(_ controller: BonsplitController, didChangeGeometry snapshot: LayoutSnapshot) {}
     func splitTabBar(_ controller: BonsplitController, shouldNotifyDuringDrag: Bool) -> Bool { false }
     func splitTabBarDividerDragDidBegin(_ controller: BonsplitController) {}

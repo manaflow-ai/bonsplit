@@ -68,6 +68,105 @@ final class TabBarResizeAnchorTests: XCTestCase {
         )
     }
 
+    func testVerticalMouseWheelScrollsOverflowingStripHorizontally() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        let pointInStrip = harness.scrollView.convert(NSPoint(x: 100, y: 10), to: nil)
+
+        XCTAssertTrue(
+            harness.registry.scrollHorizontallyForMouseWheel(
+                deltaX: 0,
+                deltaY: -3,
+                hasPreciseScrollingDeltas: false,
+                locationInWindow: pointInStrip,
+                window: harness.window
+            )
+        )
+        let scrolledOffset = harness.scrollView.contentView.bounds.origin.x
+        XCTAssertGreaterThan(scrolledOffset, 0, "Wheel down must move toward the trailing overflowed tabs.")
+
+        harness.registry.scrollHorizontallyForMouseWheel(
+            deltaX: 0,
+            deltaY: -1000,
+            hasPreciseScrollingDeltas: false,
+            locationInWindow: pointInStrip,
+            window: harness.window
+        )
+        XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 400, accuracy: 0.5)
+
+        harness.registry.scrollHorizontallyForMouseWheel(
+            deltaX: 0,
+            deltaY: 1000,
+            hasPreciseScrollingDeltas: false,
+            locationInWindow: pointInStrip,
+            window: harness.window
+        )
+        XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
+    }
+
+    func testMouseWheelLeavesTrackpadAndOutsideEventsAlone() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.registry.attachScrollView(harness.scrollView)
+        let pointInStrip = harness.scrollView.convert(NSPoint(x: 100, y: 10), to: nil)
+
+        XCTAssertFalse(
+            harness.registry.scrollHorizontallyForMouseWheel(
+                deltaX: 0,
+                deltaY: -3,
+                hasPreciseScrollingDeltas: true,
+                locationInWindow: pointInStrip,
+                window: harness.window
+            ),
+            "Trackpad scrolling keeps its native handling."
+        )
+        XCTAssertFalse(
+            harness.registry.scrollHorizontallyForMouseWheel(
+                deltaX: -3,
+                deltaY: 0,
+                hasPreciseScrollingDeltas: false,
+                locationInWindow: pointInStrip,
+                window: harness.window
+            ),
+            "Horizontal wheel deltas already scroll the strip natively."
+        )
+        XCTAssertFalse(
+            harness.registry.scrollHorizontallyForMouseWheel(
+                deltaX: 0,
+                deltaY: -3,
+                hasPreciseScrollingDeltas: false,
+                locationInWindow: NSPoint(x: 100, y: 500),
+                window: harness.window
+            ),
+            "Wheel events outside the strip belong to whatever is under the pointer."
+        )
+        XCTAssertEqual(harness.scrollView.contentView.bounds.origin.x, 0, accuracy: 0.5)
+    }
+
+    func testMouseWheelPassesThroughWhenTabsFit() throws {
+        let harness = try makeGeometryRegistryHarness()
+        defer { harness.window.orderOut(nil) }
+
+        harness.scrollView.documentView?.setFrameSize(
+            NSSize(width: 150, height: TabBarMetrics.barHeight)
+        )
+        harness.registry.attachScrollView(harness.scrollView)
+        let pointInStrip = harness.scrollView.convert(NSPoint(x: 100, y: 10), to: nil)
+
+        XCTAssertFalse(
+            harness.registry.scrollHorizontallyForMouseWheel(
+                deltaX: 0,
+                deltaY: -3,
+                hasPreciseScrollingDeltas: false,
+                locationInWindow: pointInStrip,
+                window: harness.window
+            )
+        )
+    }
+
     func testSelectedOverflowTabTracksLiveGeometryAndFullyRevealsChrome() throws {
         let harness = try makeTabBarHarness(
             initialSize: NSSize(width: 520, height: TabBarMetrics.barHeight),

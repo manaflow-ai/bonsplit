@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `BonsplitController.addPaneWithAutoLayout(from:withTab:)` adds a pane and retiles all panes in
+  Zellij's default layout: the right column fills to four panes before a new column opens.
+- Pane focus memory. `navigateFocus(direction:)` and `adjacentPane(to:direction:)` return the most
+  recently focused pane that shares the requested edge, so moving across an edge and back returns to
+  the origin pane. Closing the focused pane returns to the most recently used remaining pane.
 - `BonsplitConfiguration.Appearance.tabWidthMode` (`TabWidthMode`) to control tab sizing.
   - `.fixed` (default) keeps the historical fixed-width + horizontal-scroll layout unchanged.
   - `.fill` stretches tabs to fill the pane's available tab-bar width, distributing the
@@ -21,6 +26,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   control-shortcut number hint still appears (crossfading over the favicon on
   modifier-hold) with its width reserved so the tab never resizes. Pinned terminal (and
   other non-browser) tabs keep their titled layout.
+
+### Fixed
+- A tab title change no longer re-renders the whole tab bar. `TabItem` is now a
+  reference type, so writing one tab's title touches that object instead of the
+  `@Observable` `PaneState.tabs` array, and observation delivers the change to
+  the one `TabItemView` that reads the title. Inserting, removing, and moving
+  tabs still publish through `tabs`. Equality and hashing were already by `id`,
+  so identity comparisons are unaffected.
+- Split-button icons no longer re-resolve their SF Symbol on every tab bar body
+  evaluation. `TabBarStyling.splitActionSystemImage(for:)` tested whether a name
+  was a real symbol by allocating an `NSImage` and discarding it, which cost
+  ~27µs per call and ran once per button per evaluation. Results are now
+  memoized by name, which the symbol catalog makes safe: the answer cannot
+  change while the process runs.
 
 ## [1.1.1] - 2025-01-29
 

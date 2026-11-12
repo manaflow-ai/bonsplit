@@ -5,6 +5,7 @@
 "command.moveTabToRightPane.title" = "Move to Right Pane";
 "tabContext.renameTab" = "Rename Tab…";
 "tabContext.removeCustomTabName" = "Remove Custom Tab Name";
+"tabContext.closeTab" = "Close Tab";
 "tabContext.closeTabsToLeft" = "Close Tabs to Left";
 "tabContext.closeTabsToRight" = "Close Tabs to Right";
 "tabContext.closeOtherTabs" = "Close Other Tabs";
@@ -41,3 +42,15 @@
 "tabContext.forkConversation.newWorkspace" = "New Workspace";
 "tabContext.disconnectRemote" = "Disconnect SSH";
 "tabContext.remoteConnectedAccessibility" = "Connected over SSH";
+"tab.close.accessibilityLabel" = "Close Tab";
+
+/* Shared terminal sizing */
+"tabContext.sizeToMyWindow" = "Size to My Window";
+"tabContext.terminalSizeHeader" = "Terminal Size";
+"tabContext.sizeMode.largest" = "Largest Window";
+"tabContext.sizeMode.priority" = "Priority List…";
+"tabContext.sizeMode.fixed" = "Fixed Size…";
+"tabContext.disconnectOthers" = "Disconnect Others…";
+"tabContext.sizeMode.followLatest" = "Follow Latest";
+"tabContext.sizeMode.fitEveryone" = "Fit Everyone";
+"tabPresence.toggleSizePanel" = "Shows or hides the terminal size panel";

@@ -16,15 +16,36 @@ final class SplitViewController {
     @ObservationIgnored private var paneStatesById: [PaneID: PaneState]
     @ObservationIgnored private var paneIdsByTabId: [UUID: PaneID]
 
+    /// Focus memory: the sequence number of each pane's latest focus. A pane
+    /// that has never been focused has no entry and ranks oldest.
+    @ObservationIgnored private var paneFocusSequence: [PaneID: UInt64] = [:]
+    @ObservationIgnored private var nextPaneFocusSequence: UInt64 = 1
+
+    /// Creation order, which auto layout uses to place panes the way Zellij
+    /// does. Panes of a host-supplied tree take their layout order.
+    @ObservationIgnored private var paneCreationOrdinal: [PaneID: UInt64] = [:]
+    @ObservationIgnored private var nextPaneCreationOrdinal: UInt64 = 0
+
     /// Currently zoomed pane. When set, rendering should only show this pane.
     var zoomedPaneId: PaneID?
 
-    /// Currently focused pane ID
-    var focusedPaneId: PaneID?
+    /// Currently focused pane ID. Every change of pane records focus memory,
+    /// so directional navigation and close can return to where the user was.
+    var focusedPaneId: PaneID? {
+        didSet {
+            guard let focusedPaneId, focusedPaneId != oldValue else { return }
+            recordFocus(focusedPaneId)
+        }
+    }
 
     /// The only tab-drag state. SwiftUI observes this for visual feedback and
     /// hit-testing while drop delegates read the same value synchronously.
     var tabDragSession: TabDragSession?
+
+    /// A dropped tab whose drag image is still sliding into its slot: its
+    /// item draws nothing there until the image lands (``beginTabSettle(_:)``).
+    var settlingTabId: UUID?
+    @ObservationIgnored var tabSettleGeneration = 0
 
     /// Monotonic counter incremented on each drag start. The current value is
     /// copied into ``tabDragSession`` to invalidate stale lifecycle callbacks.
@@ -66,6 +87,66 @@ final class SplitViewController {
 
     /// Callback for geometry changes
     var onGeometryChange: (() -> Void)?
+
+    @ObservationIgnored private var tabBarRenderWindowStart: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowLastRender: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowRenderCount = 0
+    @ObservationIgnored private var tabBarRenderWindowTabCount = 0
+    @ObservationIgnored private var tabBarRenderWindowPanes: Set<PaneID> = []
+    @ObservationIgnored private var tabBarRenderWindowReported = false
+
+    /// Records a tab-bar body evaluation and emits one diagnostic for a sustained
+    /// render window. This is intentionally inactive unless the host installs a
+    /// diagnostic handler. Hosts that install the handler pay the small counter
+    /// cost needed to identify a sustained render storm.
+    func recordTabBarRender(
+        paneId: PaneID,
+        tabCount: Int,
+        now: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
+        guard let handler = publicController?.onTabBarRenderDiagnostic else {
+            resetTabBarRenderWindow()
+            return
+        }
+
+        if tabBarRenderWindowStart == 0
+            || now - tabBarRenderWindowLastRender > 0.1
+            || now - tabBarRenderWindowStart > 2 {
+            resetTabBarRenderWindow()
+            tabBarRenderWindowStart = now
+        }
+
+        tabBarRenderWindowLastRender = now
+        tabBarRenderWindowRenderCount += 1
+        tabBarRenderWindowTabCount += tabCount
+        tabBarRenderWindowPanes.insert(paneId)
+
+        let elapsed = now - tabBarRenderWindowStart
+        guard !tabBarRenderWindowReported,
+              elapsed >= 0.5,
+              tabBarRenderWindowRenderCount >= 32 else {
+            return
+        }
+
+        tabBarRenderWindowReported = true
+        handler(
+            TabBarRenderDiagnostic(
+                elapsed: elapsed,
+                renderCount: tabBarRenderWindowRenderCount,
+                tabCount: tabBarRenderWindowTabCount,
+                paneCount: tabBarRenderWindowPanes.count
+            )
+        )
+    }
+
+    private func resetTabBarRenderWindow() {
+        tabBarRenderWindowStart = 0
+        tabBarRenderWindowLastRender = 0
+        tabBarRenderWindowRenderCount = 0
+        tabBarRenderWindowTabCount = 0
+        tabBarRenderWindowPanes.removeAll(keepingCapacity: true)
+        tabBarRenderWindowReported = false
+    }
 
     /// Live divider drag sessions across every split in this tree (0 or 1 in
     /// practice — AppKit tracks one divider at a time). Sessions bracket the
@@ -125,6 +206,12 @@ final class SplitViewController {
         self.paneStatesById = indexes.panes
         self.paneIdsByTabId = indexes.tabOwners
         self.focusedPaneId = initialFocusedPaneId
+        for paneId in resolvedRoot.allPaneIds {
+            assignCreationOrdinal(paneId)
+        }
+        if let initialFocusedPaneId {
+            recordFocus(initialFocusedPaneId)
+        }
     }
 
     // MARK: - Indexed State
@@ -177,13 +264,47 @@ final class SplitViewController {
         for tab in pane.tabs {
             paneIdsByTabId[tab.id] = pane.id
         }
+        assignCreationOrdinal(pane.id)
     }
 
     private func unregisterPane(_ paneId: PaneID) {
+        paneFocusSequence.removeValue(forKey: paneId)
+        paneCreationOrdinal.removeValue(forKey: paneId)
         guard let pane = paneStatesById.removeValue(forKey: paneId) else { return }
         for tab in pane.tabs where paneIdsByTabId[tab.id] == paneId {
             paneIdsByTabId.removeValue(forKey: tab.id)
         }
+    }
+
+    private func assignCreationOrdinal(_ paneId: PaneID) {
+        guard paneCreationOrdinal[paneId] == nil else { return }
+        paneCreationOrdinal[paneId] = nextPaneCreationOrdinal
+        nextPaneCreationOrdinal += 1
+    }
+
+    // MARK: - Focus Memory
+
+    private func recordFocus(_ paneId: PaneID) {
+        paneFocusSequence[paneId] = nextPaneFocusSequence
+        nextPaneFocusSequence += 1
+    }
+
+    /// Focus recency of a pane. Larger is more recent; 0 means never focused.
+    func focusRecency(of paneId: PaneID) -> UInt64 {
+        paneFocusSequence[paneId] ?? 0
+    }
+
+    /// The most recently focused pane among `paneIds`, or the first of them
+    /// when none has been focused.
+    func mostRecentlyFocusedPane(among paneIds: [PaneID]) -> PaneID? {
+        var best: (paneId: PaneID, recency: UInt64)?
+        for paneId in paneIds {
+            let recency = focusRecency(of: paneId)
+            if best == nil || recency > best!.recency {
+                best = (paneId, recency)
+            }
+        }
+        return best?.paneId
     }
 
     // MARK: - Focus Management
@@ -232,6 +353,44 @@ final class SplitViewController {
     }
 
     // MARK: - Split Operations
+
+    /// Inserts a new pane beside the entire existing tree.
+    ///
+    /// Unlike `splitPane`, this operation does not descend into a leaf. The
+    /// existing root remains intact as one child of the new root split.
+    @discardableResult
+    func splitRootWithTab(
+        orientation: SplitOrientation,
+        tab: TabItem,
+        insertFirst: Bool,
+        initialDividerPosition: CGFloat?
+    ) -> PaneID {
+        clearPaneZoom()
+        let newPane = PaneState(tabs: [tab])
+        let existingRoot = rootNode
+        let splitState: SplitState
+        if insertFirst {
+            splitState = SplitState(
+                orientation: orientation,
+                first: .pane(newPane),
+                second: existingRoot,
+                dividerPosition: normalizedInitialDividerPosition(initialDividerPosition),
+                animationOrigin: .fromFirst
+            )
+        } else {
+            splitState = SplitState(
+                orientation: orientation,
+                first: existingRoot,
+                second: .pane(newPane),
+                dividerPosition: normalizedInitialDividerPosition(initialDividerPosition),
+                animationOrigin: .fromSecond
+            )
+        }
+        rootNode = .split(splitState)
+        registerPane(newPane)
+        focusedPaneId = newPane.id
+        return newPane.id
+    }
 
     /// Split the specified pane in the given orientation
     func splitPane(
@@ -413,6 +572,63 @@ final class SplitViewController {
         }
     }
 
+    // MARK: - Auto Layout
+
+    /// Adds a pane holding `tab` and arranges every pane in Zellij's default
+    /// tiled swap layout, the layout cmux-tui's Alt-n reproduces. Panes keep
+    /// their identity and tabs; only the split structure is rebuilt, so
+    /// manual divider positions are replaced by equal sizes.
+    @discardableResult
+    func insertPaneWithAutoLayout(tab: TabItem) -> PaneID {
+        clearPaneZoom()
+        let newPane = PaneState(tabs: [tab])
+        let existingPanes = rootNode.allPanes.enumerated().sorted { a, b in
+            let aOrdinal = paneCreationOrdinal[a.element.id] ?? UInt64(a.offset)
+            let bOrdinal = paneCreationOrdinal[b.element.id] ?? UInt64(b.offset)
+            return aOrdinal < bOrdinal
+        }.map(\.element)
+        registerPane(newPane)
+        rootNode = Self.autoLayoutRoot(for: existingPanes + [newPane])
+        focusedPaneId = newPane.id
+        return newPane.id
+    }
+
+    /// Column sizes of Zellij's default `vertical` swap layout for `count`
+    /// panes in creation order. Up to five panes, the first pane keeps the
+    /// left column and the rest share a column. Beyond that, columns hold
+    /// four panes and the first column takes the remainder, so every new
+    /// pane fills the right column before another column opens.
+    static func autoLayoutColumnSizes(paneCount count: Int) -> [Int] {
+        guard count > 1 else { return count == 1 ? [1] : [] }
+        if count <= 5 { return [1, count - 1] }
+        let remainder = count % 4
+        let first = remainder == 0 ? 4 : remainder
+        return [first] + Array(repeating: 4, count: (count - first) / 4)
+    }
+
+    private static func autoLayoutRoot(for panes: [PaneState]) -> SplitNode {
+        var columns: [SplitNode] = []
+        var start = 0
+        for size in autoLayoutColumnSizes(paneCount: panes.count) {
+            let column = panes[start..<(start + size)].map { SplitNode.pane($0) }
+            columns.append(equalSplit(column, orientation: .vertical))
+            start += size
+        }
+        return equalSplit(columns, orientation: .horizontal)
+    }
+
+    /// Chains `nodes` into splits whose divider positions give every node the
+    /// same share of the axis.
+    private static func equalSplit(_ nodes: [SplitNode], orientation: SplitOrientation) -> SplitNode {
+        guard nodes.count > 1 else { return nodes[0] }
+        return .split(SplitState(
+            orientation: orientation,
+            first: nodes[0],
+            second: equalSplit(Array(nodes.dropFirst()), orientation: orientation),
+            dividerPosition: 1 / CGFloat(nodes.count)
+        ))
+    }
+
     private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat {
         guard let position else { return 0.5 }
         return min(max(position, 0), 1)
@@ -509,8 +725,16 @@ final class SplitViewController {
 
         // Only the pane that owned focus may transfer it to its sibling. Repair a
         // stale focus independently so an unrelated close cannot choose its target.
+        // Closing the focused pane returns to the pane the user used last, as
+        // Zellij and tmux do. The sibling that absorbs the space is only the
+        // fallback for a tree whose remaining panes were never focused.
         if shouldFocusSibling {
-            focusedPaneId = siblingPaneId ?? rootNode.allPaneIds.first
+            let remaining = rootNode.allPaneIds
+            if remaining.contains(where: { focusRecency(of: $0) > 0 }) {
+                focusedPaneId = mostRecentlyFocusedPane(among: remaining)
+            } else {
+                focusedPaneId = siblingPaneId ?? remaining.first
+            }
         } else if focusedPane == nil {
             focusedPaneId = rootNode.allPaneIds.first
         }
@@ -638,76 +862,83 @@ final class SplitViewController {
 
     /// Navigate focus to an adjacent pane based on spatial position
     func navigateFocus(direction: NavigationDirection) {
-        guard let currentPaneId = focusedPaneId else { return }
-
-        let allPaneBounds = rootNode.computePaneBounds()
-        guard let currentBounds = allPaneBounds.first(where: { $0.paneId == currentPaneId })?.bounds else { return }
-
-        if let targetPaneId = findBestNeighbor(from: currentBounds, currentPaneId: currentPaneId,
-                                               direction: direction, allPaneBounds: allPaneBounds) {
-            focusPane(targetPaneId)
+        guard let currentPaneId = focusedPaneId,
+              let targetPaneId = adjacentPane(to: currentPaneId, direction: direction) else {
+            // No neighbor found = at edge, do nothing
+            return
         }
-        // No neighbor found = at edge, do nothing
+        focusPane(targetPaneId)
     }
 
-    /// Find the closest pane in the requested direction from the given pane.
+    /// The pane that directional navigation from `paneId` reaches.
+    ///
+    /// Among the panes that share the requested edge, the most recently
+    /// focused one wins, the rule Zellij uses. Moving right and then left
+    /// therefore returns to the pane you came from, even when a column holds
+    /// several panes. Panes never focused rank by edge overlap, then layout
+    /// order, so a fresh layout lands on the pane most directly across.
     func adjacentPane(to paneId: PaneID, direction: NavigationDirection) -> PaneID? {
         let allPaneBounds = rootNode.computePaneBounds()
         guard let currentBounds = allPaneBounds.first(where: { $0.paneId == paneId })?.bounds else {
             return nil
         }
-        return findBestNeighbor(
+        let neighbors = Self.directionalNeighbors(
             from: currentBounds,
             currentPaneId: paneId,
             direction: direction,
             allPaneBounds: allPaneBounds
         )
+        return neighbors.max { a, b in
+            let aRecency = focusRecency(of: a.paneId)
+            let bRecency = focusRecency(of: b.paneId)
+            if aRecency != bRecency { return aRecency < bRecency }
+            if abs(a.overlap - b.overlap) > Self.navigationEpsilon { return a.overlap < b.overlap }
+            return a.layoutOrder > b.layoutOrder
+        }?.paneId
     }
 
-    private func findBestNeighbor(from currentBounds: CGRect, currentPaneId: PaneID,
-                                  direction: NavigationDirection, allPaneBounds: [PaneBounds]) -> PaneID? {
-        let epsilon: CGFloat = 0.001
+    private static let navigationEpsilon: CGFloat = 0.001
 
-        // Filter to panes in the target direction
-        let candidates = allPaneBounds.filter { paneBounds in
-            guard paneBounds.paneId != currentPaneId else { return false }
-            let b = paneBounds.bounds
-            switch direction {
-            case .left:  return b.maxX <= currentBounds.minX + epsilon
-            case .right: return b.minX >= currentBounds.maxX - epsilon
-            case .up:    return b.maxY <= currentBounds.minY + epsilon
-            case .down:  return b.minY >= currentBounds.maxY - epsilon
+    private struct DirectionalNeighbor {
+        let paneId: PaneID
+        let overlap: CGFloat
+        let layoutOrder: Int
+    }
+
+    /// Panes that touch `currentBounds` on the requested edge with a
+    /// positive perpendicular overlap. A split tree tiles its rect, so any
+    /// pane that is not on the outer edge has at least one.
+    private static func directionalNeighbors(
+        from currentBounds: CGRect,
+        currentPaneId: PaneID,
+        direction: NavigationDirection,
+        allPaneBounds: [PaneBounds]
+    ) -> [DirectionalNeighbor] {
+        let epsilon = navigationEpsilon
+        return allPaneBounds.enumerated().compactMap { order, candidate in
+            let b = candidate.bounds
+            guard candidate.paneId != currentPaneId, b.width > epsilon, b.height > epsilon else {
+                return nil
             }
-        }
-
-        guard !candidates.isEmpty else { return nil }
-
-        // Score by overlap (perpendicular axis) and distance
-        let scored: [(PaneID, CGFloat, CGFloat)] = candidates.map { c in
+            let gap: CGFloat
             let overlap: CGFloat
-            let distance: CGFloat
-
             switch direction {
-            case .left, .right:
-                // Vertical overlap for horizontal movement
-                overlap = max(0, min(currentBounds.maxY, c.bounds.maxY) - max(currentBounds.minY, c.bounds.minY))
-                distance = direction == .left ? (currentBounds.minX - c.bounds.maxX) : (c.bounds.minX - currentBounds.maxX)
-            case .up, .down:
-                // Horizontal overlap for vertical movement
-                overlap = max(0, min(currentBounds.maxX, c.bounds.maxX) - max(currentBounds.minX, c.bounds.minX))
-                distance = direction == .up ? (currentBounds.minY - c.bounds.maxY) : (c.bounds.minY - currentBounds.maxY)
+            case .left:
+                gap = currentBounds.minX - b.maxX
+                overlap = min(currentBounds.maxY, b.maxY) - max(currentBounds.minY, b.minY)
+            case .right:
+                gap = b.minX - currentBounds.maxX
+                overlap = min(currentBounds.maxY, b.maxY) - max(currentBounds.minY, b.minY)
+            case .up:
+                gap = currentBounds.minY - b.maxY
+                overlap = min(currentBounds.maxX, b.maxX) - max(currentBounds.minX, b.minX)
+            case .down:
+                gap = b.minY - currentBounds.maxY
+                overlap = min(currentBounds.maxX, b.maxX) - max(currentBounds.minX, b.minX)
             }
-
-            return (c.paneId, overlap, distance)
+            guard abs(gap) <= epsilon, overlap > epsilon else { return nil }
+            return DirectionalNeighbor(paneId: candidate.paneId, overlap: overlap, layoutOrder: order)
         }
-
-        // Sort: prefer more overlap, then closer distance
-        let sorted = scored.sorted { a, b in
-            if abs(a.1 - b.1) > epsilon { return a.1 > b.1 }
-            return a.2 < b.2
-        }
-
-        return sorted.first?.0
     }
 
     /// Create a new tab in the focused pane

@@ -106,6 +106,13 @@ enum TabBarColors {
         return NSColor.white.withAlphaComponent(alpha)
     }
 
+    /// Whether chrome drawn over the tab bar should use its dark palette:
+    /// the same WCAG choice as the tab text, or `nil` without a custom
+    /// background, where the view's color scheme decides.
+    static func usesDarkChrome(for appearance: BonsplitConfiguration.Appearance) -> Bool? {
+        semanticTabBarBackgroundColor(for: appearance).map { !$0.isBonsplitLightColor }
+    }
+
     static func paneBackground(for appearance: BonsplitConfiguration.Appearance) -> Color {
         Color(nsColor: paneBackgroundColor(for: appearance) ?? .textBackgroundColor)
     }
@@ -263,6 +270,62 @@ enum TabBarColors {
         return tone.withAlphaComponent(alpha)
     }
 
+    /// Colors of the shared-terminal presence accessory on a tab.
+    struct PresenceColors {
+        /// The surface under the accessory (tab fill or bar).
+        let surface: NSColor
+        let fill: NSColor
+        let glyph: NSColor
+        let text: NSColor
+        let line: NSColor
+    }
+
+    /// The accessory draws on the tab's own fill when selected (unless the
+    /// host shares one backdrop), else on the bar, in the tab bar's text
+    /// color. Every color is dynamic, so system fallbacks resolve in the
+    /// appearance that draws them.
+    static func presenceColors(
+        for appearance: BonsplitConfiguration.Appearance,
+        isSelected: Bool
+    ) -> PresenceColors {
+        let surface = nsColorPresenceSurface(for: appearance, isSelected: isSelected)
+        let foreground = nsColorActiveText(for: appearance)
+        func color(_ role: BonsplitContrastPalette.Role) -> NSColor {
+            BonsplitContrastPalette.dynamicColor(role, background: surface, foreground: foreground)
+        }
+        return PresenceColors(
+            surface: surface,
+            fill: color(.fill),
+            glyph: color(.glyph),
+            text: color(.text),
+            line: color(.line)
+        )
+    }
+
+    private static func nsColorPresenceSurface(
+        for appearance: BonsplitConfiguration.Appearance,
+        isSelected: Bool
+    ) -> NSColor {
+        guard isSelected, !appearance.usesSharedBackdrop else {
+            return nsColorBarBackground(for: appearance)
+        }
+        guard let custom = tabBarBackgroundColor(for: appearance) else {
+            return .controlBackgroundColor
+        }
+        return custom.isBonsplitLightColor
+            ? custom.bonsplitDarken(by: 0.065)
+            : custom.bonsplitLighten(by: 0.12)
+    }
+
+    /// The divider between split panes: `dividerHex` when set, otherwise the chrome separator.
+    static func nsColorSplitDivider(for appearance: BonsplitConfiguration.Appearance) -> NSColor {
+        if let value = appearance.chromeColors.dividerHex,
+           let divider = NSColor(bonsplitHex: value) {
+            return divider
+        }
+        return nsColorSeparator(for: appearance)
+    }
+
     static var dropIndicator: Color {
         Color.accentColor
     }
@@ -338,6 +401,12 @@ private extension NSColor {
         self.init(red: red, green: green, blue: blue, alpha: alpha)
     }
 
+    /// Whether dark text reads better than light text on this color.
+    ///
+    /// Compares WCAG contrast of black and white against the color's relative
+    /// luminance, the same choice the host app makes for its sidebar. A plain
+    /// gamma-space brightness cutoff called saturated mid-tones such as
+    /// `#E44330` dark and drew white text at 3.2:1 where black reads at 5.4:1.
     var isBonsplitLightColor: Bool {
         var red: CGFloat = 0
         var green: CGFloat = 0
@@ -345,8 +414,15 @@ private extension NSColor {
         var alpha: CGFloat = 0
         let color = usingColorSpace(.sRGB) ?? self
         color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let luminance = (0.299 * red) + (0.587 * green) + (0.114 * blue)
-        return luminance > 0.5
+        func linearized(_ component: CGFloat) -> CGFloat {
+            component <= 0.03928
+                ? component / 12.92
+                : CGFloat(pow(Double((component + 0.055) / 1.055), 2.4))
+        }
+        let luminance = 0.2126 * linearized(red) + 0.7152 * linearized(green) + 0.0722 * linearized(blue)
+        let blackContrast = (luminance + 0.05) / 0.05
+        let whiteContrast = 1.05 / (luminance + 0.05)
+        return blackContrast > whiteContrast
     }
 
     func bonsplitSaturating(by amount: Double) -> NSColor {

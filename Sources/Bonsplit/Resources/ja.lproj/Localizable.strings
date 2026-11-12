@@ -5,6 +5,7 @@
 "command.moveTabToRightPane.title" = "右のペインへ移動";
 "tabContext.renameTab" = "タブ名を変更…";
 "tabContext.removeCustomTabName" = "カスタムタブ名を削除";
+"tabContext.closeTab" = "タブを閉じる";
 "tabContext.closeTabsToLeft" = "左側のタブを閉じる";
 "tabContext.closeTabsToRight" = "右側のタブを閉じる";
 "tabContext.closeOtherTabs" = "他のタブを閉じる";
@@ -41,3 +42,15 @@
 "tabContext.forkConversation.newWorkspace" = "新規ワークスペース";
 "tabContext.disconnectRemote" = "SSH接続を解除";
 "tabContext.remoteConnectedAccessibility" = "SSH接続中";
+"tab.close.accessibilityLabel" = "タブを閉じる";
+
+/* Shared terminal sizing */
+"tabContext.sizeToMyWindow" = "ウィンドウにサイズを合わせる";
+"tabContext.terminalSizeHeader" = "ターミナルサイズ";
+"tabContext.sizeMode.largest" = "最大のウィンドウ";
+"tabContext.sizeMode.priority" = "優先リスト…";
+"tabContext.sizeMode.fixed" = "固定サイズ…";
+"tabContext.disconnectOthers" = "他の接続を切断…";
+"tabContext.sizeMode.followLatest" = "最新の入力に合わせる";
+"tabContext.sizeMode.fitEveryone" = "全員に合わせる";
+"tabPresence.toggleSizePanel" = "ターミナルサイズパネルを表示または非表示にします";

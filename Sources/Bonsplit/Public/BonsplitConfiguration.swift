@@ -489,18 +489,24 @@ extension BonsplitConfiguration {
             /// When unset, Bonsplit derives separators from the chrome background.
             public var borderHex: String?
 
+            /// Optional hex color (`#RRGGBB` or `#RRGGBBAA`) for the divider between split panes only.
+            /// When unset, Bonsplit falls back to `borderHex`, then derives it from the chrome background.
+            public var dividerHex: String?
+
             public init(
                 backgroundHex: String? = nil,
                 tabBarBackgroundHex: String? = nil,
                 splitButtonBackdropHex: String? = nil,
                 paneBackgroundHex: String? = nil,
-                borderHex: String? = nil
+                borderHex: String? = nil,
+                dividerHex: String? = nil
             ) {
                 self.backgroundHex = backgroundHex
                 self.tabBarBackgroundHex = tabBarBackgroundHex
                 self.splitButtonBackdropHex = splitButtonBackdropHex
                 self.paneBackgroundHex = paneBackgroundHex
                 self.borderHex = borderHex
+                self.dividerHex = dividerHex
             }
         }
 
@@ -578,7 +584,9 @@ extension BonsplitConfiguration {
             }
         }
 
-        /// When true, split buttons are only visible on hover
+        /// When true, split buttons are only visible while the pointer is over the
+        /// tab bar. They fade in as an overlay instead of reserving a lane, the
+        /// same way they behave in minimal mode.
         public var splitButtonsOnHover: Bool
 
         /// Optional explicit backdrop style for the tab bar's right-side action buttons.

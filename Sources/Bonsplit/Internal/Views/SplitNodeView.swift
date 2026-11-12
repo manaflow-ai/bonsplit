@@ -91,6 +91,27 @@ final class SplitArrangedContainerView: NSView {
     override var mouseDownCanMoveWindow: Bool { false }
 }
 
+/// Gives a pane's own hosting view the controllers its views read from the
+/// environment. A pane host is a separate `NSHostingView`, so it only inherits
+/// `BonsplitView`'s environment while it sits under that view. A host that
+/// updates while detached (a window closing, a pane turning into a split)
+/// otherwise traps on `@Environment(BonsplitController.self)`.
+struct PaneHostEnvironment: ViewModifier {
+    let controller: SplitViewController
+
+    func body(content: Content) -> some View {
+        content
+            .environment(controller)
+            .environment(controller.publicController)
+    }
+}
+
+extension View {
+    func paneHostEnvironment(_ controller: SplitViewController) -> some View {
+        modifier(PaneHostEnvironment(controller: controller))
+    }
+}
+
 /// Wrapper that uses NSHostingController for proper AppKit layout constraints
 struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable {
     @Environment(SplitViewController.self) private var controller
@@ -112,7 +133,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle
         )
-        let hostingController = NonDraggableHostingController(rootView: paneView)
+        let hostingController = NonDraggableHostingController(rootView: AnyView(paneView.paneHostEnvironment(controller)))
         if #available(macOS 13.0, *) {
             // Panes are space-filling: without this, the hosting controller
             // publishes its SwiftUI content's ideal size as intrinsic-size
@@ -169,7 +190,7 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
             tabBarVisibility: tabBarVisibility,
             contentViewLifecycle: contentViewLifecycle
         )
-        context.coordinator.hostingController?.rootView = paneView
+        context.coordinator.hostingController?.rootView = AnyView(paneView.paneHostEnvironment(controller))
     }
 
     func makeCoordinator() -> Coordinator {
@@ -177,6 +198,6 @@ struct SinglePaneWrapper<Content: View, EmptyContent: View>: NSViewRepresentable
     }
 
     class Coordinator {
-        var hostingController: NonDraggableHostingController<PaneContainerView<Content, EmptyContent>>?
+        var hostingController: NonDraggableHostingController<AnyView>?
     }
 }

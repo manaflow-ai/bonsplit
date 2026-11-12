@@ -12,6 +12,7 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case rename
     case clearName
     case copyIdentifiers
+    case close
     case closeToLeft
     case closeToRight
     case closeOthers
@@ -37,8 +38,51 @@ public enum TabContextAction: String, CaseIterable, Sendable {
     case forkConversationBottom
     case forkConversationNewTab
     case forkConversationNewWorkspace
+    /// Makes this device's window set the shared terminal's size.
+    case sizeToMyWindow
+    /// Sets the shared terminal's sizing mode to ``TabPresence/SizeMode/latest``.
+    case sizeModeLatest
+    /// Sets the sizing mode to ``TabPresence/SizeMode/smallest``.
+    case sizeModeSmallest
+    /// Sets the sizing mode to ``TabPresence/SizeMode/largest``.
+    case sizeModeLargest
+    /// Sets the sizing mode to ``TabPresence/SizeMode/priority``.
+    case sizeModePriority
+    /// Sets the sizing mode to ``TabPresence/SizeMode/fixed``.
+    case sizeModeFixed
+    /// Opens the host's terminal size panel, or closes it when it is already
+    /// open for this tab. Sent by the presence accessory.
+    case toggleSizePanel
+    /// Asks the host to disconnect every other client of the terminal.
+    case disconnectOtherClients
 
     public static let defaultForkConversationDestination: TabContextAction = .forkConversationRight
+
+    /// The context action that selects a sizing mode.
+    ///
+    /// - Parameter mode: The sizing mode.
+    /// - Returns: The matching `sizeMode*` action.
+    public static func sizeMode(_ mode: TabPresence.SizeMode) -> TabContextAction {
+        switch mode {
+        case .latest: return .sizeModeLatest
+        case .smallest: return .sizeModeSmallest
+        case .largest: return .sizeModeLargest
+        case .priority: return .sizeModePriority
+        case .fixed: return .sizeModeFixed
+        }
+    }
+
+    /// The sizing mode this action selects, or nil for any other action.
+    public var sizeMode: TabPresence.SizeMode? {
+        switch self {
+        case .sizeModeLatest: return .latest
+        case .sizeModeSmallest: return .smallest
+        case .sizeModeLargest: return .largest
+        case .sizeModePriority: return .priority
+        case .sizeModeFixed: return .fixed
+        default: return nil
+        }
+    }
 
     public var isForkConversationDestination: Bool {
         switch self {

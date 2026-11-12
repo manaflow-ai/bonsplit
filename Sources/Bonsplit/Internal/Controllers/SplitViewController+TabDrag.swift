@@ -83,5 +83,7 @@ extension SplitViewController {
     func nativeTabDragSessionDidEnd(generation: Int) {
         nativeTabDragSources[generation] = nil
         cancelTabDragIfGenerationMatches(generation)
+        // AppKit ends the session once the drag image has landed.
+        endTabSettle()
     }
 }

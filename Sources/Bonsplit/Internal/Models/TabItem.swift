@@ -14,7 +14,19 @@ extension UTType {
 }
 
 /// Represents a single tab in a pane's tab bar (internal representation)
-struct TabItem: Identifiable, Hashable, Codable {
+///
+/// A reference type on purpose. `PaneState.tabs` is an `@Observable` property,
+/// so when tabs were values, writing one tab's title wrote the whole array and
+/// invalidated every view that had read it: all of `TabBarView`, not just the
+/// one tab that changed. As references, a per-tab write touches only this
+/// object, and observation delivers it to the `TabItemView` that read the
+/// property. `PaneState.tabs` still changes on insert, remove, and move, which
+/// is what `TabBarView` actually needs to see.
+///
+/// Equality and hashing are by `id`, as they were when this was a struct, so
+/// identity comparisons behave the same.
+@Observable
+final class TabItem: Identifiable, Hashable, Codable {
     let id: UUID
     var title: String
     var hasCustomTitle: Bool
@@ -31,6 +43,7 @@ struct TabItem: Identifiable, Hashable, Codable {
     var isAudioPlaying: Bool
     var isPinned: Bool
     var showsRemoteIndicator: Bool
+    var presence: TabPresence?
 
     init(
         id: UUID = UUID(),
@@ -46,7 +59,8 @@ struct TabItem: Identifiable, Hashable, Codable {
         isAudioMuted: Bool = false,
         isAudioPlaying: Bool = false,
         isPinned: Bool = false,
-        showsRemoteIndicator: Bool = false
+        showsRemoteIndicator: Bool = false,
+        presence: TabPresence? = nil
     ) {
         self.id = id
         self.title = title
@@ -62,6 +76,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioPlaying = isAudioPlaying
         self.isPinned = isPinned
         self.showsRemoteIndicator = showsRemoteIndicator
+        self.presence = presence
     }
 
     func hash(into hasher: inout Hasher) {
@@ -87,9 +102,10 @@ struct TabItem: Identifiable, Hashable, Codable {
         case isAudioPlaying
         case isPinned
         case showsRemoteIndicator
+        case presence
     }
 
-    init(from decoder: Decoder) throws {
+    required init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         self.id = try c.decode(UUID.self, forKey: .id)
         self.title = try c.decode(String.self, forKey: .title)
@@ -105,6 +121,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         self.isAudioPlaying = try c.decodeIfPresent(Bool.self, forKey: .isAudioPlaying) ?? false
         self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.showsRemoteIndicator = try c.decodeIfPresent(Bool.self, forKey: .showsRemoteIndicator) ?? false
+        self.presence = try c.decodeIfPresent(TabPresence.self, forKey: .presence)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -123,6 +140,7 @@ struct TabItem: Identifiable, Hashable, Codable {
         try c.encode(isAudioPlaying, forKey: .isAudioPlaying)
         try c.encode(isPinned, forKey: .isPinned)
         try c.encode(showsRemoteIndicator, forKey: .showsRemoteIndicator)
+        try c.encodeIfPresent(presence, forKey: .presence)
     }
 }
 

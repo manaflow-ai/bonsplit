@@ -32,11 +32,12 @@ final class TabBarItemGeometryRegistry {
     private var liveScrollObserver: NSObjectProtocol?
     private var documentFrameObserver: NSObjectProtocol?
     private var documentBoundsObserver: NSObjectProtocol?
+    private var scrollWheelMonitor: Any?
     private var selectedTabId: UUID?
     private var lastObservedSelectedTabDocumentFrame: CGRect?
     private var pendingScrollIntent: ScrollIntent?
     private var expectedProgrammaticOffset: CGFloat?
-    private var trailingObscuredWidth: CGFloat = 0
+    private(set) var trailingObscuredWidth: CGFloat = 0
 
     deinit {
         if let scrollBoundsObserver {
@@ -50,6 +51,9 @@ final class TabBarItemGeometryRegistry {
         }
         if let documentBoundsObserver {
             NotificationCenter.default.removeObserver(documentBoundsObserver)
+        }
+        if let scrollWheelMonitor {
+            NSEvent.removeMonitor(scrollWheelMonitor)
         }
     }
 
@@ -99,9 +103,11 @@ final class TabBarItemGeometryRegistry {
         self.scrollView = scrollView
         makeScrollStackTransparent(scrollView)
         guard let clipView = scrollView?.contentView else {
+            removeScrollWheelMonitor()
             invalidateObservers()
             return
         }
+        installScrollWheelMonitor()
 
         // Keep the documented AppKit scroll signal outside SwiftUI so chrome
         // redraws do not publish geometry into the view graph.
@@ -181,6 +187,75 @@ final class TabBarItemGeometryRegistry {
         setHorizontalOffset(clampedOffset, metrics: metrics)
     }
 
+    /// Scrolls an overflowing strip horizontally for a vertical mouse wheel
+    /// event over it. The strip only scrolls horizontally, so AppKit drops
+    /// those deltas and overflowed tabs would stay unreachable with a mouse.
+    /// Trackpad (precise) and horizontal deltas keep their native handling.
+    /// Returns whether the event was consumed.
+    @discardableResult
+    func scrollHorizontallyForMouseWheel(
+        deltaX: CGFloat,
+        deltaY: CGFloat,
+        hasPreciseScrollingDeltas: Bool,
+        locationInWindow: NSPoint,
+        window: NSWindow?
+    ) -> Bool {
+        guard !hasPreciseScrollingDeltas,
+              abs(deltaY) > abs(deltaX),
+              let scrollView,
+              let window,
+              scrollView.window === window,
+              isVisibleInHierarchy(scrollView),
+              scrollView.visibleRect.contains(scrollView.convert(locationInWindow, from: nil)),
+              let metrics = currentScrollMetrics(),
+              metrics.documentWidth - metrics.viewportWidth > 0.5 else {
+            return false
+        }
+
+        // Wheel down (negative delta) moves toward the trailing tabs, like
+        // it moves down a vertical list.
+        userWillScroll()
+        setHorizontalOffset(
+            metrics.offset - deltaY * TabBarItemGeometryRegistry.mouseWheelLineWidth,
+            metrics: metrics
+        )
+        return true
+    }
+
+    private static let mouseWheelLineWidth: CGFloat = 40
+
+    private func installScrollWheelMonitor() {
+        guard scrollWheelMonitor == nil else { return }
+        scrollWheelMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self else { return event }
+            let consumed = MainActor.assumeIsolated {
+                self.scrollHorizontallyForMouseWheel(
+                    deltaX: event.scrollingDeltaX,
+                    deltaY: event.scrollingDeltaY,
+                    hasPreciseScrollingDeltas: event.hasPreciseScrollingDeltas,
+                    locationInWindow: event.locationInWindow,
+                    window: event.window
+                )
+            }
+            return consumed ? nil : event
+        }
+    }
+
+    private func removeScrollWheelMonitor() {
+        guard let scrollWheelMonitor else { return }
+        NSEvent.removeMonitor(scrollWheelMonitor)
+        self.scrollWheelMonitor = nil
+    }
+
+    /// The part of the strip's scrolling viewport no trailing control lane
+    /// covers, in `targetView`; nil before the strip has a scroll view.
+    func unobscuredViewport(in targetView: NSView) -> CGRect? {
+        guard let clipView = scrollView?.contentView, clipView.window === targetView.window else { return nil }
+        var rect = clipView.bounds
+        rect.size.width = max(0, rect.width - trailingObscuredWidth)
+        return clipView.convert(rect, to: targetView)
+    }
+
     func frame(for tabId: UUID, in targetView: NSView) -> CGRect? {
         guard let itemView = itemViews.object(forKey: tabId as NSUUID),
               itemView.window === targetView.window,
@@ -197,6 +272,27 @@ final class TabBarItemGeometryRegistry {
             if let frame = frame(for: tabId, in: targetView) {
                 frames[tabId] = frame
             }
+        }
+        return frames
+    }
+
+    /// The on-screen part of each tab: clipped by the strip's scroll view, so
+    /// a tab scrolled past either edge contributes only what is visible.
+    /// `visibleRect` clips only at ancestors that clip (`clipsToBounds` is off
+    /// by default since macOS 14), so for these unclipped item views it spans
+    /// the whole strip; intersect with `bounds` to keep it to the tab itself.
+    func visibleFrames(for tabIds: [UUID], in targetView: NSView) -> [UUID: CGRect] {
+        var frames: [UUID: CGRect] = [:]
+        frames.reserveCapacity(tabIds.count)
+        for tabId in tabIds {
+            guard let itemView = itemViews.object(forKey: tabId as NSUUID),
+                  itemView.window === targetView.window,
+                  isVisibleInHierarchy(itemView) else {
+                continue
+            }
+            let visible = itemView.bounds.intersection(itemView.visibleRect)
+            guard !visible.isNull, !visible.isEmpty else { continue }
+            frames[tabId] = itemView.convert(visible, to: targetView)
         }
         return frames
     }
@@ -230,7 +326,8 @@ final class TabBarItemGeometryRegistry {
               let documentView = scrollView.documentView,
               let itemView = itemViews.object(forKey: tabId as NSUUID),
               itemView.window === scrollView.window,
-              isVisibleInHierarchy(itemView) else {
+              isVisibleInHierarchy(itemView),
+              itemView.isDescendant(of: documentView) else {
             return false
         }
 
@@ -287,12 +384,23 @@ final class TabBarItemGeometryRegistry {
 
     @discardableResult
     private func revealTabIfClipped(_ tabId: UUID) -> Bool {
+        guard let itemView = itemViews.object(forKey: tabId as NSUUID),
+              isVisibleInHierarchy(itemView) else {
+            return false
+        }
         guard let scrollView,
-              let documentView = scrollView.documentView,
-              let itemView = itemViews.object(forKey: tabId as NSUUID),
-              itemView.window === scrollView.window,
-              isVisibleInHierarchy(itemView),
-              let metrics = currentScrollMetrics(),
+              let documentView = scrollView.documentView else {
+            // A tab without an enclosing scroll view is in the fixed pinned
+            // leading area, so it is already visible.
+            return itemView.enclosingScrollView == nil
+        }
+        guard itemView.window === scrollView.window else { return false }
+        guard itemView.isDescendant(of: documentView) else {
+            // Pinned tabs are hosted beside the scrolling document and never
+            // need a scroll adjustment.
+            return true
+        }
+        guard let metrics = currentScrollMetrics(),
               metrics.unobscuredViewportWidth > 0 else {
             return false
         }
@@ -414,7 +522,8 @@ struct TabItemHitRegionView: NSViewRepresentable {
 
     final class RegionNSView: NSView, BonsplitTabItemHitRegionProviding {
         nonisolated(unsafe) private var hitBounds: NSRect = .zero
-        private var tabId: UUID?
+        /// The tab this laid-out region view belongs to.
+        private(set) var tabId: UUID?
         private weak var geometryRegistry: TabBarItemGeometryRegistry?
         private var containerFrameObserver: NSObjectProtocol?
         private var containerBoundsObserver: NSObjectProtocol?
@@ -496,7 +605,9 @@ struct TabItemHitRegionView: NSViewRepresentable {
 
         private func registerGeometryIfVisible() {
             guard window != nil, superview != nil, let tabId else { return }
-            geometryRegistry?.attachScrollView(enclosingScrollView)
+            if let enclosingScrollView {
+                geometryRegistry?.attachScrollView(enclosingScrollView)
+            }
             geometryRegistry?.register(self, for: tabId)
         }
 

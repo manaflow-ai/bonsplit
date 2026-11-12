@@ -3,8 +3,13 @@ import AppKit
 
 private var splitContainerProgrammaticSyncDepth = 0
 
-private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
-    var customDividerColor: NSColor?
+class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
+    var customDividerColor: NSColor? {
+        didSet {
+            guard oldValue != customDividerColor else { return }
+            needsDisplay = true
+        }
+    }
 
     /// Identity for external drag coordination (see BonsplitManagedSplitView).
     weak var stampedInternalController: SplitViewController?
@@ -125,11 +130,48 @@ private class ThemedSplitView: NSSplitView, BonsplitManagedSplitView {
         }
 #endif
         if inDivider { onDividerDragSession?(true) }
+        // Leave a pending drag in the queue for AppKit's native tracking.
+        // A released double-click can be offered to the host after ending
+        // the resize session, so its geometry mutation is not drag-owned.
+        // Capture the window first: the host's geometry change can detach this
+        // view before the release is dequeued, which would leave it queued.
+        let trackingWindow = window
+        if inDivider, event.clickCount == 2,
+           let splitId = stampedSplitId,
+           let trackingController = stampedInternalController,
+           let release = nextDividerEvent(in: trackingWindow, dequeue: false),
+           release.type == .leftMouseUp,
+           release.windowNumber == event.windowNumber {
+            onDividerDragSession?(false)
+            if stampedInternalController === trackingController,
+               stampedSplitId == splitId,
+               trackingController.findSplit(splitId) != nil,
+               let controller = trackingController.publicController,
+               controller.delegate?.splitTabBar(controller, didDoubleClickDivider: splitId) == true {
+                _ = nextDividerEvent(in: trackingWindow, dequeue: true)
+                return
+            }
+            // The queued release is untouched. Native double-click behavior
+            // remains available to hosts that decline the callback.
+            trackDivider(with: event)
+            return
+        }
         // For a divider hit, super runs AppKit's tracking loop and returns
         // only after the mouse is released — the session end below is the
         // guaranteed drag-end signal.
         defer { if inDivider { onDividerDragSession?(false) } }
+        trackDivider(with: event)
+    }
+
+    /// Native tracking seam, also used by pointer dispatch tests without a GUI session.
+    func trackDivider(with event: NSEvent) {
         super.mouseDown(with: event)
+    }
+
+    /// Peeks without removing events so a drag can enter native tracking unchanged.
+    func nextDividerEvent(in window: NSWindow?, dequeue: Bool) -> NSEvent? {
+        window?.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture,
+                          inMode: .eventTracking, dequeue: dequeue)
     }
 }
 
@@ -234,6 +276,47 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
     }
 
     func makeNSView(context: Context) -> NSSplitView {
+        makeSplitView(coordinator: context.coordinator)
+    }
+
+    func updateNSView(_ splitView: NSSplitView, context: Context) {
+        let coordinator = context.coordinator
+        coordinator.renderTree = { [weak coordinator, weak splitView] in
+            guard let coordinator, let splitView else { return }
+            self.updateTrackingNestedSplits(splitView, coordinator: coordinator)
+        }
+        updateTrackingNestedSplits(splitView, coordinator: coordinator)
+    }
+
+    /// Nested splits are plain AppKit views (see `updateChild`), so SwiftUI
+    /// does not observe their state. The root observes every split below it
+    /// and renders the tree again on the next turn when one changes. Only
+    /// split state is read in the observation scope: pane content observes
+    /// itself inside its own host.
+    private func updateTrackingNestedSplits(_ splitView: NSSplitView, coordinator: Coordinator) {
+        updateSplitView(splitView, coordinator: coordinator)
+        withObservationTracking {
+            _ = controller.isInteractive
+            Self.observeNestedSplits(of: splitState)
+        } onChange: { [weak coordinator] in
+            DispatchQueue.main.async {
+                coordinator?.renderTree?()
+            }
+        }
+    }
+
+    private static func observeNestedSplits(of splitState: SplitState) {
+        for child in [splitState.first, splitState.second] {
+            guard case .split(let nested) = child else { continue }
+            _ = nested.orientation
+            _ = nested.dividerPosition
+            _ = nested.imposedFirstExtent
+            _ = nested.imposedEpoch
+            observeNestedSplits(of: nested)
+        }
+    }
+
+    func makeSplitView(coordinator: Coordinator) -> NSSplitView {
 #if DEBUG
         let splitView: ThemedSplitView = {
             let debugSplitView = DebugSplitView()
@@ -243,14 +326,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
 #else
         let splitView = ThemedSplitView()
 #endif
-        splitView.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        splitView.customDividerColor = TabBarColors.nsColorSplitDivider(for: appearance)
         splitView.customDividerThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         splitView.customDividerHitExpansion = appearance.dividerHitExpansion
         splitView.stampedInternalController = controller
         splitView.stampedSplitId = splitState.id
         splitView.isVertical = splitState.orientation == .horizontal
         splitView.dividerStyle = .thin
-        splitView.delegate = context.coordinator
+        splitView.delegate = coordinator
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
@@ -265,27 +348,26 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         firstContainer.layer?.backgroundColor = NSColor.clear.cgColor
         firstContainer.layer?.isOpaque = false
         firstContainer.layer?.masksToBounds = true
-        let firstController = makeHostingController(for: splitState.first)
-        installHostingController(firstController, into: firstContainer)
+        updateChild(splitState.first, in: firstContainer, slot: &coordinator.firstChild)
         splitView.addArrangedSubview(firstContainer)
-        context.coordinator.firstHostingController = firstController
 
         let secondContainer = SplitArrangedContainerView()
         secondContainer.wantsLayer = true
         secondContainer.layer?.backgroundColor = NSColor.clear.cgColor
         secondContainer.layer?.isOpaque = false
         secondContainer.layer?.masksToBounds = true
-        let secondController = makeHostingController(for: splitState.second)
-        installHostingController(secondController, into: secondContainer)
+        updateChild(splitState.second, in: secondContainer, slot: &coordinator.secondChild)
         splitView.addArrangedSubview(secondContainer)
-        context.coordinator.secondHostingController = secondController
 
-        context.coordinator.splitView = splitView
+        coordinator.splitView = splitView
         let internalController = controller
-        context.coordinator.isTreeDragSessionActive = { [weak internalController] in
+        coordinator.isTreeDragSessionActive = { [weak internalController] in
             (internalController?.activeDividerDragSessions ?? 0) > 0
         }
-        splitView.onDividerDragSession = { [weak coordinator = context.coordinator, weak internalController] active in
+        coordinator.isTornDown = { [weak internalController] in
+            internalController?.publicController == nil
+        }
+        splitView.onDividerDragSession = { [weak coordinator = coordinator, weak internalController] active in
             // The coordinator arms isDragging at begin, before any delegate
             // reacts to the session. At end the counter's zero crossing
             // delivers the final geometry notification — forced past the
@@ -334,13 +416,25 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 splitView.arrangedSubviews[newPaneIndex].isHidden = true
 
                 // Track that we're animating (skip delegate position updates)
-                context.coordinator.isAnimating = true
+                coordinator.isAnimating = true
             }
         }
 
         // Apply the initial divider position once after initial layout scheduling.
         func applyInitialDividerPosition() {
-            if context.coordinator.didApplyInitialDividerPosition {
+            if coordinator.didApplyInitialDividerPosition {
+                return
+            }
+            // This runs a turn after makeSplitView. If the tree was torn down in
+            // between (its window closed and the controller released), laying
+            // the split out would evaluate pane hosts that can no longer read
+            // BonsplitController from their environment.
+            guard coordinator.isTornDown?() != true else {
+                coordinator.didApplyInitialDividerPosition = true
+                if animationOrigin != nil, shouldAnimate {
+                    splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                    coordinator.isAnimating = false
+                }
                 return
             }
 
@@ -349,12 +443,13 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 : splitView.bounds.height
             let availableSize = max(totalSize - splitView.dividerThickness, 0)
 
-            guard availableSize > 0 else {
-                // makeNSView can run before NSSplitView has a real frame; retry on the
-                // next runloop so we still get the intended entry animation.
-                context.coordinator.initialDividerApplyAttempts += 1
+            guard availableSize > 0, splitView.window != nil else {
+                // makeNSView can run before NSSplitView has a real frame or a
+                // window; retry on the next runloop so we still get the intended
+                // entry animation.
+                coordinator.initialDividerApplyAttempts += 1
 #if DEBUG
-                let attempt = context.coordinator.initialDividerApplyAttempts
+                let attempt = coordinator.initialDividerApplyAttempts
                 if attempt == 1 || attempt == 4 || attempt == 8 || attempt == 12 {
                     dlog(
                         "split.entry.wait split=\(splitDebugToken) orientation=\(orientationToken) " +
@@ -363,7 +458,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     )
                 }
 #endif
-                if context.coordinator.initialDividerApplyAttempts < 12 {
+                if coordinator.initialDividerApplyAttempts < 12 {
                     DispatchQueue.main.async {
                         applyInitialDividerPosition()
                     }
@@ -371,22 +466,22 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 }
 
                 // Safety fallback: don't leave the new pane hidden forever.
-                context.coordinator.didApplyInitialDividerPosition = true
+                coordinator.didApplyInitialDividerPosition = true
                 if animationOrigin != nil, shouldAnimate {
                     splitView.arrangedSubviews[newPaneIndex].isHidden = false
-                    context.coordinator.isAnimating = false
+                    coordinator.isAnimating = false
                 }
 #if DEBUG
                 dlog(
                     "split.entry.fallback split=\(splitDebugToken) orientation=\(orientationToken) " +
-                    "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) attempts=\(context.coordinator.initialDividerApplyAttempts)"
+                    "origin=\(animationOriginToken) animate=\(shouldAnimate ? 1 : 0) attempts=\(coordinator.initialDividerApplyAttempts)"
                 )
 #endif
                 return
             }
 
-            context.coordinator.didApplyInitialDividerPosition = true
-            context.coordinator.initialDividerApplyAttempts = 0
+            coordinator.didApplyInitialDividerPosition = true
+            coordinator.initialDividerApplyAttempts = 0
 
             // A fresh view initializes from the strongest authority, same
             // rule syncPosition applies on every pass: an imposed extent is
@@ -397,9 +492,9 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             // target, and every subsequent pass fought over the difference.
             if splitState.imposedFirstExtent != nil {
                 if animationOrigin != nil, shouldAnimate {
-                    context.coordinator.isAnimating = false
+                    coordinator.isAnimating = false
                 }
-                context.coordinator.syncPosition(splitState.dividerPosition, in: splitView)
+                coordinator.syncPosition(splitState.dividerPosition, in: splitView)
                 if animationOrigin != nil, shouldAnimate {
                     splitView.arrangedSubviews.indices.forEach { splitView.arrangedSubviews[$0].isHidden = false }
                 }
@@ -425,12 +520,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                         "available=\(Int(availableSize.rounded()))"
                     )
 #endif
-                    context.coordinator.setPositionSafely(startPosition, in: splitView, layout: true)
+                    coordinator.setPositionSafely(startPosition, in: splitView, layout: true)
 
                     // Wait for layout
                     DispatchQueue.main.async {
                         // Show the new pane and animate
                         splitView.arrangedSubviews[newPaneIndex].isHidden = false
+                        guard coordinator.isTornDown?() != true else {
+                            coordinator.isAnimating = false
+                            return
+                        }
 
                         SplitAnimator.shared.animate(
                             splitView: splitView,
@@ -438,16 +537,16 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                             to: targetPosition,
                             duration: duration
                         ) {
-                            context.coordinator.isAnimating = false
+                            coordinator.isAnimating = false
                             if splitState.imposedFirstExtent != nil {
                                 // An imposition requested during the entry animation
                                 // remains authoritative in the model; apply it now that
                                 // the animation guard no longer blocks synchronization.
-                                context.coordinator.syncPosition(splitState.dividerPosition, in: splitView)
+                                coordinator.syncPosition(splitState.dividerPosition, in: splitView)
                             } else {
                                 // Re-assert the target ratio to prevent pixel-rounding drift.
                                 splitState.dividerPosition = targetDividerPosition
-                                context.coordinator.lastAppliedPosition = targetDividerPosition
+                                coordinator.lastAppliedPosition = targetDividerPosition
                             }
 #if DEBUG
                             dlog(
@@ -459,8 +558,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                     }
                 } else {
                     // No animation - just set the position immediately
-                    context.coordinator.setPositionSafely(targetPosition, in: splitView, layout: false)
-                    context.coordinator.lastAppliedPosition = targetDividerPosition
+                    coordinator.setPositionSafely(targetPosition, in: splitView, layout: false)
+                    coordinator.lastAppliedPosition = targetDividerPosition
 #if DEBUG
                     dlog(
                         "split.entry.noAnimation split=\(splitDebugToken) orientation=\(orientationToken) " +
@@ -472,22 +571,27 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             } else {
                 // No animation - just set the position
                 let position = availableSize * splitState.dividerPosition
-                context.coordinator.setPositionSafely(position, in: splitView, layout: false)
+                coordinator.setPositionSafely(position, in: splitView, layout: false)
             }
         }
 
-        DispatchQueue.main.async {
-            applyInitialDividerPosition()
+        // Ordinary restored splits get their fractional layout when AppKit
+        // assigns their bounds. Only entry animation and imposed extents need
+        // the deferred initialization above.
+        if animationOrigin != nil || splitState.imposedFirstExtent != nil {
+            DispatchQueue.main.async {
+                applyInitialDividerPosition()
+            }
         }
 
         return splitView
     }
 
-    func updateNSView(_ splitView: NSSplitView, context: Context) {
+    func updateSplitView(_ splitView: NSSplitView, coordinator: Coordinator) {
         // SwiftUI may reuse the same NSSplitView/Coordinator instance while the underlying SplitState
         // object changes (e.g., during split tree restructuring). Keep the coordinator pointed at
         // the latest state to avoid syncing geometry against a stale model.
-        context.coordinator.update(
+        coordinator.update(
             splitState: splitState,
             minimumPaneWidth: appearance.minimumPaneWidth,
             minimumPaneHeight: appearance.minimumPaneHeight,
@@ -503,7 +607,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         splitView.wantsLayer = true
         splitView.layer?.backgroundColor = NSColor.clear.cgColor
         splitView.layer?.isOpaque = false
-        (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSeparator(for: appearance)
+        (splitView as? ThemedSplitView)?.customDividerColor = TabBarColors.nsColorSplitDivider(for: appearance)
         let resolvedThickness = TabBarMetrics.resolvedDividerThickness(appearance.dividerThickness)
         let dividerThicknessChanged = (splitView as? ThemedSplitView)?.customDividerThickness != resolvedThickness
         (splitView as? ThemedSplitView)?.customDividerThickness = resolvedThickness
@@ -513,22 +617,21 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // Re-install alongside the identity stamps above so a reused
         // coordinator keeps answering for the tree it currently renders.
         let internalController = controller
-        context.coordinator.isTreeDragSessionActive = { [weak internalController] in
+        coordinator.isTreeDragSessionActive = { [weak internalController] in
             (internalController?.activeDividerDragSessions ?? 0) > 0
+        }
+        coordinator.isTornDown = { [weak internalController] in
+            internalController?.publicController == nil
         }
 
         // Update orientation if changed
         splitView.isVertical = splitState.orientation == .horizontal
 
         // Update children. When a child's node type changes (split→pane or pane→split),
-        // replace the hosted content (not the arranged subview) to ensure native NSViews
-        // (e.g., Metal-backed terminals) are properly moved through the AppKit hierarchy
-        // without briefly dropping arrangedSubviews to 1.
+        // replace the content inside the arranged subview, never the arranged subview
+        // itself, so arrangedSubviews never briefly drops to 1.
         let arranged = splitView.arrangedSubviews
         if arranged.count >= 2 {
-            let firstType = splitState.first.nodeType
-            let secondType = splitState.second.nodeType
-
             let firstContainer = arranged[0]
             let secondContainer = arranged[1]
             firstContainer.wantsLayer = true
@@ -538,21 +641,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             secondContainer.layer?.backgroundColor = NSColor.clear.cgColor
             secondContainer.layer?.isOpaque = false
 
-            updateHostedContent(
-                in: firstContainer,
-                node: splitState.first,
-                nodeTypeChanged: firstType != context.coordinator.firstNodeType,
-                controller: &context.coordinator.firstHostingController
-            )
-            context.coordinator.firstNodeType = firstType
-
-            updateHostedContent(
-                in: secondContainer,
-                node: splitState.second,
-                nodeTypeChanged: secondType != context.coordinator.secondNodeType,
-                controller: &context.coordinator.secondHostingController
-            )
-            context.coordinator.secondNodeType = secondType
+            updateChild(splitState.first, in: firstContainer, slot: &coordinator.firstChild)
+            updateChild(splitState.second, in: secondContainer, slot: &coordinator.secondChild)
         }
 
         // Access dividerPosition (and the imposed extent) so SwiftUI tracks
@@ -566,7 +656,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // extent applies immediately instead of waiting for a SwiftUI
         // update that may never come (representables are not reliably
         // re-updated for observation-only changes).
-        splitState.syncDividerNow = { [weak coordinator = context.coordinator, weak splitView] in
+        splitState.syncDividerNow = { [weak coordinator = coordinator, weak splitView] in
             guard let coordinator else { return }
             // One coalesced apply on the NEXT runloop turn. Synchronous
             // application from inside the caller's plan pass re-enters
@@ -584,7 +674,7 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             }
         }
         let currentPosition = splitState.dividerPosition
-        context.coordinator.syncPosition(currentPosition, in: splitView)
+        coordinator.syncPosition(currentPosition, in: splitView)
 
         // A pure divider-thickness change doesn't move the model divider
         // position, so `syncPosition` early-returns and AppKit keeps the cached
@@ -594,15 +684,15 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         // after this layout pass settles real, non-zero bounds.
         if dividerThicknessChanged {
             DispatchQueue.main.async {
-                context.coordinator.reapplyDividerForThicknessChange(in: splitView)
+                coordinator.reapplyDividerForThicknessChange(in: splitView)
             }
         }
     }
 
     // MARK: - Helpers
 
-    private func makeHostingController(for node: SplitNode) -> NonDraggableHostingController<AnyView> {
-        let hostingController = NonDraggableHostingController(rootView: AnyView(makeView(for: node)))
+    private func makeHostingController(for paneState: PaneState) -> NonDraggableHostingController<AnyView> {
+        let hostingController = NonDraggableHostingController(rootView: AnyView(paneView(for: paneState)))
         if #available(macOS 13.0, *) {
             // NSSplitView owns pane geometry. Keep NSHostingController from publishing
             // intrinsic-size constraints that force a minimum pane width.
@@ -633,63 +723,95 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
     }
 
-    private func updateHostedContent(
-        in container: NSView,
-        node: SplitNode,
-        nodeTypeChanged: Bool,
-        controller: inout NonDraggableHostingController<AnyView>?
-    ) {
-        // Historically we recreated the NSHostingController when the child node type changed
-        // (pane <-> split) to force a full detach/reattach of native AppKit subviews.
-        //
-        // In practice, that can introduce a single-frame "blank flash" for Metal/IOSurface-backed
-        // content during split collapse (SwiftUI tears down the old subtree before the new subtree
-        // has produced its native backing views).
-        //
-        // Keeping the hosting controller stable and just swapping its rootView makes the update
-        // atomic from AppKit's perspective and avoids the transient blank frame.
-        _ = nodeTypeChanged // keep signature; behavior is intentionally identical either way.
-
-        if let current = controller {
-            current.rootView = AnyView(makeView(for: node))
-            // Ensure fill if container bounds changed without a layout pass yet.
-            current.view.frame = container.bounds
-            return
-        }
-
-        let newController = makeHostingController(for: node)
-        installHostingController(newController, into: container)
-        controller = newController
-    }
-
-    @ViewBuilder
-    private func makeView(for node: SplitNode) -> some View {
+    /// Renders one child of a split into its arranged container.
+    ///
+    /// A pane gets exactly one hosting view. A nested split is a plain AppKit
+    /// split view driven by this same code, not another SwiftUI host: SwiftUI
+    /// walks the focusable items of every nested host when it rebuilds the key
+    /// view loop, and with one host per split level that walk roughly doubled
+    /// with each level (a 16-deep chain held the main thread for ~28 s on its
+    /// first mount). Hosts are now siblings, so the walk stays linear.
+    ///
+    /// A pane keeps its hosting view across updates and only swaps the root
+    /// view, so Metal-backed content never sees a torn-down host mid-update.
+    private func updateChild(_ node: SplitNode, in container: NSView, slot: inout SplitChild?) {
         switch node {
         case .pane(let paneState):
-            PaneContainerView(
-                pane: paneState,
-                controller: controller,
-                contentBuilder: contentBuilder,
-                emptyPaneBuilder: emptyPaneBuilder,
-                showSplitButtons: showSplitButtons,
-                tabBarVisibility: tabBarVisibility,
-                contentViewLifecycle: contentViewLifecycle
-            )
+            if case .pane(let current)? = slot {
+                current.rootView = AnyView(paneView(for: paneState))
+                // Ensure fill if container bounds changed without a layout pass yet.
+                current.view.frame = container.bounds
+                return
+            }
+            slot?.view.removeFromSuperview()
+            let hostingController = makeHostingController(for: paneState)
+            installHostingController(hostingController, into: container)
+            slot = .pane(hostingController)
+
         case .split(let nestedSplitState):
-            SplitContainerView(
-                splitState: nestedSplitState,
-                controller: controller,
-                appearance: appearance,
-                dividerPositionRange: dividerPositionRange,
-                contentBuilder: contentBuilder,
-                emptyPaneBuilder: emptyPaneBuilder,
-                showSplitButtons: showSplitButtons,
-                tabBarVisibility: tabBarVisibility,
-                contentViewLifecycle: contentViewLifecycle,
-                onGeometryChange: onGeometryChange,
-                enableAnimations: enableAnimations,
-                animationDuration: animationDuration
-            )
+            let nested = nestedSplit(nestedSplitState)
+            if case .split(let splitView, let coordinator)? = slot {
+                coordinator.update(
+                    splitState: nestedSplitState,
+                    minimumPaneWidth: appearance.minimumPaneWidth,
+                    minimumPaneHeight: appearance.minimumPaneHeight,
+                    dividerPositionRange: dividerPositionRange,
+                    onGeometryChange: onGeometryChange
+                )
+                nested.updateSplitView(splitView, coordinator: coordinator)
+                return
+            }
+            slot?.view.removeFromSuperview()
+            let coordinator = nested.makeCoordinator()
+            let splitView = nested.makeSplitView(coordinator: coordinator)
+            splitView.frame = container.bounds
+            splitView.autoresizingMask = [.width, .height]
+            container.addSubview(splitView)
+            nested.updateSplitView(splitView, coordinator: coordinator)
+            slot = .split(splitView, coordinator)
+        }
+    }
+
+    private func nestedSplit(_ nestedSplitState: SplitState) -> SplitContainerView {
+        SplitContainerView(
+            splitState: nestedSplitState,
+            controller: controller,
+            appearance: appearance,
+            dividerPositionRange: dividerPositionRange,
+            contentBuilder: contentBuilder,
+            emptyPaneBuilder: emptyPaneBuilder,
+            showSplitButtons: showSplitButtons,
+            tabBarVisibility: tabBarVisibility,
+            contentViewLifecycle: contentViewLifecycle,
+            onGeometryChange: onGeometryChange,
+            enableAnimations: enableAnimations,
+            animationDuration: animationDuration
+        )
+    }
+
+    private func paneView(for paneState: PaneState) -> some View {
+        PaneContainerView(
+            pane: paneState,
+            controller: controller,
+            contentBuilder: contentBuilder,
+            emptyPaneBuilder: emptyPaneBuilder,
+            showSplitButtons: showSplitButtons,
+            tabBarVisibility: tabBarVisibility,
+            contentViewLifecycle: contentViewLifecycle
+        )
+        .paneHostEnvironment(controller)
+    }
+
+    /// What a split's arranged container currently shows.
+    enum SplitChild {
+        case pane(NonDraggableHostingController<AnyView>)
+        case split(NSSplitView, Coordinator)
+
+        var view: NSView {
+            switch self {
+            case .pane(let hostingController): return hostingController.view
+            case .split(let splitView, _): return splitView
+            }
         }
     }
 
@@ -713,6 +835,11 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         /// the divider, so an apply refuses and stays armed instead of moving
         /// it under the pointer. Installed from makeNSView/updateNSView.
         var isTreeDragSessionActive: (() -> Bool)?
+        /// Answers whether the BonsplitController behind this tree is gone.
+        /// Deferred divider work checks it before laying out: a torn-down
+        /// tree's pane hosts can no longer read the controller from their
+        /// environment.
+        var isTornDown: (() -> Bool)?
         /// Track last applied position to detect external changes
         var lastAppliedPosition: CGFloat = 0.5
         /// What the last imposed apply actually produced, and how big the
@@ -729,12 +856,14 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         var isSyncingProgrammatically = false
         /// Track if user is actively dragging the divider
         var isDragging = false
-        /// Track child node types to detect structural changes
-        var firstNodeType: SplitNode.NodeType
-        var secondNodeType: SplitNode.NodeType
-        /// Retain hosting controllers so SwiftUI content stays alive
-        var firstHostingController: NonDraggableHostingController<AnyView>?
-        var secondHostingController: NonDraggableHostingController<AnyView>?
+        /// What each arranged container shows. Retains pane hosting
+        /// controllers so SwiftUI content stays alive, and nested split
+        /// coordinators so their delegates stay alive.
+        var firstChild: SplitChild?
+        var secondChild: SplitChild?
+        /// Renders the tree again after a change observed anywhere in it.
+        /// Installed by the root's `updateNSView`.
+        var renderTree: (() -> Void)?
 
         init(
             splitState: SplitState,
@@ -750,8 +879,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
             self.dividerPositionRange = dividerPositionRange
             self.onGeometryChange = onGeometryChange
             self.lastAppliedPosition = splitState.dividerPosition
-            self.firstNodeType = splitState.first.nodeType
-            self.secondNodeType = splitState.second.nodeType
         }
 
         func update(
@@ -780,8 +907,6 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 initialDividerApplyAttempts = 0
                 isAnimating = false
                 isDragging = false
-                firstNodeType = newState.first.nodeType
-                secondNodeType = newState.second.nodeType
                 return
             }
 
@@ -968,6 +1093,8 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
         }
 
         func setPositionSafely(_ position: CGFloat, in splitView: NSSplitView, layout: Bool = true) {
+            // setPosition lays the split out synchronously.
+            if isTornDown?() == true { return }
 #if DEBUG
             // Wobble hunt: name every divider write while an imposition is
             // active. The imposed target and a fraction-derived recompute
@@ -1302,6 +1429,46 @@ struct SplitContainerView<Content: View, EmptyContent: View>: NSViewRepresentabl
                 )
 #endif
             }
+        }
+
+        func splitView(_ splitView: NSSplitView, resizeSubviewsWithOldSize oldSize: NSSize) {
+            guard !isAnimating,
+                  !isDragging,
+                  !isSyncingProgrammatically,
+                  splitState.imposedFirstExtent == nil,
+                  splitView.arrangedSubviews.count == 2,
+                  splitAvailableSize(in: splitView) > 0 else {
+                splitView.adjustSubviews()
+                return
+            }
+
+            // The model owns fractional layout, including the first nonzero
+            // bounds of a newly mounted split. Applying it here avoids first
+            // publishing AppKit's equal/proportional frames and repairing them
+            // from didResize or a later main-queue callback. An ancestor's
+            // programmatic layout must not suppress this child's layout.
+            let scale = splitView.window?.backingScaleFactor ?? 1
+            let requestedPosition = splitAvailableSize(in: splitView) * splitState.dividerPosition
+            let position = clampedDividerPosition(
+                (requestedPosition * scale).rounded() / scale,
+                in: splitView
+            )
+            var first = splitView.bounds
+            var second = splitView.bounds
+            if splitView.isVertical {
+                first.size.width = position
+                second.origin.x = first.maxX + splitView.dividerThickness
+                second.size.width = max(0, splitView.bounds.maxX - second.minX)
+            } else {
+                first.size.height = position
+                second.origin.y = first.maxY + splitView.dividerThickness
+                second.size.height = max(0, splitView.bounds.maxY - second.minY)
+            }
+            isSyncingProgrammatically = true
+            defer { isSyncingProgrammatically = false }
+            splitView.arrangedSubviews[0].frame = first
+            splitView.arrangedSubviews[1].frame = second
+            lastAppliedPosition = position / splitAvailableSize(in: splitView)
         }
 
         func splitViewDidResizeSubviews(_ notification: Notification) {
