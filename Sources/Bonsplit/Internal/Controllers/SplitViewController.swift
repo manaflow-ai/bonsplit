@@ -88,6 +88,66 @@ final class SplitViewController {
     /// Callback for geometry changes
     var onGeometryChange: (() -> Void)?
 
+    @ObservationIgnored private var tabBarRenderWindowStart: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowLastRender: TimeInterval = 0
+    @ObservationIgnored private var tabBarRenderWindowRenderCount = 0
+    @ObservationIgnored private var tabBarRenderWindowTabCount = 0
+    @ObservationIgnored private var tabBarRenderWindowPanes: Set<PaneID> = []
+    @ObservationIgnored private var tabBarRenderWindowReported = false
+
+    /// Records a tab-bar body evaluation and emits one diagnostic for a sustained
+    /// render window. This is intentionally inactive unless the host installs a
+    /// diagnostic handler. Hosts that install the handler pay the small counter
+    /// cost needed to identify a sustained render storm.
+    func recordTabBarRender(
+        paneId: PaneID,
+        tabCount: Int,
+        now: TimeInterval = ProcessInfo.processInfo.systemUptime
+    ) {
+        guard let handler = publicController?.onTabBarRenderDiagnostic else {
+            resetTabBarRenderWindow()
+            return
+        }
+
+        if tabBarRenderWindowStart == 0
+            || now - tabBarRenderWindowLastRender > 0.1
+            || now - tabBarRenderWindowStart > 2 {
+            resetTabBarRenderWindow()
+            tabBarRenderWindowStart = now
+        }
+
+        tabBarRenderWindowLastRender = now
+        tabBarRenderWindowRenderCount += 1
+        tabBarRenderWindowTabCount += tabCount
+        tabBarRenderWindowPanes.insert(paneId)
+
+        let elapsed = now - tabBarRenderWindowStart
+        guard !tabBarRenderWindowReported,
+              elapsed >= 0.5,
+              tabBarRenderWindowRenderCount >= 32 else {
+            return
+        }
+
+        tabBarRenderWindowReported = true
+        handler(
+            TabBarRenderDiagnostic(
+                elapsed: elapsed,
+                renderCount: tabBarRenderWindowRenderCount,
+                tabCount: tabBarRenderWindowTabCount,
+                paneCount: tabBarRenderWindowPanes.count
+            )
+        )
+    }
+
+    private func resetTabBarRenderWindow() {
+        tabBarRenderWindowStart = 0
+        tabBarRenderWindowLastRender = 0
+        tabBarRenderWindowRenderCount = 0
+        tabBarRenderWindowTabCount = 0
+        tabBarRenderWindowPanes.removeAll(keepingCapacity: true)
+        tabBarRenderWindowReported = false
+    }
+
     /// Live divider drag sessions across every split in this tree (0 or 1 in
     /// practice — AppKit tracks one divider at a time). Sessions bracket the
     /// divider's mouse-tracking lifecycle, so external sizing can consult
@@ -572,6 +632,82 @@ final class SplitViewController {
     private func normalizedInitialDividerPosition(_ position: CGFloat?) -> CGFloat {
         guard let position else { return 0.5 }
         return min(max(position, 0), 1)
+    }
+
+    /// Moves an existing pane leaf to an edge of the complete split tree.
+    @discardableResult
+    func movePane(
+        _ paneId: PaneID,
+        toRootEdge edge: RootSplitEdge,
+        dividerPosition: CGFloat
+    ) -> Bool {
+        guard paneStatesById.count > 1,
+              let pane = paneStatesById[paneId],
+              !isPaneDirectRootChild(paneId, on: edge),
+              let remainder = removingPane(paneId, from: rootNode) else {
+            return false
+        }
+
+        clearPaneZoom()
+        let movedPane = SplitNode.pane(pane)
+        let splitState = SplitState(
+            orientation: edge.orientation,
+            first: edge.insertsFirst ? movedPane : remainder,
+            second: edge.insertsFirst ? remainder : movedPane,
+            dividerPosition: normalizedInitialDividerPosition(dividerPosition)
+        )
+        rootNode = .split(splitState)
+        focusedPaneId = paneId
+        return true
+    }
+
+    private func isPaneDirectRootChild(
+        _ paneId: PaneID,
+        on edge: RootSplitEdge
+    ) -> Bool {
+        guard case .split(let rootSplit) = rootNode,
+              rootSplit.orientation == edge.orientation else {
+            return false
+        }
+
+        let edgeNode = edge.insertsFirst ? rootSplit.first : rootSplit.second
+        guard case .pane(let pane) = edgeNode else { return false }
+        return pane.id == paneId
+    }
+
+    private func removingPane(
+        _ paneId: PaneID,
+        from node: SplitNode
+    ) -> SplitNode? {
+        switch node {
+        case .pane(let pane):
+            return pane.id == paneId ? nil : node
+
+        case .split(let split):
+            let first = removingPane(paneId, from: split.first)
+            let second = removingPane(paneId, from: split.second)
+
+            switch (first, second) {
+            case (nil, nil):
+                return nil
+            case (nil, let second?):
+                return second
+            case (let first?, nil):
+                return first
+            case (let first?, let second?):
+                let rebuilt = SplitState(
+                    id: split.id,
+                    orientation: split.orientation,
+                    first: first,
+                    second: second,
+                    dividerPosition: split.dividerPosition,
+                    animationOrigin: split.animationOrigin
+                )
+                rebuilt.imposedFirstExtent = split.imposedFirstExtent
+                rebuilt.imposedEpoch = split.imposedEpoch
+                return .split(rebuilt)
+            }
+        }
     }
 
     /// Close a pane and collapse the split

@@ -107,6 +107,11 @@ public final class BonsplitController {
     /// on the host UI package.
     @ObservationIgnored public var tabMiddleClickCapture: ((@escaping () -> Void) -> AnyView)?
 
+    /// Called once when tab-bar body evaluation remains active across a sustained
+    /// render window. Hosts can use this low-volume signal to diagnose main-thread
+    /// render storms without adding work to ordinary tab-bar updates.
+    @ObservationIgnored public var onTabBarRenderDiagnostic: (@MainActor (TabBarRenderDiagnostic) -> Void)?
+
     /// Called when the user explicitly requests to toggle zoom from tab chrome.
     /// When set, the host owns the full toggle and should return whether it succeeded.
     @ObservationIgnored public var onTabZoomToggleRequest: (@MainActor (_ tabId: TabID, _ paneId: PaneID) -> Bool)?
@@ -879,6 +884,37 @@ public final class BonsplitController {
         notifyGeometryChange()
 
         return newPaneId
+    }
+
+    /// Moves a pane and all of its tabs to an outer edge of the complete split tree.
+    ///
+    /// The pane retains its identity, selected tab, and tab ownership. Its former
+    /// branch is collapsed, the remaining tree keeps its relative topology, and a
+    /// new root split is created with the configured default divider position.
+    /// Moving the only pane, moving an unknown pane, or moving a pane that already
+    /// spans the requested edge is a no-op.
+    ///
+    /// - Parameters:
+    ///   - paneId: The pane to move.
+    ///   - edge: The outer edge where the pane should become a direct root child.
+    /// - Returns: `true` when the tree changed; otherwise `false`.
+    @discardableResult
+    public func movePane(
+        _ paneId: PaneID,
+        toRootEdge edge: RootSplitEdge
+    ) -> Bool {
+        guard configuration.allowSplits,
+              internalController.movePane(
+                paneId,
+                toRootEdge: edge,
+                dividerPosition: normalizedInitialDividerPosition(nil)
+              ) else {
+            return false
+        }
+
+        delegate?.splitTabBar(self, didFocusPane: paneId)
+        notifyGeometryChange()
+        return true
     }
 
     /// Close a specific pane

@@ -3,10 +3,15 @@ import SwiftUI
 
 struct TabContextMenuSnapshot {
     let tabId: UUID
-    let state: TabContextMenuState
+    /// Builds the menu's tab state. The tab strip renders every tab far more
+    /// often than a menu opens, and the state calls host providers and walks
+    /// the pane tree, so it is computed only when a menu is built.
+    private let stateProvider: () -> TabContextMenuState
     let moveDestinationsProvider: () -> [TabContextMoveDestination]
     let forkConversationAvailabilityProvider: () -> TabContextForkConversationAvailability
     let forkConversationAvailabilityRefreshHandler: @MainActor () async -> Void
+
+    var state: TabContextMenuState { stateProvider() }
 
     init(
         tabId: UUID,
@@ -15,11 +20,38 @@ struct TabContextMenuSnapshot {
         forkConversationAvailabilityProvider: @escaping () -> TabContextForkConversationAvailability,
         forkConversationAvailabilityRefreshHandler: @escaping @MainActor () async -> Void = {}
     ) {
+        self.init(
+            tabId: tabId,
+            stateProvider: { state },
+            moveDestinationsProvider: moveDestinationsProvider,
+            forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
+            forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
+        )
+    }
+
+    init(
+        tabId: UUID,
+        stateProvider: @escaping () -> TabContextMenuState,
+        moveDestinationsProvider: @escaping () -> [TabContextMoveDestination],
+        forkConversationAvailabilityProvider: @escaping () -> TabContextForkConversationAvailability,
+        forkConversationAvailabilityRefreshHandler: @escaping @MainActor () async -> Void = {}
+    ) {
         self.tabId = tabId
-        self.state = state
+        self.stateProvider = stateProvider
         self.moveDestinationsProvider = moveDestinationsProvider
         self.forkConversationAvailabilityProvider = forkConversationAvailabilityProvider
         self.forkConversationAvailabilityRefreshHandler = forkConversationAvailabilityRefreshHandler
+    }
+
+    /// A copy whose state is computed now, so one menu build reads one value.
+    func resolvingState() -> TabContextMenuSnapshot {
+        TabContextMenuSnapshot(
+            tabId: tabId,
+            state: state,
+            moveDestinationsProvider: moveDestinationsProvider,
+            forkConversationAvailabilityProvider: forkConversationAvailabilityProvider,
+            forkConversationAvailabilityRefreshHandler: forkConversationAvailabilityRefreshHandler
+        )
     }
 }
 
