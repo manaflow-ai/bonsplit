@@ -13,7 +13,7 @@ enum TabBarMetrics {
     static let tabMinWidth: CGFloat = 48
     static let tabMaxWidth: CGFloat = 220
     static let tabCornerRadius: CGFloat = 0
-    static let tabHorizontalPadding: CGFloat = 6
+    static let tabHorizontalPadding: CGFloat = 8
     static let tabSpacing: CGFloat = 0
     static let activeIndicatorHeight: CGFloat = 1.5
     static let activeIndicatorTrailingInset: CGFloat = 1
@@ -27,7 +27,7 @@ enum TabBarMetrics {
     static let closeIconSize: CGFloat = 9
     static let dirtyIndicatorSize: CGFloat = 8
     static let notificationBadgeSize: CGFloat = 6
-    static let contentSpacing: CGFloat = 6
+    static let contentSpacing: CGFloat = 8
 
     // MARK: - Drop Indicator
 
