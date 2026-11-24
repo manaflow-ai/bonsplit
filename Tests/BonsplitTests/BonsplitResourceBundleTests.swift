@@ -1,6 +1,11 @@
 import XCTest
 @testable import Bonsplit
 
+/// AppKit menu titles follow the test machine's preferred language.
+func localizedMenuTitle(_ key: String) -> String {
+    BonsplitResourceBundle.localizedString(forKey: key, defaultValue: key)
+}
+
 /// SwiftPM's generated `Bundle.module` traps with "unable to find bundle named
 /// Bonsplit_Bonsplit" when the resource bundle is unreachable on first use,
 /// for example after the running app was moved, trashed or its volume was
@@ -67,6 +72,22 @@ final class BonsplitResourceBundleTests: XCTestCase {
             ),
             "Close This Tab"
         )
+    }
+
+    func testSimplifiedChineseCoversEveryEnglishString() throws {
+        let bundle = try XCTUnwrap(BonsplitResourceBundle.bundle)
+        func strings(in language: String) throws -> [String: String] {
+            let directory = try XCTUnwrap(bundle.url(forResource: language, withExtension: "lproj"))
+            let data = try Data(contentsOf: directory.appendingPathComponent("Localizable.strings"))
+            let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+            return try XCTUnwrap(plist as? [String: String])
+        }
+
+        let english = try strings(in: "en")
+        let chinese = try strings(in: "zh-Hans")
+        XCTAssertFalse(english.isEmpty)
+        XCTAssertEqual(Set(chinese.keys), Set(english.keys))
+        XCTAssertTrue(chinese.values.allSatisfy { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty })
     }
 
     func testPackageResourceBundleIsReachableInTestBuilds() {
