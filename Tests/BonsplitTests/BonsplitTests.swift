@@ -2055,12 +2055,12 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let moveItem = menu.items.first { $0.title == "Move Tab" }
+        let moveItem = menu.items.first { $0.title == localizedMenuTitle("tabContext.moveTab") }
 
         XCTAssertEqual(moveDestinationRequestCount, 1)
         XCTAssertNotNil(moveItem)
         XCTAssertTrue(moveItem?.isEnabled ?? false)
-        XCTAssertEqual(moveItem?.submenu?.items.map(\.title), ["Move Tab to New Workspace", "Workspace A"])
+        XCTAssertEqual(moveItem?.submenu?.items.map(\.title), [localizedMenuTitle("command.moveTabToNewWorkspace.title"), "Workspace A"])
         XCTAssertEqual(moveItem?.submenu?.items.map(\.isEnabled), [true, false])
 
         let newWorkspaceItem = try XCTUnwrap(moveItem?.submenu?.items.first)
@@ -2103,7 +2103,7 @@ final class BonsplitTests: XCTestCase {
             target: TabContextMenuActionTarget()
         )
 
-        let closeItem = try XCTUnwrap(menu.items.first { $0.title == "Close Tab" })
+        let closeItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.closeTab") })
         XCTAssertFalse(closeItem.isEnabled)
     }
 
@@ -2137,7 +2137,7 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let muteItem = try XCTUnwrap(menu.items.first { $0.title == "Mute Tab" })
+        let muteItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.muteTab") })
         target.performContextAction(muteItem)
 
         XCTAssertEqual(selectedAction, .toggleAudioMute)
@@ -2172,8 +2172,8 @@ final class BonsplitTests: XCTestCase {
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
 
-        XCTAssertTrue(menu.items.contains { $0.title == "Unmute Tab" })
-        XCTAssertFalse(menu.items.contains { $0.title == "Mute Tab" })
+        XCTAssertTrue(menu.items.contains { $0.title == localizedMenuTitle("tabContext.unmuteTab") })
+        XCTAssertFalse(menu.items.contains { $0.title == localizedMenuTitle("tabContext.muteTab") })
     }
 
     @MainActor
@@ -2207,11 +2207,11 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let item = try XCTUnwrap(menu.items.first { $0.title == "Full Width Tab" })
+        let item = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.enterFullWidthTab") })
         target.performContextAction(item)
 
         XCTAssertEqual(selectedAction, .toggleFullWidthTab)
-        XCTAssertFalse(menu.items.contains { $0.title == "Exit Full Width Tab" })
+        XCTAssertFalse(menu.items.contains { $0.title == localizedMenuTitle("tabContext.exitFullWidthTab") })
     }
 
     @MainActor
@@ -2244,8 +2244,8 @@ final class BonsplitTests: XCTestCase {
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
 
-        XCTAssertTrue(menu.items.contains { $0.title == "Exit Full Width Tab" })
-        XCTAssertFalse(menu.items.contains { $0.title == "Full Width Tab" })
+        XCTAssertTrue(menu.items.contains { $0.title == localizedMenuTitle("tabContext.exitFullWidthTab") })
+        XCTAssertFalse(menu.items.contains { $0.title == localizedMenuTitle("tabContext.enterFullWidthTab") })
     }
 
     @MainActor
@@ -2279,19 +2279,26 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Left" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversation.default.left") })
         target.performContextAction(forkItem)
         XCTAssertEqual(selectedAction, .forkConversation)
 
-        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversationTo") })
         let destinationItems = try XCTUnwrap(forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem })
         XCTAssertEqual(
             destinationItems.map(\.title),
-            ["Right Split", "Left Split", "Top Split", "Bottom Split", "New Tab", "New Workspace"]
+            [
+                localizedMenuTitle("tabContext.forkConversation.right"),
+                localizedMenuTitle("tabContext.forkConversation.left"),
+                localizedMenuTitle("tabContext.forkConversation.top"),
+                localizedMenuTitle("tabContext.forkConversation.bottom"),
+                localizedMenuTitle("tabContext.forkConversation.newTab"),
+                localizedMenuTitle("tabContext.forkConversation.newWorkspace"),
+            ]
         )
         XCTAssertEqual(destinationItems.map(\.state), [.off, .on, .off, .off, .off, .off])
 
-        let newTabItem = try XCTUnwrap(destinationItems.first { $0.title == "New Tab" })
+        let newTabItem = try XCTUnwrap(destinationItems.first { $0.title == localizedMenuTitle("tabContext.forkConversation.newTab") })
         target.performContextAction(newTabItem)
         XCTAssertEqual(selectedAction, .forkConversationNewTab)
     }
@@ -2325,8 +2332,8 @@ final class BonsplitTests: XCTestCase {
         )
 
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Left" })
-        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversation.default.left") })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversationTo") })
         let destinationItems = try XCTUnwrap(forkSubmenuItem.submenu?.items.filter { !$0.isSeparatorItem })
 
         XCTAssertFalse(forkItem.isEnabled)
@@ -2363,8 +2370,8 @@ final class BonsplitTests: XCTestCase {
             forkConversationAvailabilityProvider: { availability }
         )
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
-        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversation.default.right") })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversationTo") })
 
         XCTAssertFalse(forkItem.isEnabled)
         XCTAssertFalse(forkSubmenuItem.isEnabled)
@@ -2424,8 +2431,8 @@ final class BonsplitTests: XCTestCase {
             }
         )
         let menu = TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
-        let forkItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation to the Right" })
-        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == "Fork Conversation To" })
+        let forkItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversation.default.right") })
+        let forkSubmenuItem = try XCTUnwrap(menu.items.first { $0.title == localizedMenuTitle("tabContext.forkConversationTo") })
 
         menu.menuWillOpen(menu)
         menu.menuWillOpen(menu)
@@ -2474,7 +2481,7 @@ final class BonsplitTests: XCTestCase {
             ),
             target: target
         )
-        XCTAssertFalse(withoutRemote.items.contains { $0.title == "Disconnect SSH" })
+        XCTAssertFalse(withoutRemote.items.contains { $0.title == localizedMenuTitle("tabContext.disconnectRemote") })
 
         let withRemote = TabContextMenuBuilder.makeMenu(
             snapshot: TabContextMenuSnapshot(
@@ -2485,7 +2492,7 @@ final class BonsplitTests: XCTestCase {
             ),
             target: target
         )
-        let disconnectItem = try XCTUnwrap(withRemote.items.first { $0.title == "Disconnect SSH" })
+        let disconnectItem = try XCTUnwrap(withRemote.items.first { $0.title == localizedMenuTitle("tabContext.disconnectRemote") })
         target.performContextAction(disconnectItem)
         XCTAssertEqual(selectedAction, .disconnectRemote)
     }

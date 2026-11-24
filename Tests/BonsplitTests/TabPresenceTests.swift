@@ -104,27 +104,33 @@ final class TabPresenceTests: XCTestCase {
             return TabContextMenuBuilder.makeMenu(snapshot: snapshot, target: target)
         }
 
-        XCTAssertFalse(menu(presence: nil).items.contains { $0.title == "Size to My Window" })
+        XCTAssertFalse(menu(presence: nil).items.contains { $0.title == localizedMenuTitle("tabContext.sizeToMyWindow") })
 
         let alone = menu(presence: samplePresence(mode: .priority, canDisconnect: false, alone: true))
         let titles = alone.items.map(\.title)
-        XCTAssertTrue(titles.contains("Size to My Window"))
-        XCTAssertFalse(titles.contains("Disconnect Others…"))
+        XCTAssertTrue(titles.contains(localizedMenuTitle("tabContext.sizeToMyWindow")))
+        XCTAssertFalse(titles.contains(localizedMenuTitle("tabContext.disconnectOthers")))
         for removed in ["Don't Resize from This Mac", "Show Size Panel…"] {
             XCTAssertFalse(titles.contains(removed), "unexpected \(removed)")
         }
-        let sizeMenu = try XCTUnwrap(alone.items.first { $0.title == "Terminal Size" }?.submenu)
+        let sizeMenu = try XCTUnwrap(alone.items.first { $0.title == localizedMenuTitle("tabContext.terminalSizeHeader") }?.submenu)
         XCTAssertEqual(
             sizeMenu.items.map(\.title),
-            ["Follow Latest", "Fit Everyone", "Largest Window", "Priority List…", "Fixed Size…"]
+            [
+                localizedMenuTitle("tabContext.sizeMode.followLatest"),
+                localizedMenuTitle("tabContext.sizeMode.fitEveryone"),
+                localizedMenuTitle("tabContext.sizeMode.largest"),
+                localizedMenuTitle("tabContext.sizeMode.priority"),
+                localizedMenuTitle("tabContext.sizeMode.fixed"),
+            ]
         )
-        XCTAssertEqual(sizeMenu.items.first { $0.title == "Priority List…" }?.state, .on)
-        XCTAssertEqual(sizeMenu.items.first { $0.title == "Follow Latest" }?.state, .off)
+        XCTAssertEqual(sizeMenu.items.first { $0.title == localizedMenuTitle("tabContext.sizeMode.priority") }?.state, .on)
+        XCTAssertEqual(sizeMenu.items.first { $0.title == localizedMenuTitle("tabContext.sizeMode.followLatest") }?.state, .off)
 
         let shared = menu(presence: samplePresence(mode: .latest, canDisconnect: true))
-        XCTAssertTrue(shared.items.contains { $0.title == "Disconnect Others…" })
+        XCTAssertTrue(shared.items.contains { $0.title == localizedMenuTitle("tabContext.disconnectOthers") })
 
-        let largest = try XCTUnwrap(sizeMenu.items.first { $0.title == "Largest Window" })
+        let largest = try XCTUnwrap(sizeMenu.items.first { $0.title == localizedMenuTitle("tabContext.sizeMode.largest") })
         target.performContextAction(largest)
         XCTAssertEqual(selected, .sizeModeLargest)
     }
